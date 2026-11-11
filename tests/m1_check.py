@@ -29,6 +29,7 @@ import mockup                                   # noqa: E402
 BUILD = os.path.join(ROOT, 'build')
 VIEW_W, VIEW_H = 160, 144
 STEP_US = 100
+SNAP = []                       # ο καθρέφτης του φόντου μετά τη σχεδίαση (M3)
 
 
 def symbols():
@@ -77,7 +78,9 @@ def render_at(c, sym, cam_x, cam_y):
         c.poke(k + 1, v >> 8)
     c.poke(sym['REDRAW'], 1)
     wait_phase(c, sym, 1)
-    return wait_phase(c, sym, 2) / 1000.0
+    t = wait_phase(c, sym, 2) / 1000.0
+    SNAP.append(wait_phase(c, sym, 6) / 1000.0)
+    return t
 
 
 def compare(c, ref, name, shots):
@@ -132,6 +135,7 @@ def main():
 
     print('\nολόκληρο το παράθυρο: %.1f - %.1f ms (%.1f - %.1f καρέ των 20 ms)'
           % (min(times), max(times), min(times) / 20, max(times) / 20))
+    print('και μετά ο καθρέφτης του φόντου (M3): %.1f ms' % max(SNAP))
     sys.exit(0 if ok else 1)
 
 

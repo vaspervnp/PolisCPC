@@ -3,7 +3,9 @@
 ;     ./game/build.sh            -> build/polis.dsk, build/polis.sna, .sym
 ;
 ; M1: ο χάρτης 96x96 στη μνήμη (#8000) και το ισομετρικό έδαφος + οι πόροι
-; σε ολόκληρο το παράθυρο χάρτη (ground.asm, res.asm). Με -DBARS=1 βγαίνει η
+; σε ολόκληρο το παράθυρο χάρτη (ground.asm, res.asm).
+; M3: 16 μονάδες κινούνται στα 25 Hz, με επαναφορά από τον καθρέφτη του
+; φόντου στην τράπεζα C4 και sprites στην C5 (units.asm). Με -DBARS=1 βγαίνει η
 ; οθόνη ελέγχου του M0 (λωρίδες παλέτας) αντί για τον χάρτη.
 ;
 ; Τι κάνει το M0 (η υποδομή κάτω από όλα):
@@ -62,10 +64,10 @@ start:
         call draw_bars
         else
         call clear_screen
-        ld hl,map_src           ; ο χάρτης στη θέση του (#8000)
+        ld hl,map_z             ; ο χάρτης στη θέση του (#8000), από ZX0
         ld de,MAP
-        ld bc,MAPW * MAPW
-        ldir
+        call dzx0
+        call units_init
         ld a,1
         ld (redraw),a
         endif
@@ -83,11 +85,26 @@ frame:
         inc a
         ld (phase),a            ; 1 = σχεδιάζει (το διαβάζει το tests/m1_check.py)
         call render
-        ld a,2
+        ld a,2                  ; 2 = το παράθυρο σχεδιάστηκε
         ld (phase),a
-.idle:  ld a,HW_RED
+        call bg_snapshot        ; ο καθρέφτης του φόντου για τις μονάδες
+        call units_forget       ; η οθόνη ξαναγράφτηκε: δεν έχουν ίχνη να σβήσουν
+        ld a,6                  ; 6 = και ο καθρέφτης έτοιμος
+        ld (phase),a
+.idle:  ld hl,ticks             ; οι μονάδες στα 25 Hz: κάθε 2ο καρέ
+        inc (hl)
+        bit 0,(hl)
+        jr nz,frame
+        ld a,(phase)
+        cp 6
+        jr nz,frame             ; όχι πριν τον καθρέφτη
+        ld a,HW_RED
         call border
-        call frame_work         ; ό,τι κάνει το καρέ — μετριέται από το border
+        ld a,3
+        ld (uphase),a           ; 3 = τρέχει το καρέ μονάδων (tests/m3_check.py)
+        call units_tick
+        ld a,4
+        ld (uphase),a
         ld a,HW_BLACK
         call border
         jr frame
@@ -223,6 +240,8 @@ pen_pair:
         include "../palette.asm"
         include "ground.asm"
         include "res.asm"
+        include "zx0.asm"
+        include "units.asm"
 
 linebuf:
         ds 80
@@ -263,6 +282,26 @@ b_n:        db 0
 b_l0:       db 0
 b_lines:    db 0
 b_y:        db 0
+ticks:      db 0
+uphase:     db 0
+erase_req:  db 0
+paused:     db 0
+s_key:      db 0
+s_y:        db 0
+; Η σειρά σχεδίασης: το low byte της εγγραφής κάθε μονάδας (δείκτης x 16).
+order:      db 0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240
+        align 256               ; (πριν από κάθε μπλοκ LZX0: εδώ ισχύει)
+unit_tab:   ds UNITS * U_SIZE
+
+; Οι 16 μονάδες του M3: x (bytes), y (γραμμές), dx, dy, σετ.
+unit_init:
+        db 10,20,1,1,0,   30,40,-1,1,1,   50,10,1,-1,2,   70,60,-1,-1,0
+        db 12,90,1,-1,1,  40,100,1,1,2,   60,120,-1,-1,0, 20,70,-1,1,1
+        db 74,30,-1,1,2,  4,128,1,-1,0,   36,64,1,1,1,    56,80,-1,-1,2
+        db 26,4,1,1,0,    66,100,-1,1,1,  46,50,1,-1,2,   16,116,-1,-1,0
+
+set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
+spr_tab:    dw spr_z0, spr_z1, spr_z2
 
 ; ------------------------------------------------------------ γραφικά
 ; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη: το byte του χάρτη
@@ -275,12 +314,35 @@ TILE_PAGE   equ tile_gfx >> 8
 res_gfx:                        ; στοιχισμένο στα 128 (το blit το χρειάζεται)
         assert (res_gfx & 127) == 0, 'res_gfx must be 128-aligned'
         incbin "../data/resources.bin"
-map_src:
+; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB).
+map_z:
+        lzx0
         incbin "../data/map96.bin"
+        lzclose
+
+; Τα σετ των μονάδων, συμπιεσμένα· αποσυμπιέζονται στην τράπεζα C5.
+spr_z0:
+        lzx0
+        incbin "../data/villager_m.bin"
+        lzclose
+spr_z1:
+        lzx0
+        incbin "../data/swordsman.bin"
+        lzclose
+spr_z2:
+        lzx0
+        incbin "../data/archer.bin"
+        lzclose
+
+; ΤΙΠΟΤΑ ΜΕ `align` ΜΕΤΑ ΑΠΟ ΜΠΛΟΚ LZX0: ο rasm στοιχίζει με τη διεύθυνση
+; ΠΡΙΝ τη συμπίεση, και μετά τη συμπίεση η ετικέτα μετακινείται σε μη
+; στοιχισμένη θέση. Ό,τι θέλει στοίχιση μπαίνει πριν ή ζει εκτός binary.
 
 end:
 
-        assert end < #4000, 'code overflows into the bank window at #4000'
+; Το «end < #4000» ΔΕΝ ελέγχεται εδώ: ο rasm αποτιμά τις ετικέτες μετά από
+; μπλοκ LZX0 με το ασυμπίεστο μέγεθος. Το ελέγχει το build.sh στο πραγματικό
+; POLIS.BIN.
 
 ; ---------------------------------------------------------- έξοδοι
 ; Το ίδιο αρχείο βγάζει δύο πράγματα. Με -DSNA=1: snapshot που ξεκινάει

@@ -190,37 +190,7 @@ blit_res:
         jr nc,.nc
         inc d
 .nc:    ld hl,(b_src)
-        ld b,RES_H
-.fline: push de
-        repeat RES_W - 1
-        ld a,(de)
-        and (hl)
-        inc l                   ; το sprite είναι στοιχισμένο στα 128:
-        or (hl)                 ; οι 8 bytes της γραμμής δεν αλλάζουν σελίδα
-        inc l
-        ld (de),a
-        inc de
-        rend
-        ld a,(de)
-        and (hl)
-        inc l
-        or (hl)
-        inc hl
-        ld (de),a
-        pop de
-        ld a,d                  ; η επόμενη γραμμή οθόνης
-        add a,#08
-        ld d,a
-        and #38
-        jr nz,.fok
-        ld a,e
-        add a,80
-        ld e,a
-        ld a,d
-        adc a,#C0
-        ld d,a
-.fok:   djnz .fline
-        ret
+        jp blit16
 
 .clip:
         ; στήλες: c0 = max(0, -x)/... σε bytes δεδομένων
@@ -327,4 +297,146 @@ blit_res:
         ld hl,b_lines
         dec (hl)
         jr nz,.line
+        ret
+
+; ----------------------------------------------------------------
+; Sprite 8x16 με μάσκα, ολόκληρο μέσα στην οθόνη, χωρίς ψαλίδι.
+; HL = πηγή, ΣΤΟΙΧΙΣΜΕΝΗ στα 128 (οι 8 bytes μιας γραμμής δεν αλλάζουν
+; σελίδα, άρα `inc l`), DE = byte οθόνης. Το μοιράζονται πόροι και μονάδες.
+;
+; Η γρήγορη διαδρομή: +#800 για την επόμενη γραμμή ΔΕΝ αλλάζει το low byte,
+; άρα μέσα σε μια οκτάδα γραμμών αρκεί `inc e` και επαναφορά του E από το C
+; — χωρίς push/pop ανά γραμμή. Αυτό χαλάει μόνο αν τα 4 bytes της γραμμής
+; περνάνε όριο σελίδας (E ≥ #FD)· τότε, και μόνο για όσες γραμμές μένουν,
+; η αργή διαδρομή με 16-bit `inc de`. ~0,85 ms.
+;
+; (Δοκιμάστηκε και πλήρες ξετύλιγμα με είσοδο ανά οκτάδα: οι γραμμές
+; κέρδισαν 3 ms στα 16 sprites, η επιλογή εισόδου έφαγε 7. Πετάχτηκε.)
+blit16:
+        ld b,16
+.chk:   ld a,e
+        cp #FD
+        jr nc,.slow
+        ld c,e
+.line:  repeat 3
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        rend
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc hl
+        ld (de),a
+        ld e,c
+        ld a,d                  ; η επόμενη γραμμή: +#800
+        add a,#08
+        ld d,a
+        and #38
+        jr z,.wrap
+        djnz .line
+        ret
+.wrap:  ld a,e                  ; τέλος οκτάδας: -#4000 + 80
+        add a,80
+        ld e,a
+        ld a,d
+        adc a,#C0
+        ld d,a
+        djnz .chk
+        ret
+
+.slow:  push de
+        repeat 3
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc de
+        rend
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc hl
+        ld (de),a
+        pop de
+        ld a,d                  ; ώς το τέλος της οκτάδας μόνο: μετά το
+        add a,#08               ; +80 το E αλλάζει, και ίσως ξαναχωράει
+        ld d,a
+        and #38
+        jr z,.wrap
+        djnz .slow
+        ret
+
+; DE = byte οθόνης. 4 bytes x 16 γραμμές από τον καθρέφτη (C4 στο #4000).
+; Ίδιο κόλπο με το blit16. Το C είναι μεγάλο ώστε τα 64 LDI να μη
+; δανειστούν από το B.
+restore16:
+        ld bc,#10FF
+.chk:   ld a,e
+        cp #FC                  ; τα 4 LDI πάνε το DE ως start+4: ≤ #FF
+        jr nc,.slow
+.l:     ld h,d
+        ld l,e
+        res 7,h                 ; #C000+k -> #4000+k
+        ldi
+        ldi
+        ldi
+        ldi
+        ld a,e
+        sub 4
+        ld e,a
+        ld a,d
+        add a,#08
+        ld d,a
+        and #38
+        jr z,.wrap
+        djnz .l
+        ret
+.wrap:  ld a,e
+        add a,80
+        ld e,a
+        ld a,d
+        adc a,#C0
+        ld d,a
+        djnz .chk
+        ret
+
+.slow:  push de
+        ld h,d
+        ld l,e
+        res 7,h
+        ldi
+        ldi
+        ldi
+        ldi
+        pop de
+        ld a,d
+        add a,#08
+        ld d,a
+        and #38
+        jr z,.wrap
+        djnz .slow
+        ret
+
+; DE = η γραμμή από κάτω.
+next_line_de:
+        ld a,d
+        add a,#08
+        ld d,a
+        and #38
+        ret nz
+        ld a,e
+        add a,80
+        ld e,a
+        ld a,d
+        adc a,#C0
+        ld d,a
         ret
