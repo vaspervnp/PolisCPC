@@ -347,7 +347,7 @@ def render_world(grd, res, towns=True):
 MM_X, MM_Y, MM_S = 13, 162, 20          # μίνι χάρτης: κέντρο-πάνω, πλευρά
 
 
-def minimap(img, grd, res, cam):
+def minimap(img, grd, res, cam, rect=True):
     """Μίνι χάρτης: ΡΟΜΒΟΣ, όπως στο Age of Empires — ο χάρτης είναι
     ισομετρικός, άρα και η επισκόπησή του. 20 pixels πλάτος, 20 γραμμές
     ύψος = 40x20 μονάδες, η ίδια αναλογία 2:1 με το πλακίδιο. Το λευκό
@@ -372,6 +372,8 @@ def minimap(img, grd, res, cam):
         img[MM_Y + int((i + j) * MM_S / 2 / N)][
             MM_X + int((i - j) * MM_S / 2 / N)] = \
             gfx.PEN['T'] if who == 0 else gfx.PEN['r']
+    if not rect:
+        return
     # το παράθυρο: κόσμος -> μίνι χάρτης, κλίμακα MM_S / 8N
     k = MM_S / (8.0 * N)
     cx, cy = cam

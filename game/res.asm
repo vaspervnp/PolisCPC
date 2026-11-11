@@ -16,10 +16,17 @@ RES_W       equ 4               ; bytes δεδομένων ανά γραμμή
 RES_H       equ 16
 RES_SZ      equ 128             ; μάσκα + δεδομένα
 
+; Οι πόροι που πέφτουν στο ΠΑΡΑΘΥΡΟ ΨΑΛΙΔΙΣΜΑΤΟΣ (clip_x0..clip_x1 bytes,
+; clip_y0..clip_y1 γραμμές οθόνης). Όλο το παράθυρο χάρτη στην πλήρη σχεδίαση·
+; μια στήλη 2 bytes ή μια σειρά 8 γραμμών στην κύλιση (M2).
 draw_resources:
-        ; Σειρές που φαίνονται: το sprite της r πιάνει τις γραμμές
-        ; 4r - cam_y - 10 ... +16. Από r = (cam_y - 6) >> 2 + 1 ...
+        ; πρώτη σειρά: το sprite της r πιάνει τις γραμμές 4r - cam_y - 10
+        ; ... +16, άρα r = ((cam_y + clip_y0 - 6) >> 2) + 1
         ld hl,(cam_y)
+        ld a,(clip_y0)
+        ld e,a
+        ld d,0
+        add hl,de
         ld de,-6
         add hl,de
         sra h
@@ -28,19 +35,40 @@ draw_resources:
         rr l
         inc hl
         ld (var_r),hl
-        ld a,(VIEW_H + 10 + 6) / 4 + 2  ; πόσες σειρές, με περιθώριο
+        ld a,(clip_y0)          ; πόσες σειρές: (ύψος + 16) / 4 + 2
+        ld b,a
+        ld a,(clip_y1)
+        sub b
+        add a,16
+        srl a
+        srl a
+        add a,2
         ld (rows_left),a
 
-.row:   ; i0 = (r + h) >> 1: το πρώτο πλακίδιο με X οθόνης ≥ -2
+.row:   ; k = r + h + clip_x0/2. Το πρώτο πλακίδιο που ακουμπάει το παράθυρο
+        ; είναι το i = k >> 1, στο X οθόνης clip_x0 - 2*(k AND 1).
         ld hl,(var_r)
         ld de,(cam_h)
         add hl,de
-        ; x0 = 4*i0 - 2(r+h): 0 αν το r+h είναι ζυγό, -2 αν μονό
+        ld a,(clip_x0)
+        srl a
+        ld e,a
+        ld d,0
+        add hl,de
         ld a,l
         and 1
-        neg
         add a,a
+        ld b,a
+        ld a,(clip_x0)
+        sub b
         ld (rx),a
+        ld b,a                  ; πόσα πλακίδια: (clip_x1 - x + 3) / 4
+        ld a,(clip_x1)
+        sub b
+        add a,3
+        srl a
+        srl a
+        ld (rn),a
         sra h
         rr l
         ld (var_i),hl
@@ -55,10 +83,10 @@ draw_resources:
         add hl,de
         ld a,h
         or a
-        jr nz,.next             ; έξω από το παράθυρο κάθετα
+        jp nz,.next             ; έξω από την οθόνη κάθετα
         ld a,l
         cp VIEW_H + 16
-        jr nc,.next
+        jp nc,.next
         ld (ry),a
         ; J = r - i0, ptr = MAP + J*96 + i0
         ld hl,(var_r)
@@ -86,18 +114,26 @@ draw_resources:
         ld c,a                  ; C = J
         ld a,(rx)
         ld ixl,a                ; IXL = X οθόνης του πλακιδίου
-        ld ixh,21               ; 21 πλακίδια καλύπτουν -2 .. 80
+        ld a,(rn)
+        ld ixh,a                ; IXH = πόσα πλακίδια
         ld de,1-MAPW            ; DE = βήμα (i+1, j-1)
-        ; Όλη η σειρά μέσα στον χάρτη: (I, J) και (I+20, J-20).
+        ; Όλα μέσα στον χάρτη: (I, J) και (I+n-1, J-n+1).
+        dec a
+        ld (rn),a
+        ld a,MAPW
+        ld hl,rn
+        sub (hl)
+        ld l,a                  ; L = 96 - (n-1)
         ld a,b
-        cp MAPW - 20
-        jr nc,.tile
+        cp l
+        jr nc,.tile0
         ld a,c
         cp MAPW
-        jr nc,.tile
-        cp 20
-        jr nc,.ftile
-
+        jr nc,.tile0
+        ld hl,rn
+        cp (hl)
+        jr nc,.ftile0
+.tile0: call .ptr
 .tile:  ld a,b                  ; με ελέγχους ορίων
         cp MAPW
         jr nc,.skip
@@ -117,6 +153,8 @@ draw_resources:
         jr nz,.tile
         jr .next
 
+.ftile0:
+        call .ptr
 .ftile: ld a,(hl)               ; χωρίς: όλη η σειρά είναι μέσα
         and #0F
         call nz,res_here
@@ -136,6 +174,31 @@ draw_resources:
         jp nz,.row
         ret
 
+; HL = ο δείκτης του χάρτη για το (var_i, rj) — ξαναϋπολογίζεται γιατί ο
+; έλεγχος από πάνω χάλασε το HL.
+.ptr:   push de
+        ld a,(rj)
+        ld l,a
+        ld a,(rj)
+        rlca
+        sbc a,a
+        ld h,a                  ; J με πρόσημο
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        ld d,h
+        ld e,l
+        add hl,hl
+        add hl,de
+        ld de,(var_i)
+        add hl,de
+        ld de,MAP
+        add hl,de
+        pop de
+        ret
+
 ; Πόρος A στο πλακίδιο του σαρωτή: X από το IXL. Κρατάει BC, DE, HL, IX.
 res_here:
         push bc
@@ -151,7 +214,24 @@ res_here:
         pop bc
         ret
 
+; A = γραμμή οθόνης 0..143, B = byte 0..79 -> DE = η διεύθυνσή τους, με
+; τύλιγμα στα 2 KB (με την κύλιση η γραμμή μπορεί να σπάει).
+line_x: ld l,a
+        ld h,0
+        add hl,hl
+        ld de,line_addr
+        add hl,de
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        ld a,b
+        add a,e
+        ld e,a
+        ret nc
+        jp de_carry
+
 ; A = πόρος (1-15), (rx) = X οθόνης σε bytes (προσημασμένο), (ry) = Y + 16.
+; Ψαλίδι στο παράθυρο clip_*.
 blit_res:
         ; sprite = res_gfx + (A-1)*128
         dec a
@@ -166,87 +246,78 @@ blit_res:
         add hl,de
         ld (b_src),hl
 
-        ; Ολόκληρο μέσα στο παράθυρο; 0 ≤ X ≤ 76 και 0 ≤ Y ≤ 128. Τότε χωρίς
-        ; ψαλίδι, ξετυλιγμένο — η συνηθισμένη περίπτωση.
+        ; Με +8 στο X και +16 στο Y όλα χωράνε σε bytes χωρίς πρόσημο.
+        ; c0 = max(0, clip_x0 - x), c1 = min(4, clip_x1 - x)
         ld a,(rx)
-        cp 80 - RES_W + 1
-        jr nc,.clip
-        ld a,(ry)
-        sub 16
-        jr c,.clip
-        cp VIEW_H - RES_H + 1
-        jr nc,.clip
-        ld l,a                  ; DE = line_addr[y] + x
-        ld h,0
-        add hl,hl
-        ld de,line_addr
-        add hl,de
-        ld e,(hl)
-        inc hl
-        ld d,(hl)
-        ld a,(rx)
-        add a,e
-        ld e,a
-        jr nc,.nc
-        inc d
-.nc:    ld hl,(b_src)
-        jp blit16
-
-.clip:
-        ; στήλες: c0 = max(0, -x)/... σε bytes δεδομένων
-        ld a,(rx)
-        ld c,0
-        bit 7,a
-        jr z,.xpos
-        neg
-        ld c,a                  ; c0 = -x
+        add a,8
+        ld d,a                  ; D = x + 8
+        ld a,(clip_x0)
+        add a,8
+        sub d
+        jr nc,.c0
+        xor a
+.c0:    ld (b_c0),a
         cp RES_W
         ret nc
-.xpos:  ld a,c
-        ld (b_c0),a
-        ld a,(rx)               ; c1 = min(4, 80 - x)
-        ld b,a
-        ld a,80
-        sub b
-        jr c,.xc1               ; (για αρνητικό x το 80-x > 4)
+        ld a,(clip_x1)
+        add a,8
+        sub d                   ; clip_x1 - x
+        ret c
+        ret z
         cp RES_W
-        jr c,.xok
-.xc1:   ld a,RES_W
-.xok:   ld hl,b_c0
+        jr c,.c1
+        ld a,RES_W
+.c1:    ld hl,b_c0
         sub (hl)
         ret z
         ret c
         ld (b_n),a
-
-        ; γραμμές: l0 = max(0, -y), l1 = min(16, 144 - y)
+        ; l0 = max(0, clip_y0 - y), l1 = min(16, clip_y1 - y)
         ld a,(ry)
-        sub 16                  ; y (μπορεί αρνητικό)
-        ld c,0
-        jr nc,.ypos
-        neg
-        ld c,a
-.ypos:  ld a,c
-        ld (b_l0),a
-        ld a,(ry)
-        ld b,a
-        ld a,VIEW_H + 16
-        sub b                   ; 144 - y
+        ld d,a                  ; D = y + 16
+        ld a,(clip_y0)
+        add a,16
+        sub d
+        jr nc,.l0
+        xor a
+.l0:    ld (b_l0),a
         cp RES_H
-        jr c,.yok
+        ret nc
+        ld a,(clip_y1)
+        add a,16
+        sub d
+        ret c
+        ret z
+        cp RES_H
+        jr c,.l1
         ld a,RES_H
-.yok:   ld hl,b_l0
+.l1:    ld hl,b_l0
         sub (hl)
         ret z
         ret c
         ld (b_lines),a
 
-        ; πρώτη γραμμή οθόνης: y + l0
+        ; Ολόκληρο μέσα; Τότε χωρίς ψαλίδι, ξετυλιγμένο — η συνηθισμένη
+        ; περίπτωση στην πλήρη σχεδίαση.
+        cp RES_H
+        jr nz,.clip
+        ld a,(b_n)
+        cp RES_W
+        jr nz,.clip
+        ld a,(ry)
+        sub 16
+        ld hl,rx
+        ld b,(hl)
+        call line_x
+        ld hl,(b_src)
+        jp blit16
+
+.clip:  ; πρώτη γραμμή οθόνης: y + l0· πηγή: + l0*8 + c0*2
         ld a,(ry)
         sub 16
         ld hl,b_l0
         add a,(hl)
         ld (b_y),a
-        ; πηγή: + l0*8 + c0*2
         ld a,(b_l0)
         add a,a
         add a,a
@@ -260,23 +331,70 @@ blit_res:
         ld hl,(b_src)
         add hl,de
         ld (b_src),hl
-
-.line:  ld a,(b_y)              ; DE = line_addr[y] + x + c0
-        ld l,a
-        ld h,0
-        add hl,hl
-        ld de,line_addr
-        add hl,de
-        ld e,(hl)
-        inc hl
-        ld d,(hl)
+        ; ΚΟΜΜΕΝΟ ΜΟΝΟ ΚΑΘΕΤΑ, ΜΕΣΑ ΣΕ ΜΙΑ ΣΕΙΡΑ ΧΑΡΑΚΤΗΡΩΝ (η σειρά 8 γραμμών
+        ; της κάθετης κύλισης): όλα τα 4 bytes, και η επόμενη γραμμή είναι
+        ; D + 8 — χωρίς line_x ανά γραμμή.
+        ld a,(b_n)
+        cp RES_W
+        jr nz,.line
+        ld a,(b_y)
+        and 7
+        ld c,a
+        ld a,(b_lines)
+        add a,c
+        cp 9
+        jr nc,.line
         ld a,(rx)
+        ld b,a
+        ld a,(b_y)
+        call line_x
+        ld a,e
+        cp #FD                  ; τα 4 bytes περνάνε όριο σελίδας: αργά
+        jr nc,.line
+        ld c,e
+        ld hl,(b_src)
+        ld a,(b_lines)
+        ld b,a
+.row:   ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        ld e,c
+        ld a,d
+        add a,8
+        ld d,a
+        djnz .row
+        ret
+
+.line:  ld a,(rx)               ; DE = line_addr[y] + x + c0
         ld hl,b_c0
         add a,(hl)
-        ld l,a
-        ld h,0
-        add hl,de
-        ex de,hl
+        ld b,a
+        ld a,(b_y)
+        call line_x
         ld hl,(b_src)
         ld a,(b_n)
         ld b,a
@@ -286,7 +404,8 @@ blit_res:
         or (hl)
         inc hl
         ld (de),a
-        inc de
+        inc e
+        call z,de_carry
         djnz .byte
         ld hl,(b_src)
         ld de,RES_W * 2
@@ -300,25 +419,68 @@ blit_res:
         ret
 
 ; ----------------------------------------------------------------
+; Η ΕΠΟΜΕΝΗ ΣΕΙΡΑ ΧΑΡΑΚΤΗΡΩΝ, με την κύλιση
+;
+; Μέσα στη σειρά η επόμενη γραμμή είναι +#800 και το low byte δεν αλλάζει.
+; Στο τέλος της σειράς (μετά τη γραμμή 7, το D «ξεχείλισε» στο +8): +80 στη
+; μετατόπιση, ΤΥΛΙΓΜΕΝΗ στα 2 KB (με την κύλιση η σειρά μπορεί να συνεχίζει
+; από την αρχή της οκτάδας), στη γραμμή 0 της σελίδας #C000.
+
+; ----------------------------------------------------------------
 ; Sprite 8x16 με μάσκα, ολόκληρο μέσα στην οθόνη, χωρίς ψαλίδι.
-; HL = πηγή, ΣΤΟΙΧΙΣΜΕΝΗ στα 128 (οι 8 bytes μιας γραμμής δεν αλλάζουν
-; σελίδα, άρα `inc l`), DE = byte οθόνης. Το μοιράζονται πόροι και μονάδες.
+; HL = πηγή, ΣΤΟΙΧΙΣΜΕΝΗ στα 128 (`inc l` σε όλο το sprite), DE = byte
+; οθόνης. Το μοιράζονται πόροι και μονάδες. ~0,75 ms.
 ;
-; Η γρήγορη διαδρομή: +#800 για την επόμενη γραμμή ΔΕΝ αλλάζει το low byte,
-; άρα μέσα σε μια οκτάδα γραμμών αρκεί `inc e` και επαναφορά του E από το C
-; — χωρίς push/pop ανά γραμμή. Αυτό χαλάει μόνο αν τα 4 bytes της γραμμής
-; περνάνε όριο σελίδας (E ≥ #FD)· τότε, και μόνο για όσες γραμμές μένουν,
-; η αργή διαδρομή με 16-bit `inc de`. ~0,85 ms.
+; ΞΕΤΥΛΙΓΜΕΝΟ: 16 γραμμές, κανένας μετρητής. Ανάμεσα στις γραμμές μόνο
+; `call z` για την αλλαγή σειράς χαρακτήρων — 3 NOPs όταν δεν γίνεται, 14 από
+; τις 15 φορές. Αν τα 4 bytes μιας γραμμής περνάνε όριο σελίδας (E ≥ #FD), το
+; `inc e` δεν φτάνει: ελέγχεται στην αρχή και σε κάθε αλλαγή σειράς, και
+; ΜΟΝΟ οι γραμμές που μένουν πάνε από την αργή διαδρομή.
 ;
-; (Δοκιμάστηκε και πλήρες ξετύλιγμα με είσοδο ανά οκτάδα: οι γραμμές
-; κέρδισαν 3 ms στα 16 sprites, η επιλογή εισόδου έφαγε 7. Πετάχτηκε.)
+; (Δοκιμάστηκε και ξετύλιγμα με είσοδο ανά σειρά: οι γραμμές κέρδισαν 3 ms
+; στα 16 sprites, η επιλογή εισόδου έφαγε 7. Πετάχτηκε.)
 blit16:
-        ld b,16
-.chk:   ld a,e
+        ld a,e
         cp #FD
-        jr nc,.slow
+        ld b,16
+        jp nc,blit_slow
         ld c,e
-.line:  repeat 3
+        repeat 15
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        inc e
+        ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
+        ld (de),a
+        ld e,c
+        ld a,d
+        add a,#08
+        ld d,a
+        and #38
+        call z,bwrap
+        rend
+        repeat 4
         ld a,(de)
         and (hl)
         inc l
@@ -327,30 +489,43 @@ blit16:
         ld (de),a
         inc e
         rend
-        ld a,(de)
-        and (hl)
-        inc l
-        or (hl)
-        inc hl
-        ld (de),a
-        ld e,c
-        ld a,d                  ; η επόμενη γραμμή: +#800
-        add a,#08
-        ld d,a
-        and #38
-        jr z,.wrap
-        djnz .line
-        ret
-.wrap:  ld a,e                  ; τέλος οκτάδας: -#4000 + 80
-        add a,80
-        ld e,a
-        ld a,d
-        adc a,#C0
-        ld d,a
-        djnz .chk
         ret
 
-.slow:  push de
+; Αλλαγή σειράς στο ξετυλιγμένο blit16: +80 τυλιγμένο στα 2 KB. Αν η νέα
+; σειρά περνάει όριο σελίδας, οι γραμμές που μένουν (από το L: 8 bytes ανά
+; γραμμή) πάνε στην αργή διαδρομή, και το ξετυλιγμένο εγκαταλείπεται.
+bwrap:  ld a,c
+        add a,80
+        ld c,a
+        ld e,a
+        ld a,d
+        adc a,0
+        and 7
+        or #C0
+        ld d,a
+        ld a,e
+        cp #FD
+        ret c
+        pop af                  ; όχι πίσω στο ξετυλιγμένο
+        ld a,l
+        and #7F
+        rrca
+        rrca
+        rrca
+        neg
+        add a,16
+        ld b,a
+
+; Η αργή διαδρομή, B γραμμές. Μια γραμμή που περνάει όριο σελίδας θέλει απλώς
+; 16-bit `inc de` — εκτός αν το όριο είναι και όριο 2 KB (D AND 7 = 7), όπου
+; η γραμμή συνεχίζει από την αρχή της οκτάδας. Αυτό το δεύτερο γίνεται σε
+; ΜΙΑ σειρά χαρακτήρων μόνο, όταν η κύλιση την έχει σπάσει.
+blit_slow:
+.l:     push de
+        ld a,d
+        and 7
+        cp 7
+        jr z,.k2
         repeat 3
         ld a,(de)
         and (hl)
@@ -360,56 +535,44 @@ blit16:
         ld (de),a
         inc de
         rend
+        jr .last
+.k2:    repeat 3
         ld a,(de)
         and (hl)
         inc l
         or (hl)
-        inc hl
+        inc l
+        ld (de),a
+        inc e
+        call z,de_carry
+        rend
+.last:  ld a,(de)
+        and (hl)
+        inc l
+        or (hl)
+        inc l
         ld (de),a
         pop de
-        ld a,d                  ; ώς το τέλος της οκτάδας μόνο: μετά το
-        add a,#08               ; +80 το E αλλάζει, και ίσως ξαναχωράει
-        ld d,a
-        and #38
-        jr z,.wrap
-        djnz .slow
-        ret
-
-; DE = byte οθόνης. 4 bytes x 16 γραμμές από τον καθρέφτη (C4 στο #4000).
-; Ίδιο κόλπο με το blit16. Το C είναι μεγάλο ώστε τα 64 LDI να μη
-; δανειστούν από το B.
-restore16:
-        ld bc,#10FF
-.chk:   ld a,e
-        cp #FC                  ; τα 4 LDI πάνε το DE ως start+4: ≤ #FF
-        jr nc,.slow
-.l:     ld h,d
-        ld l,e
-        res 7,h                 ; #C000+k -> #4000+k
-        ldi
-        ldi
-        ldi
-        ldi
-        ld a,e
-        sub 4
-        ld e,a
         ld a,d
         add a,#08
         ld d,a
         and #38
-        jr z,.wrap
+        call z,next_row_de
         djnz .l
         ret
-.wrap:  ld a,e
-        add a,80
-        ld e,a
-        ld a,d
-        adc a,#C0
-        ld d,a
-        djnz .chk
-        ret
 
-.slow:  push de
+; DE = byte οθόνης. 4 bytes x 16 γραμμές από τον καθρέφτη (C4 στο #4000),
+; που έχει την ΙΔΙΑ διάταξη: η πηγή είναι το DE με το bit 15 σβηστό.
+; Ξετυλιγμένο όπως το blit16. ~0,55 ms.
+;
+; Το B μετράει γραμμές· το C είναι μεγάλο ώστε τα 64 LDI να μη δανειστούν
+; ποτέ από το B.
+restore16:
+        ld bc,#10FF
+        ld a,e
+        cp #FC                  ; τα 4 LDI πάνε το DE ως +4: ≤ #FF
+        jp nc,restore_slow
+        repeat 15
         ld h,d
         ld l,e
         res 7,h
@@ -417,26 +580,111 @@ restore16:
         ldi
         ldi
         ldi
-        pop de
+        dec b
+        ld a,e
+        sub 4
+        ld e,a
         ld a,d
         add a,#08
         ld d,a
         and #38
-        jr z,.wrap
-        djnz .slow
+        call z,rwrap
+        rend
+        ld h,d
+        ld l,e
+        res 7,h
+        ldi
+        ldi
+        ldi
+        ldi
         ret
 
-; DE = η γραμμή από κάτω.
+rwrap:  ld a,e
+        add a,80
+        ld e,a
+        ld a,d
+        adc a,0
+        and 7
+        or #C0
+        ld d,a
+        ld a,e
+        cp #FC
+        ret c
+        pop af                  ; οι B γραμμές που μένουν: αργά
+
+restore_slow:
+.l:     push de
+        ld a,d
+        and 7
+        cp 7
+        jr z,.k2
+        ld h,d
+        ld l,e
+        res 7,h
+        ldi                     ; απλό όριο σελίδας: τα LDI το περνάνε σωστά
+        ldi                     ; (το C είναι ≥ 4: τα LDI δεν αγγίζουν το B)
+        ldi
+        ldi
+        jr .next
+.k2:    repeat 4
+        ld h,d
+        ld l,e
+        res 7,h
+        ld a,(hl)
+        ld (de),a
+        inc e
+        call z,de_carry
+        rend
+.next:  pop de
+        ld a,d
+        add a,#08
+        ld d,a
+        and #38
+        call z,next_row_de
+        djnz .l
+        ret
+
+; Το E μόλις έγινε 0: D+1, τυλιγμένο στα 2 KB της οκτάδας.
+de_carry:
+        inc d
+        ld a,d
+        and 7
+        ret nz
+        ld a,d
+        sub 8
+        ld d,a
+        ret
+
+; DE + 1 μέσα στη μνήμη οθόνης: στο όριο των 2 KB τυλίγεται στην αρχή της
+; ίδιας οκτάδας (η κύλιση μπορεί να σπάει μια γραμμή εκεί).
+inc_de_scr:
+        inc de
+        ld a,e
+        or a
+        ret nz
+        ld a,d
+        and 7
+        ret nz
+        ld a,d
+        sub 8
+        ld d,a
+        ret
+
+; DE = η γραμμή από κάτω, με τύλιγμα στα 2 KB.
 next_line_de:
         ld a,d
         add a,#08
         ld d,a
         and #38
         ret nz
+; Το D μόλις ξεχείλισε (τέλος σειράς): +80, τυλιγμένο στα 2 KB.
+next_row_de:
         ld a,e
         add a,80
         ld e,a
         ld a,d
-        adc a,#C0
+        adc a,0
+        and 7
+        or #C0
         ld d,a
         ret

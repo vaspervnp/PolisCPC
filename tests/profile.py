@@ -2,6 +2,7 @@
 
     python3 tests/profile.py [cam_x cam_y]     # πλήρης σχεδίαση παραθύρου
     python3 tests/profile.py units             # 20 καρέ μονάδων (M3)
+    python3 tests/profile.py scroll R|L|U|D    # 20 καρέ κύλισης, χωρίς μονάδες (M2)
 
 Κάθε 7 µs γράφει πού είναι ο PC. Τα δείγματα αντιστοιχίζονται στο πλησιέστερο σύμβολο από κάτω (τοπικές
 ετικέτες συμπεριλαμβάνονται), οπότε φαίνεται και ποιος βρόχος τρώει.
@@ -47,7 +48,13 @@ def main():
     c.run_frames(5)
     c.quickload(os.path.join(M.BUILD, 'polis.sna'))
     M.wait_phase(c, sym, 6)
-    if sys.argv[1:2] == ['units']:
+    if sys.argv[1:2] == ['scroll']:
+        import m2_check as M2
+        import m3_check as M3
+        c.poke(sym['ERASE_REQ'], 1)
+        M3.tick_time(c, sym)
+        c.key_down(M2.KEYS[sys.argv[2]])
+    if sys.argv[1:2] in (['units'], ['scroll']):
         hits, n = collections.Counter(), 0
         for _ in range(20):
             while c.peek(sym['UPHASE']) != 4:

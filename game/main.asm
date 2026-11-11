@@ -52,8 +52,10 @@ start:
         di
         ld sp,STACK_TOP
         im 1
-        ld hl,#C9FB             ; EI ; RET
-        ld (#0038),hl
+        ld a,#C3                ; JP int_handler (screen.asm)
+        ld (#0038),a
+        ld hl,int_handler
+        ld (#0039),hl
 
         ld bc,GA*256+GA_RMR     ; Mode 0, ROMs κλειστές
         out (c),c
@@ -67,8 +69,17 @@ start:
         ld hl,map_z             ; ο χάρτης στη θέση του (#8000), από ZX0
         ld de,MAP
         call dzx0
+        ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
+        ld b,16
+.z:     ld (hl),0
+        inc hl
+        djnz .z
         call units_init
+        call hud_init
+        ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
+        call crtc_w
         ld a,1
+        ld (split_req),a        ; από το επόμενο VSYNC: δύο καρέ CRTC, χάρτης + HUD
         ld (redraw),a
         endif
         ei
@@ -84,6 +95,9 @@ frame:
         ld (redraw),a
         inc a
         ld (phase),a            ; 1 = σχεδιάζει (το διαβάζει το tests/m1_check.py)
+        ld hl,0                 ; πλήρης σχεδίαση: η κύλιση ξεκινάει από το 0,
+        ld (scr_s),hl           ; οπότε καμία γραμμή δεν σπάει στα 2 KB
+        call build_lines
         call render
         ld a,2                  ; 2 = το παράθυρο σχεδιάστηκε
         ld (phase),a
@@ -241,6 +255,8 @@ pen_pair:
         include "ground.asm"
         include "res.asm"
         include "zx0.asm"
+        include "screen.asm"
+        include "scroll.asm"
         include "units.asm"
 
 linebuf:
@@ -282,7 +298,52 @@ b_n:        db 0
 b_l0:       db 0
 b_lines:    db 0
 b_y:        db 0
+rn:         db 0
+clip_x0:    db 0                ; το παράθυρο ψαλιδίσματος των πόρων (res.asm)
+clip_x1:    db 80
+clip_y0:    db 0
+clip_y1:    db VIEW_H
+sdx:        db 0                ; κύλιση που ζητήθηκε αυτό το καρέ (scroll.asm)
+sdy:        db 0
+sdiag:      db 0                ; η διαγώνια κύλιση εναλλάξ (scroll.asm)
+v_shx:      db 0                ; η κύλιση από το προηγούμενο καρέ μονάδων
+v_shy:      db 0
+rect_n:     db 0                ; ορθογώνια που σβήνονται/ζωγραφίζονται (units.asm)
+rects:      ds 64               ; (x, y) x 32
+col_c:      db 0
+col_y:      db 0
+col_off:    db 0
+col_w:      dw 0
+col_par:    db 0                ; draw_column: η ισοτιμία του s
+col_n:      db 0
+col_i:      dw 0
+col_j:      dw 0
+col_ptr:    dw 0
+col_t0:     dw 0
+col_t1:     dw 0
+col_lp:     dw 0
+col_r0:     db 0                ; ο πόρος του τρέχοντος / επόμενου πλακιδίου
+col_r1:     db 0
+col_sy:     db 0
+sr_y0:      db 0                ; strip_resources
+sr_n:       db 0
+sr_res:     db 0
+sr_src:     db 0
+sr_line:    dw 0                ; η πρώτη γραμμή του sprite της ομάδας
+el_t:       db 0
+row_ent:    dw 0
+row_dst:    dw 0
+v_dx:       db 0
+v_dy:       db 0
+v_xlo:      db 0                ; το εύρος του U_X που φαίνεται (units.asm)
+v_xhi:      db 0
+v_ylo:      db 0
+v_yhi:      db 0
 ticks:      db 0
+scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
+int_n:      db 0
+split_on:   db 0
+split_req:  db 0
 uphase:     db 0
 erase_req:  db 0
 paused:     db 0
@@ -318,6 +379,12 @@ res_gfx:                        ; στοιχισμένο στα 128 (το blit �
 map_z:
         lzx0
         incbin "../data/map96.bin"
+        lzclose
+
+; Το HUD: ολόκληρη η σελίδα #4000 στη διάταξη του CRTC, σχεδόν μηδενικά.
+hud_z:
+        lzx0
+        incbin "../data/hud_page.bin"
         lzclose
 
 ; Τα σετ των μονάδων, συμπιεσμένα· αποσυμπιέζονται στην τράπεζα C5.

@@ -15,12 +15,22 @@
 i πάει κάτω-δεξιά, άρα ένα βήμα «δεξιά κατά μήκος της σειράς ρόμβων» είναι
 (i+1, j-1) = +1-96.
 
+ΚΑΙ ΤΟ HUD (data/hud_page.bin)
+
+Από το M2 το HUD ΔΕΝ είναι στη μνήμη οθόνης που κυλάει: είναι στην κύρια
+RAM #4000-#7FFF και το δείχνει το δεύτερο «καρέ» του CRTC (split-screen).
+Το αρχείο είναι ολόκληρη η σελίδα των 16 KB στη διάταξη του CRTC με αρχή 0:
+σειρά k, γραμμή l, byte b στο l*#800 + k*80 + b. Είναι σχεδόν όλο μηδενικά·
+το παιχνίδι το παίρνει συμπιεσμένο. Ίδιο HUD με το mockup, με τον μίνι
+χάρτη χωρίς το πλαίσιο της κάμερας.
+
 Τα κτίρια ΔΕΝ είναι στον χάρτη: είναι αντικείμενα με δική τους λίστα (M7).
 Κάτω από τις κατόψεις τους ο χάρτης έχει σκέτο έδαφος.
 """
 import json
 import os
 
+import cpcimg
 import gfx
 import mockup
 import terrain as T
@@ -40,8 +50,28 @@ def encode(grd, res):
     return bytes(out)
 
 
+HUD_Y0, HUD_ROWS = mockup.MAP_H, 7
+
+
+def hud_page(grd, res):
+    img = mockup.hud_background()
+    mockup.minimap(img, grd, res, (0, 0), rect=False)
+    page = bytearray(0x4000)
+    for k in range(HUD_ROWS):
+        for l in range(8):
+            row = img[HUD_Y0 + k * 8 + l]
+            for b in range(80):
+                p, q = row[2 * b], row[2 * b + 1]
+                page[l * 0x800 + k * 80 + b] = cpcimg.mode0_byte(p or 0, q or 0)
+    return bytes(page)
+
+
 def main():
     grd, res = mockup.make_map()
+    with open(os.path.join(DATA, 'hud_page.bin'), 'wb') as f:
+        f.write(hud_page(grd, res))
+    print('data/hud_page.bin  HUD %d γραμμές, σελίδα 16 KB στη διάταξη CRTC'
+          % (HUD_ROWS * 8))
     blob = encode(grd, res)
     assert len(blob) == N * N
     with open(os.path.join(DATA, 'map96.bin'), 'wb') as f:
