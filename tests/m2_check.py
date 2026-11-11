@@ -31,6 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import m1_check as M                            # noqa: E402
 import m3_check as M3                           # noqa: E402
+import scene as S                               # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 from cpc import CPC                             # noqa: E402
 
@@ -133,36 +134,11 @@ def expect_cam(c, sym, keys, n):
     return x, y
 
 
-def expected(c, sym, ref, sets):
-    """Το φόντο με τις ορατές μονάδες από πάνω (όπως στο M3)."""
-    tab = c.read_ram(sym['UNIT_TAB'], M3.UNITS * M3.U_SIZE)
-    order = c.read_ram(sym['ORDER'], M3.UNITS)
-    img = [list(r) for r in ref]
-    for entry in order:
-        u = tab[entry:entry + M3.U_SIZE]
-        x, y, kind = u[7], u[8], u[4]
-        if y == 255:
-            continue
-        ptr = u[10] | u[11] << 8
-        off = ptr - (M3.SPR_BASE + kind * M3.SPR_STRIDE)
-        if off < M3.SPR_WEST:
-            spr = sets[kind][off // 128]
-        else:
-            spr = M3.gfx.mirror(sets[kind][4 + (off - M3.SPR_WEST) // 128])
-        for j in range(16):
-            for i in range(8):
-                p = spr[j][i]
-                if p is not None:
-                    img[y + j][x * 2 + i] = p
-    return img
-
-
 def main():
     shots = '--shots' in sys.argv
     sym = M.symbols()
     grd, res = M.mockup.make_map()
     world = M.mockup.render_world(grd, res, towns=False)
-    sets = [M3.frames(n) for n in M3.SETS]
     ok = True
 
     c = CPC()
@@ -177,7 +153,7 @@ def main():
         for _ in range(4):
             times.append(M3.tick_time(c, sym))
         cx, cy = cam(c, sym)
-        exp = expected(c, sym, M.reference(world, cx, cy), sets)
+        exp = S.expected(c, sym, M.reference(world, cx, cy))
         good = diff(decode_scrolled(c, sym), exp, 'units%d' % k, c, shots)
         print('μονάδες  %-9s κύλιση δεξιά ενώ κινούνται, κάμερα (%d,%d)'
               % ('OK' if good else 'ΑΠΟΤΥΧΙΑ', cx, cy))
@@ -190,7 +166,7 @@ def main():
     for _ in range(3):
         M3.tick_time(c, sym)
     cx, cy = cam(c, sym)
-    exp = expected(c, sym, M.reference(world, cx, cy), sets)
+    exp = S.expected(c, sym, M.reference(world, cx, cy))
     good = diff(decode_scrolled(c, sym), exp, 'units_d', c, shots)
     print('μονάδες  %-9s μετά από κύλιση κάτω, κάμερα (%d,%d)'
           % ('OK' if good else 'ΑΠΟΤΥΧΙΑ', cx, cy))

@@ -4,8 +4,10 @@
 ;
 ; M1: ο χάρτης 96x96 στη μνήμη (#8000) και το ισομετρικό έδαφος + οι πόροι
 ; σε ολόκληρο το παράθυρο χάρτη (ground.asm, res.asm).
-; M3: 16 μονάδες κινούνται στα 25 Hz, με επαναφορά από τον καθρέφτη του
-; φόντου στην τράπεζα C4 και sprites στην C5 (units.asm). Με -DBARS=1 βγαίνει η
+; M3: οι μονάδες στα 25 Hz, με επαναφορά από τον καθρέφτη του φόντου στην
+; τράπεζα C4 και sprites στην C5 (units.asm). M2: κύλιση με το CRTC και HUD
+; με split-screen (scroll.asm, screen.asm). M4: 128 μονάδες, κέρσορας,
+; επιλογή και εντολή κίνησης (units.asm, input.asm). Με -DBARS=1 βγαίνει η
 ; οθόνη ελέγχου του M0 (λωρίδες παλέτας) αντί για τον χάρτη.
 ;
 ; Τι κάνει το M0 (η υποδομή κάτω από όλα):
@@ -258,6 +260,7 @@ pen_pair:
         include "screen.asm"
         include "scroll.asm"
         include "units.asm"
+        include "input.asm"
 
 linebuf:
         ds 80
@@ -309,7 +312,6 @@ sdiag:      db 0                ; η διαγώνια κύλιση εναλλά�
 v_shx:      db 0                ; η κύλιση από το προηγούμενο καρέ μονάδων
 v_shy:      db 0
 rect_n:     db 0                ; ορθογώνια που σβήνονται/ζωγραφίζονται (units.asm)
-rects:      ds 64               ; (x, y) x 32
 col_c:      db 0
 col_y:      db 0
 col_off:    db 0
@@ -333,12 +335,29 @@ sr_line:    dw 0                ; η πρώτη γραμμή του sprite τη�
 el_t:       db 0
 row_ent:    dw 0
 row_dst:    dw 0
-v_dx:       db 0
-v_dy:       db 0
-v_xlo:      db 0                ; το εύρος του U_X που φαίνεται (units.asm)
-v_xhi:      db 0
-v_ylo:      db 0
-v_yhi:      db 0
+pcx:        db 98               ; η κάμερα στο προηγούμενο καρέ μονάδων (low)
+pcy:        db 303 & 255
+utick:      db 0                ; τα καρέ μονάδων (η ισοτιμία του βήματος)
+think_i:    db 0                ; ο κυκλικός δείκτης της απόφασης
+seed:       dw #ACE1
+g_x:        db 0                ; το τελευταίο βήμα του unit_go
+g_y:        db 0
+rl_n:       db 0                ; πόσες στο RLIST, NEWLIST, ORDER
+nl_n:       db 0
+ord_n:      db 0                ; μονάδες στο ORDER
+ord_tot:    db 0                ; + γωνία + κέρσορας
+cur_x:      db 40               ; ο κέρσορας στην οθόνη (input.asm)
+cur_y:      db 64
+cin:        db 0
+cin_prev:   db 0
+box_on:     db 0
+sel_n:      db 0
+cw_x:       dw 0
+cw_y:       dw 0
+bx0:        dw 0
+bx1:        dw 0
+by0:        dw 0
+by1:        dw 0
 ticks:      db 0
 scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
 int_n:      db 0
@@ -347,19 +366,8 @@ split_req:  db 0
 uphase:     db 0
 erase_req:  db 0
 paused:     db 0
-s_key:      db 0
+s_key:      dw 0
 s_y:        db 0
-; Η σειρά σχεδίασης: το low byte της εγγραφής κάθε μονάδας (δείκτης x 16).
-order:      db 0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240
-        align 256               ; (πριν από κάθε μπλοκ LZX0: εδώ ισχύει)
-unit_tab:   ds UNITS * U_SIZE
-
-; Οι 16 μονάδες του M3: x (bytes), y (γραμμές), dx, dy, σετ.
-unit_init:
-        db 10,20,1,1,0,   30,40,-1,1,1,   50,10,1,-1,2,   70,60,-1,-1,0
-        db 12,90,1,-1,1,  40,100,1,1,2,   60,120,-1,-1,0, 20,70,-1,1,1
-        db 74,30,-1,1,2,  4,128,1,-1,0,   36,64,1,1,1,    56,80,-1,-1,2
-        db 26,4,1,1,0,    66,100,-1,1,1,  46,50,1,-1,2,   16,116,-1,-1,0
 
 set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
 spr_tab:    dw spr_z0, spr_z1, spr_z2
@@ -372,6 +380,9 @@ tile_gfx:
         incbin "../data/terrain.bin"
 TILE_PAGE   equ tile_gfx >> 8
         assert $ - tile_gfx == 256, 'terrain.bin must be exactly one page'
+cursor_gfx:                     ; κέρσορας, σημάδι επιλογής, γωνία -> C5
+        incbin "../data/cursor.bin"
+        align 128
 res_gfx:                        ; στοιχισμένο στα 128 (το blit το χρειάζεται)
         assert (res_gfx & 127) == 0, 'res_gfx must be 128-aligned'
         incbin "../data/resources.bin"

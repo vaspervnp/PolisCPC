@@ -1,0 +1,385 @@
+; input.asm — ο κέρσορας, η επιλογή και η εντολή κίνησης. M4.
+;
+;   Q A O P ή joystick   ο κέρσορας (2 bytes / 6 γραμμές ανά καρέ). Στην
+;                        άκρη της οθόνης, ό,τι σπρώχνει πέρα κυλάει τον χάρτη
+;   SPACE ή fire 1       πάτημα + άφημα στο ίδιο σημείο: επιλογή της μονάδας
+;                        κάτω από τον κέρσορα· με σύρσιμο: κουτί επιλογής
+;   RETURN, COPY, fire 2 οι επιλεγμένες πηγαίνουν στον κέρσορα, σε σχηματισμό
+;
+; Τα βελάκια μένουν για την κύλιση (scroll.asm). Το «σημείο» του κέρσορα
+; είναι το πάνω-αριστερό pixel του sprite (cur_x bytes, cur_y γραμμές
+; οθόνης). Η μονάδα «πατάει» στο (WX + 2, WY + 14): εκεί τη στέλνει η εντολή,
+; εκεί την πιάνει το κουτί.
+
+SEL_MAX     equ 32
+SELLIST     equ #A840           ; 32 x δείκτης εγγραφής (μετά τα RECTS)
+CUR_DX      equ 2
+CUR_DY      equ 6
+
+; Τα bits του cin (1 = πατημένο).
+IN_UP       equ 0
+IN_DOWN     equ 1
+IN_LEFT     equ 2
+IN_RIGHT    equ 3
+IN_FIRE     equ 4
+IN_CMD      equ 5
+
+cursor_input:
+        ld a,9                  ; joystick: 0 πάνω, 1 κάτω, 2 αριστερά,
+        call read_row           ; 3 δεξιά, 4 fire 2, 5 fire 1
+        ld e,a
+        and #0F
+        ld d,a
+        bit 5,e
+        jr z,.j1
+        set IN_FIRE,d
+.j1:    bit 4,e
+        jr z,.j2
+        set IN_CMD,d
+.j2:    ld a,8                  ; Q (3), A (5)
+        call read_row
+        bit 3,a
+        jr z,.k1
+        set IN_UP,d
+.k1:    bit 5,a
+        jr z,.k2
+        set IN_DOWN,d
+.k2:    ld a,4                  ; O (2)
+        call read_row
+        bit 2,a
+        jr z,.k3
+        set IN_LEFT,d
+.k3:    ld a,3                  ; P (3)
+        call read_row
+        bit 3,a
+        jr z,.k4
+        set IN_RIGHT,d
+.k4:    ld a,5                  ; SPACE (7)
+        call read_row
+        bit 7,a
+        jr z,.k5
+        set IN_FIRE,d
+.k5:    ld a,2                  ; RETURN (2)
+        call read_row
+        bit 2,a
+        jr z,.k6
+        set IN_CMD,d
+.k6:    ld a,1                  ; COPY (1)
+        call read_row
+        bit 1,a
+        jr z,.k7
+        set IN_CMD,d
+.k7:    ld a,d
+        ld (cin),a
+
+        bit IN_LEFT,d           ; ο κέρσορας, και η κύλιση στις άκρες
+        jr z,.nl
+        ld a,(cur_x)
+        sub CUR_DX
+        jr nc,.lok
+        ld a,-1
+        ld (sdx),a
+        xor a
+.lok:   ld (cur_x),a
+.nl:    bit IN_RIGHT,d
+        jr z,.nr
+        ld a,(cur_x)
+        add a,CUR_DX
+        cp 77
+        jr c,.rok
+        ld a,1
+        ld (sdx),a
+        ld a,76
+.rok:   ld (cur_x),a
+.nr:    bit IN_UP,d
+        jr z,.nu
+        ld a,(cur_y)
+        sub CUR_DY
+        jr nc,.uok
+        ld a,-1
+        ld (sdy),a
+        xor a
+.uok:   ld (cur_y),a
+.nu:    bit IN_DOWN,d
+        jr z,.nd
+        ld a,(cur_y)
+        add a,CUR_DY
+        cp VIEW_H - 16 + 1
+        jr c,.dok
+        ld a,1
+        ld (sdy),a
+        ld a,VIEW_H - 16
+.dok:   ld (cur_y),a
+.nd:
+        ld a,(cin_prev)         ; πατήματα και αφήματα
+        ld e,a
+        ld a,d
+        ld (cin_prev),a
+        cpl
+        and e
+        ld c,a                  ; C = αφέθηκαν
+        ld a,e
+        cpl
+        and d
+        ld b,a                  ; B = πατήθηκαν
+        bit IN_FIRE,b
+        jr z,.nf
+        push bc
+        call cur_world          ; η γωνία του κουτιού εδώ
+        ld hl,(cw_x)
+        ld (ANCHOR_REC + U_WX),hl
+        ld hl,(cw_y)
+        ld (ANCHOR_REC + U_WY),hl
+        ld a,1
+        ld (box_on),a
+        pop bc
+.nf:    bit IN_FIRE,c
+        jr z,.nrel
+        push bc
+        xor a
+        ld (box_on),a
+        call do_select
+        pop bc
+.nrel:  bit IN_CMD,b
+        ret z
+        jp do_command
+
+; Ο κέρσορας στον κόσμο -> cw_x, cw_y (ποτέ αρνητικά).
+cur_world:
+        ld hl,(cam_x)
+        ld a,(cur_x)
+        ld e,a
+        ld d,0
+        add hl,de
+        ld (cw_x),hl
+        ld hl,(cam_y)
+        ld a,(cur_y)
+        ld e,a
+        add hl,de
+        bit 7,h
+        jr z,.y
+        ld hl,0
+.y:     ld (cw_y),hl
+        ret
+
+; Άφημα του fire. Ξε-επιλογή όλων (από τη λίστα SELLIST), και μετά: αν ο
+; κέρσορας είναι σχεδόν εκεί που πατήθηκε, η μονάδα κάτω του (η πιο
+; μπροστινή)· αλλιώς όσες ΦΑΙΝΟΝΤΑΙ (το ORDER) και πατάνε μέσα στο κουτί.
+do_select:
+        call cur_world
+        ld a,(sel_n)
+        or a
+        jr z,.d0
+        ld b,a
+        ld hl,SELLIST
+.d:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push de
+        pop ix
+        res F_SEL,(ix+U_FL)
+        set F_REDRAW,(ix+U_FL)
+        djnz .d
+        xor a
+        ld (sel_n),a
+.d0:        ld hl,(cw_x)            ; κλικ ή κουτί;
+        ld de,(ANCHOR_REC + U_WX)
+        or a
+        sbc hl,de
+        call abs_hl
+        ld a,h
+        or a
+        jr nz,.box
+        ld a,l
+        cp 3
+        jr nc,.box
+        ld hl,(cw_y)
+        ld de,(ANCHOR_REC + U_WY)
+        or a
+        sbc hl,de
+        call abs_hl
+        ld a,h
+        or a
+        jr nz,.box
+        ld a,l
+        cp 8
+        jr nc,.box
+        ; ΚΛΙΚ: από τη μπροστινή (τέλος του ORDER) προς τα πίσω
+        ld a,(ord_n)
+        or a
+        ret z
+        ld b,a
+        add a,a
+        ld l,a
+        ld h,0
+        ld de,ORDER
+        add hl,de
+.cl:    dec hl
+        ld d,(hl)
+        dec hl
+        ld e,(hl)
+        push de
+        pop ix
+        ld a,(cur_x)
+        sub (ix+U_SX)
+        cp 4
+        jr nc,.cn
+        ld a,(cur_y)
+        sub (ix+U_SY)
+        cp 16
+        jr nc,.cn
+        jp unit_select
+.cn:    djnz .cl
+        ret
+.box:   ; ΚΟΥΤΙ: x0..x1, y0..y1 στον κόσμο
+        ld hl,(cw_x)
+        ld de,(ANCHOR_REC + U_WX)
+        call order_hl_de
+        ld (bx0),hl
+        ld (bx1),de
+        ld hl,(cw_y)
+        ld de,(ANCHOR_REC + U_WY)
+        call order_hl_de
+        ld (by0),hl
+        ld (by1),de
+        ld a,(ord_n)
+        or a
+        ret z
+        ld b,a
+        ld hl,ORDER
+.b:     push bc
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push hl
+        push de
+        pop ix
+        ld l,(ix+U_WX)          ; τα πόδια: (WX + 2, WY + 14)
+        ld h,(ix+U_WX+1)
+        inc hl
+        inc hl
+        ld de,(bx0)
+        call cmp_hl_de          ; carry: hl < de
+        jr c,.bn
+        ex de,hl
+        ld hl,(bx1)
+        call cmp_hl_de
+        jr c,.bn
+        ld l,(ix+U_WY)
+        ld h,(ix+U_WY+1)
+        ld de,14
+        add hl,de
+        ld de,(by0)
+        call cmp_hl_de
+        jr c,.bn
+        ex de,hl
+        ld hl,(by1)
+        call cmp_hl_de
+        jr c,.bn
+        call unit_select
+.bn:    pop hl
+        pop bc
+        djnz .b
+        ret
+
+; IX -> επιλεγμένη, στη λίστα (ως SEL_MAX).
+unit_select:
+        ld hl,sel_n
+        ld a,(hl)
+        cp SEL_MAX
+        ret nc
+        inc (hl)
+        set F_SEL,(ix+U_FL)
+        set F_REDRAW,(ix+U_FL)
+        add a,a
+        ld l,a
+        ld h,0
+        ld de,SELLIST
+        add hl,de
+        push ix
+        pop de
+        ld (hl),e
+        inc hl
+        ld (hl),d
+        ret
+
+; HL = |HL|.
+abs_hl: bit 7,h
+        ret z
+        xor a
+        sub l
+        ld l,a
+        sbc a,a
+        sub h
+        ld h,a
+        ret
+
+; HL, DE -> HL = min, DE = max (χωρίς πρόσημο).
+order_hl_de:
+        call cmp_hl_de
+        ret c
+        ex de,hl
+        ret
+
+; Carry αν HL < DE (χωρίς πρόσημο). Κρατάει HL, DE.
+cmp_hl_de:
+        or a
+        sbc hl,de
+        add hl,de
+        ret
+
+; RETURN: οι επιλεγμένες στον κέρσορα, σε σχηματισμό 4 στηλών (5 bytes)
+; και σειρών (12 γραμμές), με τον κέρσορα στο κέντρο της πρώτης σειράς.
+do_command:
+        call cur_world
+        ld a,(sel_n)
+        or a
+        ret z
+        ld hl,SELLIST
+        ld c,0                  ; C = πόσες έχουν πάρει θέση
+.u:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push hl
+        push de
+        pop ix
+        ld a,c                  ; TX = cw_x - 2 - 7 + (k AND 3) * 5
+        and 3
+        ld b,a
+        add a,a
+        add a,a
+        add a,b
+        sub 9
+        ld hl,(cw_x)
+        call add_s8
+        ld de,WORLD_W
+        call clamp_world
+        ld (ix+U_TX),l
+        ld (ix+U_TX+1),h
+        ld a,c                  ; TY = cw_y - 14 + ((k >> 2) AND 7) * 12
+        rrca
+        rrca
+        and 7
+        ld b,a
+        add a,a
+        add a,b
+        add a,a
+        add a,a
+        sub 14
+        ld hl,(cw_y)
+        call add_s8
+        ld de,WORLD_H
+        call clamp_world
+        ld (ix+U_TY),l
+        ld (ix+U_TY+1),h
+        set F_MOVE,(ix+U_FL)
+        res F_WANDER,(ix+U_FL)
+        pop hl
+        inc c
+        ld a,(sel_n)
+        cp c
+        jr nz,.u
+        ret
