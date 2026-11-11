@@ -1,6 +1,22 @@
-"""Μια ολόκληρη οθόνη 160x200 — ο μόνος τρόπος να κριθεί το σύνολο.
+"""Ένας ολόκληρος χάρτης και η οθόνη πάνω του — ο μόνος τρόπος να κριθεί
+το σύνολο.
 
     python3 src/mockup.py
+
+Βγάζει τρία αρχεία στο preview/:
+
+    screen.png  μία οθόνη 160x200: χάρτης, HUD, μονάδες μαζί
+    map.png     ΟΛΟΣ ο χάρτης 96x96, με το πλέγμα των οθονών από πάνω —
+                για να φαίνεται πόσες οθόνες είναι και τι έχει μέσα
+    scroll.gif  η κάμερα περνάει πάνω από τον χάρτη, με τον μίνι χάρτη να
+                ακολουθεί: η κύλιση όπως θα τη δει ο παίκτης
+
+Ο ΧΑΡΤΗΣ ΕΙΝΑΙ 96x96 ΠΛΑΚΙΔΙΑ, ΔΗΛΑΔΗ ~12,8 ΟΘΟΝΕΣ
+
+Ο ισομετρικός χάρτης είναι ρόμβος 8N pixels πλάτος x 8N γραμμές ύψος, άρα
+εμβαδόν 32·N² pixels. Το παράθυρο χάρτη είναι 160x144. Με N=96:
+32·96² / (160·144) = 12,8 οθόνες — πάνω από τις 9 που ζητήθηκαν. Ο χάρτης
+είναι ένα byte ανά πλακίδιο, 9.216 bytes: χωράει σε μία τράπεζα.
 
 Τα contact sheets δείχνουν αν ΕΝΑ πλακίδιο είναι καλό. Δεν δείχνουν αν ο
 χάρτης διαβάζεται, αν τα δέντρα χάνονται μέσα στο γρασίδι, αν το HUD χωράει
@@ -16,6 +32,7 @@
 Τα κουμπιά είναι 8 pixels πλατιά: οκτώ στη σειρά πιάνουν 64 από τα 160.
 """
 import os
+import math
 import random
 
 import buildings as B
@@ -58,149 +75,331 @@ def number(img, v, x, y, pen, width=4):
             digit(img, int(ch), x + k * 4, y, pen)
 
 
-N = 44                                  # ο χάρτης του mockup: 44x44 πλακίδια
-S = 10                                  # τα σημεία του σεναρίου μετατοπίζονται
-X0, Y0 = 76, -108 + 4 * 2 * (22 - S - 12)  # το (12,12) του σεναρίου στο κέντρο
+N = 96                                  # ο χάρτης: 96x96 πλακίδια
+TOP = 64                                # χώρος πάνω από τον χάρτη για ψηλά κτίρια
+WX0 = 4 * N - 4                         # το κουτί του (0,0) στον κόσμο
+WW, WH = 8 * N, 8 * N + TOP             # ο κόσμος σε pixels
+
+LAND = ('grass', 'grass_tuft', 'grass_flower')
+
+
+def _noise(seed, scale):
+    """Ομαλός θόρυβος τιμών σε (i, j) — για ακτές και δάση που δεν είναι
+    ορθογώνια."""
+    rnd = random.Random(seed)
+    g = [[rnd.random() for _ in range(N // scale + 3)]
+         for _ in range(N // scale + 3)]
+
+    def f(i, j):
+        x, y = i / scale, j / scale
+        x0, y0 = int(x), int(y)
+        tx, ty = x - x0, y - y0
+        tx, ty = tx * tx * (3 - 2 * tx), ty * ty * (3 - 2 * ty)
+        a = g[y0][x0] * (1 - tx) + g[y0][x0 + 1] * tx
+        b = g[y0 + 1][x0] * (1 - tx) + g[y0 + 1][x0 + 1] * tx
+        return a * (1 - ty) + b * ty
+    return f
+
+
+# Οι δύο πόλεις. (κτίριο, πολιτισμός, εποχή, i, j, παίκτης) — i, j η ΠΙΣΩ
+# γωνία της κάτοψης. Ο παίκτης 0 είναι μπλε, ο 1 κόκκινος: ΙΔΙΑ δεδομένα,
+# άλλος πίνακας pens (`gfx.team_table`).
+TOWNS = (
+    # ο παίκτης: Έλληνες, κάτω αριστερά, δίπλα στη θάλασσα
+    ('town_center', 'greek', 3, 30, 58, 0),
+    ('house', 'greek', 3, 35, 57, 0), ('house', 'greek', 3, 35, 60, 0),
+    ('house', 'greek', 3, 27, 63, 0), ('house', 'greek', 3, 31, 64, 0),
+    ('granary', 'greek', 3, 25, 57, 0),
+    ('storage_pit', 'greek', 3, 26, 52, 0),
+    ('barracks', 'greek', 3, 38, 64, 0),
+    ('farm', 'greek', 2, 30, 67, 0), ('farm', 'greek', 2, 26, 67, 0),
+    ('temple', 'greek', 3, 34, 69, 0),
+    ('market', 'greek', 3, 39, 59, 0),
+    ('tower', 'greek', 3, 42, 55, 0),
+    ('dock', 'greek', 3, 22, 61, 0),
+    ('wall', 'greek', 3, 44, 60, 0), ('wall', 'greek', 3, 44, 61, 0),
+    ('wall', 'greek', 3, 44, 62, 0), ('wall', 'greek', 3, 44, 63, 0),
+    # ο αντίπαλος: Αιγύπτιοι, πάνω δεξιά
+    ('town_center', 'egypt', 3, 64, 24, 1),
+    ('house', 'egypt', 3, 69, 23, 1), ('house', 'egypt', 3, 69, 26, 1),
+    ('house', 'egypt', 3, 62, 29, 1),
+    ('granary', 'egypt', 3, 59, 24, 1),
+    ('barracks', 'egypt', 3, 66, 30, 1),
+    ('archery', 'egypt', 3, 71, 30, 1),
+    ('farm', 'egypt', 2, 60, 19, 1),
+    ('tower', 'egypt', 3, 58, 31, 1),
+    ('temple', 'egypt', 3, 72, 19, 1),
+)
+
+# (μονάδα, καρέ, i, j, παίκτης)
+UNITS = (('villager_m', 1, 33, 56, 0), ('villager_f', 2, 28, 66, 0),
+         ('villager_m', 9, 22, 53, 0), ('swordsman', 0, 40, 62, 0),
+         ('archer', 5, 41, 63, 0), ('villager_f', 6, 32, 68, 0),
+         ('hoplite', 4, 43, 58, 0), ('villager_m', 3, 47, 49, 0),
+         ('villager_m', 5, 63, 29, 1), ('spearman', 0, 68, 33, 1),
+         ('archer', 1, 70, 34, 1), ('clubman', 6, 52, 40, 1),
+         ('slinger', 2, 53, 41, 1), ('villager_f', 1, 58, 22, 1))
+
+
+def footprint_tiles(i0, j0, n):
+    return [(i, j) for j in range(j0, j0 + n) for i in range(i0, i0 + n)]
 
 
 def make_map(seed=7):
-    """Ένας μικρός ισομετρικός χάρτης: λίμνη πάνω δεξιά, δάσος κάτω αριστερά,
-    ορυχεία δεξιά, δρόμος που περνάει από την πόλη.
+    """Ο χάρτης 96x96: θάλασσα στα ΒΑ, λίμνες, δάση από θόρυβο, μια έρημος,
+    ορυχεία, δύο πόλεις και ο δρόμος ανάμεσά τους.
 
-    Στην οθόνη: το i πάει κάτω-ΔΕΞΙΑ, το j κάτω-ΑΡΙΣΤΕΡΑ. Μια περιοχή
-    ορθογώνια σε (i, j) είναι ρόμβος στην οθόνη.
+    Στην οθόνη: το i πάει κάτω-ΔΕΞΙΑ, το j κάτω-ΑΡΙΣΤΕΡΑ. Το (0,0) είναι η
+    πάνω κορυφή του ρόμβου.
     """
     rnd = random.Random(seed)
-    grd = [['grass'] * N for _ in range(N)]          # grd[j][i]
+    coast = _noise(seed + 1, 9)
+    woods = _noise(seed + 2, 6)
+    dry = _noise(seed + 3, 14)
+    grd = [[None] * N for _ in range(N)]          # grd[j][i]
     res = [[None] * N for _ in range(N)]
+    water = [[False] * N for _ in range(N)]
+
+    # θάλασσα κατά μήκος της ακμής j=0 (πάνω δεξιά στην οθόνη), με ακτή
+    # που κυματίζει, και μια λωρίδα της που μπαίνει μέσα ώς την πόλη
     for j in range(N):
         for i in range(N):
+            if j < 6 + 8 * coast(i, 0) or (i < 24 and j < 66 and
+                                           i < 4 + 16 * coast(0, j)):
+                water[j][i] = True
+    # λίμνες
+    for (ci, cj, ri, rj) in ((50, 72, 6, 4), (78, 60, 4, 7), (16, 86, 5, 4)):
+        for j in range(N):
+            for i in range(N):
+                if ((i - ci) / ri) ** 2 + ((j - cj) / rj) ** 2 < 1:
+                    water[j][i] = True
+
+    def wet(i, j):
+        return 0 <= i < N and 0 <= j < N and water[j][i]
+
+    for j in range(N):
+        for i in range(N):
+            if water[j][i]:
+                near = any(not wet(i + a, j + b) and 0 <= i + a < N and
+                           0 <= j + b < N
+                           for a in range(-2, 3) for b in range(-2, 3))
+                grd[j][i] = 'water_shallow' if near else 'water_deep'
+                continue
             r = rnd.random()
-            grd[j][i] = ('grass_tuft' if r < .10 else
-                         'grass_flower' if r < .15 else 'grass')
+            t = ('grass_tuft' if r < .10 else
+                 'grass_flower' if r < .15 else 'grass')
+            if dry(i, j) > .66 and i > 60 and j > 50:
+                t = 'sand_dune' if r < .2 else 'sand'
+            grd[j][i] = t
 
-    # λίμνη: i 9.., j ..5 — βαθύ στη μέση, ρηχό στις άκρες
-    for j in range(0, S + 6):
-        for i in range(S + 9, N):
-            deep = j <= S + 3 and i >= S + 12
-            grd[j][i] = 'water_deep' if deep else 'water_shallow'
-    for i in range(S + 9, N):
-        grd[S + 6][i] = 'shore_ne'       # νερό στο j-1: ακμή ΒΑ
-    for j in range(0, S + 6):
-        grd[j][S + 8] = 'shore_se'       # νερό στο i+1: ακμή ΝΑ
+    # ΑΚΤΕΣ: η στεριά που αγγίζει νερό σε ΜΙΑ ακμή παίρνει το αντίστοιχο
+    # πλακίδιο· όσα αγγίζουν σε δύο ή περισσότερες (κάβοι, κόλποι) γίνονται
+    # άμμος, που κουμπώνει με όλα.
+    for j in range(N):
+        for i in range(N):
+            if water[j][i]:
+                continue
+            sides = [s for s, (a, b) in (('ne', (0, -1)), ('se', (1, 0)),
+                                         ('sw', (0, 1)), ('nw', (-1, 0)))
+                     if wet(i + a, j + b)]
+            if len(sides) == 1:
+                grd[j][i] = 'shore_' + sides[0]
+            elif sides:
+                grd[j][i] = 'sand'
 
-    # χώμα γύρω από την πόλη και ένας δρόμος κατά μήκος του i
-    for j in range(S + 8, S + 15):
-        for i in range(S + 6, S + 14):
-            if rnd.random() < .35:
-                grd[j][i] = 'dirt' if rnd.random() < .7 else 'dirt_rough'
-    for i in range(0, N):
-        grd[S + 15][i] = 'road'
-    for j in range(S + 15, N):
-        grd[j][S + 16] = 'road'
+    # βραχότοπος με γκρεμούς γύρω από τα ορυχεία της πέτρας
+    for j in range(40, 47):
+        for i in range(76, 86):
+            if not water[j][i] and rnd.random() < .7:
+                grd[j][i] = 'rock_floor' if rnd.random() < .75 else 'cliff'
+
+    # δρόμος από πόλη σε πόλη: κατά μήκος του i, μετά του j
+    for i in range(34, 67):
+        if not water[44][i]:
+            grd[44][i] = 'road'
+    for j in range(32, 58):
+        grd[j][66 if j < 44 else 34] = 'road'
+    # πατημένο χώμα γύρω από τα κέντρα πόλης
+    for (ci, cj) in ((32, 60), (66, 26)):
+        for j in range(cj - 7, cj + 9):
+            for i in range(ci - 7, ci + 9):
+                if grd[j][i] in LAND and rnd.random() < .3:
+                    grd[j][i] = 'dirt' if rnd.random() < .7 else 'dirt_rough'
+
+    busy = set()
+    for key, _, _, i0, j0, _ in TOWNS:
+        busy.update(footprint_tiles(i0, j0, B.footprint(key)))
+    calm = set()                                  # χωρίς δάσος γύρω από πόλεις
+    for (ci, cj) in ((32, 60), (66, 26)):
+        calm.update((i, j) for j in range(cj - 12, cj + 15)
+                    for i in range(ci - 12, ci + 15))
 
     def free(i, j):
         return (0 <= i < N and 0 <= j < N and res[j][i] is None and
-                grd[j][i] in ('grass', 'grass_tuft', 'grass_flower'))
+                (i, j) not in busy and grd[j][i] in LAND)
 
-    # δάσος: κάτω αριστερά (j μεγάλο, i μικρό)
-    for j in range(S + 16, N):
-        for i in range(0, S + 14):
-            if free(i, j) and rnd.random() < .6 - .03 * (i - S - 4):
-                res[j][i] = 'tree' if rnd.random() < .7 else 'tree_pine'
-    for (i, j) in ((12, 17), (13, 18), (11, 16)):
-        if free(i + S, j + S):
-            res[j + S][i + S] = 'berry_bush'
-    # ορυχεία δεξιά, ζώα, ερείπια
-    for (i, j, k) in ((20, 9, 'gold_rock'), (21, 10, 'gold_rock'),
-                      (19, 12, 'stone_rock'), (20, 13, 'stone_rock'),
-                      (22, 12, 'rock_small'), (4, 10, 'stump'),
-                      (18, 19, 'gazelle'), (3, 6, 'ruins'),
-                      (5, 13, 'tree'), (2, 12, 'tree_pine')):
-        if free(i + S, j + S):
-            res[j + S][i + S] = k
-    for (i, j) in ((14, 2), (18, 4), (12, 1), (25, 3)):
-        res[j + S][i + S] = 'fish'
-    res[S + 1][S + 21] = 'whale'
-    for i in (10, 13, 15):
-        res[S + 6][i + S] = 'reeds'
-    # δάσος και στη δυτική άκρη, πέρα από το σενάριο
-    for j in range(0, N):
-        for i in range(0, N):
-            if (i - j) < -S - 4 and free(i, j) and rnd.random() < .55:
-                res[j][i] = 'tree' if rnd.random() < .6 else 'tree_pine'
+    # δάση: εκεί που ο θόρυβος είναι ψηλός
+    for j in range(N):
+        for i in range(N):
+            w = woods(i, j)
+            if free(i, j) and (i, j) not in calm and w > .58 and \
+                    rnd.random() < (w - .5) * 2.4:
+                res[j][i] = 'tree_pine' if j < 30 and rnd.random() < .7 \
+                    else 'tree' if rnd.random() < .75 else 'tree_pine'
+    for j in range(N):
+        for i in range(N):
+            if grd[j][i] in ('sand', 'sand_dune') and rnd.random() < .04:
+                res[j][i] = 'tree_palm'
+
+    def cluster(kind, ci, cj, n):
+        k = 0
+        for (a, b) in ((0, 0), (1, 0), (0, 1), (1, 1), (2, 0), (0, 2),
+                       (2, 1), (-1, 1)):
+            if k < n and 0 <= ci + a < N and 0 <= cj + b < N and \
+                    (ci + a, cj + b) not in busy and \
+                    grd[cj + b][ci + a] in LAND + ('rock_floor', 'sand'):
+                res[cj + b][ci + a] = kind
+                k += 1
+
+    for (ci, cj) in ((46, 50), (75, 36), (20, 40), (88, 76)):
+        cluster('gold_rock', ci, cj, 4)
+    for (ci, cj) in ((78, 42), (82, 44), (40, 76), (58, 10)):
+        cluster('stone_rock', ci, cj, 5)
+    for (ci, cj) in ((24, 50), (37, 52), (61, 33)):
+        cluster('berry_bush', ci, cj, 5)
+    for (i, j, k) in ((50, 30, 'gazelle'), (54, 33, 'gazelle'),
+                      (44, 84, 'gazelle'), (12, 70, 'ruins'),
+                      (86, 20, 'ruins'), (48, 46, 'rock_small'),
+                      (70, 70, 'rock_small'), (40, 30, 'stump'),
+                      (41, 31, 'bush_empty')):
+        if free(i, j):
+            res[j][i] = k
+    for j in range(N):
+        for i in range(N):
+            g = grd[j][i]
+            if g == 'water_deep' and rnd.random() < .006:
+                res[j][i] = 'whale'
+            elif g == 'water_shallow' and rnd.random() < .02:
+                res[j][i] = 'fish'
+            elif g.startswith('shore') and rnd.random() < .05 and free(i, j):
+                pass
+    for (i, j) in busy:
+        res[j][i] = None
     return grd, res
 
 
-# (κτίριο, πολιτισμός, εποχή, i, j) — i, j η ΠΙΣΩ γωνία της κάτοψης
-TOWN = (('town_center', 'greek', 3, 9, 9),
-        ('house', 'greek', 3, 14, 8),
-        ('house', 'greek', 3, 14, 11),
-        ('house', 'greek', 3, 6, 13),
-        ('granary', 'greek', 3, 4, 8),
-        ('barracks', 'greek', 3, 17, 16),
-        ('farm', 'greek', 2, 9, 17),
-        ('temple', 'greek', 3, 12, 20),
-        ('tower', 'greek', 3, 19, 6),
-        ('dock', 'greek', 3, 16, 5))
+# ------------------------------------------------------------ ο κόσμος
 
-# (μονάδα, καρέ, i, j)
-UNITS = (('villager_m', 1, 12, 15), ('villager_f', 2, 10, 18),
-         ('villager_m', 9, 19, 11), ('swordsman', 0, 15, 14),
-         ('archer', 5, 17, 14), ('villager_f', 6, 7, 16),
-         ('hoplite', 4, 13, 15))
+def world_xy(i, j):
+    return iso.tile_xy(i, j, WX0, TOP)
 
 
-def draw():
-    img = gfx.blank(W, H, gfx.PEN['K'])
-    view = gfx.blank(W, MAP_H, gfx.PEN['K'])
-
-    grd, res = make_map()
-    # Κάτω από ένα κτίριο δεν φυτρώνει τίποτα.
-    for key, _, _, i0, j0 in TOWN:
-        n = B.footprint(key)
-        for j in range(j0 + S, j0 + S + n):
-            for i in range(i0 + S, i0 + S + n):
-                res[j][i] = None
+def render_world(grd, res):
+    """Όλος ο χάρτης σε ΕΝΑ buffer pixels. Η οθόνη είναι ένα κομμάτι του —
+    αυτό ακριβώς είναι η κύλιση."""
+    # Έξω από τον ρόμβο: pen 0, που στον χάρτη είναι μαύρο — όπως το «κενό»
+    # γύρω από τον χάρτη στο Age of Empires. Όχι pen 1: αυτό είναι η βαθιά
+    # θάλασσα, και ο χάρτης θα έλιωνε μέσα στο περίγραμμα.
+    world = gfx.blank(WW, WH, gfx.PEN_MASK)
+    tiles = {k: T.tile(TER_ART[k]) for k in TER_ART}
     for j in range(N):
         for i in range(N):
-            x, y = iso.tile_xy(i, j, X0, Y0)
-            gfx.stamp(view, T.tile(TER_ART[grd[j][i]]), x, y)
+            x, y = world_xy(i, j)
+            gfx.stamp(world, tiles[grd[j][i]], x, y)
 
     # Τα αντικείμενα ταξινομούνται κατά το ΜΠΡΟΣΤΙΝΟ τους πλακίδιο (i+j):
     # ό,τι είναι πιο κάτω στην οθόνη ζωγραφίζεται τελευταίο. Ο αλγόριθμος του
     # ζωγράφου — ο ίδιος που θα κάνει ο κάδος γραμμών στο παιχνίδι.
+    arts = {k: T.res(RES_ART[k]) for k in RES_ART if RES_ART[k]}
     objs = []
     for j in range(N):
         for i in range(N):
             if res[j][i]:
-                x, y = iso.tile_xy(i, j, X0, Y0)
-                objs.append((i + j, i, T.res(RES_ART[res[j][i]]), x, y - 10))
-    for key, culture, age, i0, j0 in TOWN:
-        i0, j0 = i0 + S, j0 + S
+                x, y = world_xy(i, j)
+                objs.append((i + j, i, arts[res[j][i]], x, y - 10))
+    red = dict(enumerate(gfx.team_table(1)))
+    for key, culture, age, i0, j0, who in TOWNS:
         b = B.render(key, culture, age)
+        if who:
+            b = gfx.recolour(b, red)
         n = B.footprint(key)
-        x, y = iso.tile_xy(i0, j0, X0, Y0)
-        _, fy = iso.tile_xy(i0 + n - 1, j0 + n - 1, X0, Y0)
+        x, _ = world_xy(i0, j0)
+        _, fy = world_xy(i0 + n - 1, j0 + n - 1)
         # Το χωράφι είναι ΠΑΤΩΜΑ: μπαίνει πριν από ό,τι πατάει πάνω του.
         depth = -1 if key == 'farm' else i0 + j0 + 2 * (n - 1)
         objs.append((depth, i0 + n - 1, b, x + 4 - 4 * n, fy + 8 - len(b)))
     sets = {s.name: s for s in units.all_sets()}
-    for name, frame, i, j in UNITS:
-        i, j = i + S, j + S
+    for name, frame, i, j, who in UNITS:
         f = sets[name].frames[frame]
-        x, y = iso.tile_xy(i, j, X0, Y0)
+        if who:
+            f = gfx.recolour(f, red)
+        x, y = world_xy(i, j)
         objs.append((i + j, i + 0.5, f, x + 4 - len(f[0]) // 2, y - 10))
     objs.sort(key=lambda o: (o[0], o[1]))
     for _, _, art, x, y in objs:
-        gfx.stamp(view, art, x, y)
-    for y in range(MAP_H):
-        img[y] = view[y]
+        gfx.stamp(world, art, x, y)
+    return world
 
-    # ------------------------------------------------------------- HUD
-    for y in range(MAP_H, H):
-        for x in range(W):
-            img[y][x] = gfx.PEN['K']
+
+# ---------------------------------------------------------------- HUD
+
+MM_X, MM_Y, MM_S = 13, 162, 20          # μίνι χάρτης: κέντρο-πάνω, πλευρά
+
+
+def minimap(img, grd, res, cam):
+    """Μίνι χάρτης: ΡΟΜΒΟΣ, όπως στο Age of Empires — ο χάρτης είναι
+    ισομετρικός, άρα και η επισκόπησή του. 20 pixels πλάτος, 20 γραμμές
+    ύψος = 40x20 μονάδες, η ίδια αναλογία 2:1 με το πλακίδιο. Το λευκό
+    πλαίσιο είναι το παράθυρο — μετακινείται όσο κυλάει η κάμερα."""
+    mm = {'water_deep': 'K', 'water_shallow': 'c', 'dirt': 'o',
+          'dirt_rough': 'o', 'road': 'D', 'sand': 'S', 'sand_dune': 'S',
+          'rock_floor': 'i', 'cliff': 'i'}
+    for my in range(MM_S + 1):
+        for mx in range(-MM_S // 2, MM_S // 2):
+            X, Y = mx + 0.5, my + 0.5
+            i = int((Y + X) * N / MM_S)
+            j = int((Y - X) * N / MM_S)
+            if 0 <= i < N and 0 <= j < N:
+                g = grd[j][i]
+                pen = gfx.PEN['S' if g.startswith('shore') else mm.get(g, 'n')]
+                if res[j][i] and res[j][i].startswith('tree'):
+                    pen = gfx.PEN['g']
+                img[MM_Y + my][MM_X + mx] = pen
+    for key, _, _, i0, j0, who in TOWNS:
+        n = B.footprint(key)
+        i, j = i0 + n / 2, j0 + n / 2
+        img[MM_Y + int((i + j) * MM_S / 2 / N)][
+            MM_X + int((i - j) * MM_S / 2 / N)] = \
+            gfx.PEN['T'] if who == 0 else gfx.PEN['r']
+    # το παράθυρο: κόσμος -> μίνι χάρτης, κλίμακα MM_S / 8N
+    k = MM_S / (8.0 * N)
+    cx, cy = cam
+    x0 = MM_X + int(round((cx - 4 * N) * k))
+    x1 = MM_X + int(round((cx + W - 4 * N) * k))
+    y0 = MM_Y + int(round((cy - TOP) * k))
+    y1 = MM_Y + int(round((cy + MAP_H - TOP) * k))
+    for x in range(x0, x1 + 1):
+        for y in (y0, y1):
+            if 0 <= x < W and MM_Y - 1 <= y <= MM_Y + MM_S + 1:
+                img[y][x] = gfx.PEN['I']
+    for y in range(y0, y1 + 1):
+        for x in (x0, x1):
+            if 0 <= x < W and MM_Y - 1 <= y <= MM_Y + MM_S + 1:
+                img[y][x] = gfx.PEN['I']
+
+
+def frame(world, grd, res, cam, hud_bg):
+    """Μία οθόνη: το κομμάτι του κόσμου στη θέση `cam` + το HUD."""
+    cx, cy = cam
+    img = [list(r) for r in hud_bg]
+    for y in range(MAP_H):
+        img[y] = list(world[cy + y][cx:cx + W])
+    minimap(img, grd, res, cam)
+    return img
+
+
+def hud_background():
+    img = gfx.blank(W, H, gfx.PEN['K'])
     for x in range(W):
         img[MAP_H][x] = gfx.PEN['t']
 
@@ -212,29 +411,8 @@ def draw():
         number(img, v, ox + 9, MAP_H + 6, gfx.PEN['I'])
     gfx.stamp(img, T.hud(HUD_ART['alert']), 148, MAP_H + 1)
 
-    # Μίνι χάρτης: ΡΟΜΒΟΣ, όπως στο Age of Empires — ο χάρτης είναι
-    # ισομετρικός, άρα και η επισκόπησή του. 20 pixels πλάτος, 20 γραμμές
-    # ύψος = 40x20 μονάδες, η ίδια αναλογία 2:1 με το πλακίδιο.
-    mm = {'water_deep': 'K', 'water_shallow': 'c', 'shore_ne': 'S',
-          'shore_se': 'S', 'shore_sw': 'S', 'shore_nw': 'S', 'dirt': 'o',
-          'dirt_rough': 'o', 'road': 'D'}
-    cx, cy = 13, 162
-    for my in range(21):
-        for mx in range(-10, 10):
-            X, Y = mx + 0.5, my + 0.5
-            i, j = int((Y + X) * N / 20), int((Y - X) * N / 20)
-            if 0 <= i < N and 0 <= j < N:
-                pen = gfx.PEN[mm.get(grd[j][i], 'n')]
-                if res[j][i] and res[j][i].startswith('tree'):
-                    pen = gfx.PEN['g']
-                img[cy + my][cx + mx] = pen
-    for key, _, _, i0, j0 in TOWN:
-        n = B.footprint(key)
-        i, j = i0 + S + n / 2, j0 + S + n / 2
-        img[cy + int((i + j) * 10 / N)][cx + int((i - j) * 10 / N)] = \
-            gfx.PEN['T']
-
     # κάρτα επιλεγμένης μονάδας
+    sets = {s.name: s for s in units.all_sets()}
     gfx.stamp(img, sets['swordsman'].frames[0], 27, 163)
     for x in range(26, 38):
         img[181][x] = gfx.PEN['n'] if x < 35 else gfx.PEN['r']
@@ -249,11 +427,97 @@ def draw():
     return img
 
 
+# ---------------------------------------------------------- εικόνες
+
+def to_image(img, zoom):
+    """Pens -> εικόνα PIL με pixel 2:1, γρήγορα (παλέτα, όχι ορθογώνια)."""
+    from PIL import Image
+    h, w = len(img), len(img[0])
+    im = Image.new('P', (w, h))
+    pal = []
+    for rgb in gfx.RGB:
+        pal.extend(rgb)
+    im.putpalette(pal + [0] * (768 - len(pal)))
+    im.putdata([p if p is not None else 0 for row in img for p in row])
+    return im.resize((w * 2 * zoom, h * zoom), Image.NEAREST)
+
+
+def cam_on(i, j):
+    """Η κάμερα (πάνω αριστερή γωνία) ώστε το πλακίδιο (i, j) να είναι στο
+    κέντρο του παραθύρου — ευθυγραμμισμένη σε byte (ζυγό pixel)."""
+    x, y = world_xy(i, j)
+    cx = max(0, min(WW - W, x + 4 - W // 2)) & ~1
+    cy = max(0, min(WH - MAP_H, y + 4 - MAP_H // 2))
+    return cx, cy
+
+
+def save_map(world, path):
+    """Ολόκληρος ο χάρτης, με το πλέγμα των οθονών (160x144) από πάνω."""
+    from PIL import ImageDraw
+    z = 1
+    im = to_image(world, z).convert('RGB')
+    d = ImageDraw.Draw(im)
+    for gx in range(0, WW + 1, W):
+        d.line([(gx * 2 * z, 0), (gx * 2 * z, WH * z)], fill=(255, 255, 255))
+    for gy in range(TOP, WH + 1, MAP_H):
+        d.line([(0, gy * z), (WW * 2 * z, gy * z)], fill=(255, 255, 255))
+    area = 32.0 * N * N / (W * MAP_H)
+    from PIL import ImageFont
+    try:
+        font = ImageFont.truetype('DejaVuSans.ttf', 16)
+    except OSError:
+        font = None
+    d.rectangle([4, 4, 640, 28], fill=(0, 0, 0))
+    d.text((10, 7), 'χάρτης %dx%d πλακίδια = %.1f οθόνες χάρτη (%dx%d η καθεμία)'
+           % (N, N, area, W, MAP_H), fill=(255, 220, 90), font=font)
+    im.save(path)
+    return area
+
+
+def letterbox(im):
+    """Τετράγωνος καμβάς: η οθόνη στη μέση, μαύρα περιθώρια πάνω και κάτω."""
+    from PIL import Image
+    side = max(im.width, im.height)
+    out = Image.new('P', (side, side), 0)
+    out.putpalette(im.getpalette())
+    out.paste(im, ((side - im.width) // 2, (side - im.height) // 2))
+    return out
+
+
+def save_scroll(world, grd, res, hud_bg, path):
+    """Η κάμερα ταξιδεύει από την πόλη του παίκτη στην αντίπαλη και πίσω,
+    σε βήματα των 4 pixels / 4 γραμμών: μισό πλακίδιο, όσο ένα byte-ζεύγος
+    — το βήμα που θα κάνει και η κύλιση στο CPC."""
+    route = [cam_on(32, 60), cam_on(48, 44), cam_on(66, 26), cam_on(80, 44),
+             cam_on(50, 74), cam_on(32, 60)]
+    frames = []
+    for (ax, ay), (bx, by) in zip(route, route[1:]):
+        steps = max(abs(bx - ax), abs(by - ay)) // 8 or 1
+        for s in range(steps):
+            t = s / steps
+            cam = (int(ax + (bx - ax) * t) & ~1, int(ay + (by - ay) * t))
+            frames.append(letterbox(
+                to_image(frame(world, grd, res, cam, hud_bg), 2)))
+    frames[0].save(path, save_all=True, append_images=frames[1:],
+                   duration=80, loop=0)
+    return len(frames)
+
+
 def main():
-    img = draw()
+    grd, res = make_map()
+    world = render_world(grd, res)
+    hud_bg = hud_background()
+
+    img = frame(world, grd, res, cam_on(33, 60), hud_bg)
     path = os.path.join(PREVIEW, 'screen.png')
     preview.contact_sheet(path, [('', img)], zoom=4, cols=1, title='', grid=False)
     print(path)
+
+    area = save_map(world, os.path.join(PREVIEW, 'map.png'))
+    print('%s  (%.1f οθόνες)' % (os.path.join(PREVIEW, 'map.png'), area))
+
+    n = save_scroll(world, grd, res, hud_bg, os.path.join(PREVIEW, 'scroll.gif'))
+    print('%s  (%d καρέ)' % (os.path.join(PREVIEW, 'scroll.gif'), n))
 
 
 if __name__ == '__main__':

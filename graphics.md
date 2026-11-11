@@ -158,6 +158,8 @@ preview/terrain.png    κάθε ρόμβος στρωμένος 3x3 — εκεί
 preview/resources.png  κάθε πόρος πάνω στο έδαφος που θα πατήσει
 preview/hud.png        τα 24 εικονίδια πάνω σε κουμπί
 preview/screen.png     ΟΛΟΚΛΗΡΗ οθόνη 160x200 — χάρτης, HUD, μονάδες μαζί
+preview/map.png        ΟΛΟΣ ο χάρτης 96x96 (~12,8 οθόνες) με το πλέγμα οθονών
+preview/scroll.gif     η κάμερα κυλάει πάνω στον χάρτη, ο μίνι χάρτης ακολουθεί
 palette.gpl            παλέτα GIMP/Aseprite με τα firmware numbers
 palette.asm            τα 16 INK και οι τέσσερις πίνακες παικτών
 sprites.json           μονάδες, κινήσεις, μεγέθη, παλέτα, ονόματα καρέ

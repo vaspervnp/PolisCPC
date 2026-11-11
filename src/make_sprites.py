@@ -163,7 +163,13 @@ def write_palette():
            '',
            'polis_inks:',
            '  db ' + ','.join(str(f) for f in gfx.FW)
-           + '   ; firmware numbers, pen 0..15', '']
+           + '   ; firmware numbers, pen 0..15', '',
+           '; Τα ίδια ως hardware colours του gate array, με το bit 6 αναμμένο:',
+           '; ld bc,#7F00+pen / out (c),c / ld c,τιμή / out (c),c. Για όταν το',
+           '; firmware είναι κλειστό.',
+           'polis_hw:',
+           '  db ' + ','.join('#%02X' % h for h in gfx.HW)
+           + '   ; pen 0..15', '']
     asm += ['; Χρώμα παίκτη: ο πίνακας αλλάζει ΜΟΝΟ τα pens %d και %d.'
             % (gfx.TEAM_HI, gfx.TEAM_LO),
             '; Πέρνα τα δεδομένα του sprite μία φορά στο φόρτωμα, pen προς pen.',

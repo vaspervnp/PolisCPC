@@ -58,6 +58,15 @@ PALETTE = [
 
 PEN = {p[0]: i for i, p in enumerate(PALETTE)}
 FW = [p[2] for p in PALETTE]
+
+# Firmware number -> hardware colour του gate array, ΜΕ το bit 6 ήδη αναμμένο:
+# είναι ακριβώς το byte που στέλνεις με `OUT (#7Fxx)` μετά την επιλογή pen.
+# Το παιχνίδι κλείνει το firmware, άρα δεν υπάρχει `SCR SET INK` να
+# μεταφράσει — ο πίνακας χρειάζεται.
+HW_OF_FW = [0x54, 0x44, 0x55, 0x5C, 0x58, 0x5D, 0x4C, 0x45, 0x4D, 0x56,
+            0x46, 0x57, 0x5E, 0x40, 0x5F, 0x4E, 0x47, 0x4F, 0x52, 0x42,
+            0x53, 0x5A, 0x59, 0x5B, 0x4A, 0x43, 0x4B]
+HW = [HW_OF_FW[f] for f in FW]
 NAMES = [p[1] for p in PALETTE]
 CHARS = [p[0] for p in PALETTE]
 USAGE = [p[3] for p in PALETTE]
