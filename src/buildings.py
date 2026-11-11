@@ -1,4 +1,4 @@
-"""Τα κτίρια: ποια υπάρχουν σε κάθε εποχή, και πώς ζωγραφίζονται.
+"""Τα κτίρια: ποια υπάρχουν σε κάθε εποχή, και πώς ζωγραφίζονται — ΙΣΟΜΕΤΡΙΚΑ.
 
 Ο ΠΙΝΑΚΑΣ ΕΠΟΧΩΝ ΕΙΝΑΙ Ο ΚΑΝΟΝΑΣ
 
@@ -11,273 +11,394 @@
   στη Λίθινη και στη Χαλκού, άρα δύο αρχεία: το πρώτο ισχύει για τις εποχές
   1-2 και το δεύτερο για τις 3-4.
 
-Το `sprites.json` γράφει για κάθε κτίριο ποιο αρχείο ισχύει σε ποια εποχή,
+Το `buildings.json` γράφει για κάθε κτίριο ποιο αρχείο ισχύει σε ποια εποχή,
 ώστε το παιχνίδι να μη χρειάζεται να ξέρει αυτόν τον κανόνα.
 
-ΤΑ ΜΕΓΕΘΗ
+ΤΑ ΜΕΓΕΘΗ ΕΙΝΑΙ ΚΑΤΟΨΕΙΣ ΣΕ ΠΛΑΚΙΔΙΑ
 
-    S  12x16   σπίτι, αποθήκη, χωράφι, πύργος, τείχος
-    M  16x20   στρατώνας, αγορά, ναός, λιμάνι, στάβλος, σκοπευτήριο
-    L  24x24   κέντρο πόλης, κυβερνείο, ακαδημία, θαύμα
+    T  1x1   8 pixels πλάτος   τείχος (κομμάτια που ενώνονται)
+    S  2x2  16                 σπίτι, αποθήκη, πύργος
+    M  3x3  24                 στρατώνας, σιταποθήκη, χωράφι, ναός, ...
+    L  4x4  32                 κέντρο πόλης, κυβερνείο, ακαδημία, θαύμα
 
-Όλα πατάνε στην ΚΑΤΩ γραμμή του καμβά: ο χάρτης τα τοποθετεί από τη βάση,
-όπως και τις μονάδες.
+Το πλάτος είναι ΑΚΡΙΒΩΣ η κάτοψη: ένα κτίριο 3x3 πιάνει 24 pixels, όσο τρία
+πλακίδια στη σειρά. Το ύψος δεν είναι σταθερό — ο καμβάς είναι γενναιόδωρος
+και ΚΟΒΕΤΑΙ από πάνω ώστε να μένουν μόνο οι γραμμές που έχουν κάτι
+(`trim_top`). Το παιχνίδι τα τοποθετεί από τη ΒΑΣΗ: η κάτω γραμμή του
+κτιρίου είναι η κάτω γραμμή του κουτιού του μπροστινού πλακιδίου, άρα το
+ύψος ανά εικόνα (που ο πίνακας έχει ήδη) αρκεί.
+
+ΚΑΘΕ ΚΤΙΡΙΟ ΕΙΝΑΙ ΜΙΚΡΟ ΜΟΝΤΕΛΟ
+
+Δεν ζωγραφίζονται pixel-pixel: κάθε σχέδιο στήνει κουτιά, στέγες, κώνους
+και τρούλους στον χώρο, και το `iso.Scene` τα προβάλλει και τα σκιάζει. Έτσι
+οκτώ πολιτισμοί x τέσσερις εποχές βγαίνουν με την ίδια προοπτική και το ίδιο
+φως — που ζωγραφισμένα με το χέρι δεν θα έβγαιναν ποτέ.
 """
-from bstyle import (AGE_NAMES, CULTURES, Style, banner, columns, door, ground,
-                    rect, roof, trim_line, wall)
+import iso
+from bstyle import (AGE_NAMES, CULTURES, Style, banner, columns, door,
+                    foundation, ramp_roof, ramp_wall, roof, trim_band, walls,
+                    window)
 from gfx import PEN, blank
 
-SIZES = {'S': (12, 16), 'M': (16, 20), 'L': (24, 24)}
+# μέγεθος -> (κάτοψη σε πλακίδια, πλάτος pixels, ύψος καμβά πριν το κόψιμο)
+SIZES = {'T': (1, 8, 24), 'S': (2, 16, 44), 'M': (3, 24, 48), 'L': (4, 32, 64)}
 
 
-def _canvas(size):
-    w, h = SIZES[size]
-    return blank(w, h, None), w, h
+def _scene(size):
+    n, w, h = SIZES[size]
+    img = blank(w, h, None)
+    return iso.Scene(img, 4 * n, h - 8 * n), n
+
+
+def trim_top(img):
+    """Κόβει τις άδειες γραμμές από πάνω. Από κάτω ΔΕΝ κόβει: η βάση είναι
+    το σημείο αναφοράς."""
+    k = 0
+    while k < len(img) - 1 and all(p is None for p in img[k]):
+        k += 1
+    return img[k:]
+
+
+# ------------------------------------------------------ κοινά κομμάτια
+
+def body(sc, st, u0, v0, u1, v1, h):
+    """Το σώμα του κτιρίου: στρογγυλή καλύβα όταν η στέγη είναι κωνική
+    (Λίθινη, Κέλτες), αλλιώς ορθογώνιο. Επιστρέφει τους δύο ορατούς τοίχους
+    ως (πλευρά, θέση, από, ώς) για πόρτες και παράθυρα."""
+    if st.shape == 'cone':
+        cu, cv = (u0 + u1) / 2, (v0 + v1) / 2
+        r = min(u1 - u0, v1 - v0) / 2
+        sc.prism(cu, cv, r, 0, h, ramp_wall(st))
+        k = r * 0.924                       # cos 22,5°: η απόσταση της έδρας
+        a = r * 0.383
+        return ('L', cv + k, cu - a, cu + a), ('R', cu + k, cv - a, cv + a)
+    walls(sc, st, u0, v0, u1, v1, h)
+    return ('L', v1, u0, u1), ('R', u1, v0, v1)
+
+
+def hall(sc, st, u0, v0, u1, v1, h, rh, axis='u'):
+    """Σώμα + στέγη του πολιτισμού + στολίδι. Το πιο κοινό σχέδιο."""
+    L, R = body(sc, st, u0, v0, u1, v1, h)
+    if st.shape != 'cone':
+        trim_band(sc, st, u0, v0, u1, v1, h)
+    roof(sc, st, u0, v0, u1, v1, h, rh, axis)
+    return L, R
+
+
+def mid(span, w):
+    _, _, a0, a1 = span
+    return (a0 + a1) / 2 - w / 2
+
+
+def crate(sc, u, v, s, top, side):
+    sc.box(u, v, u + s, v + s, 0, s, side, PEN['K'], top)
 
 
 # ----------------------------------------------------------- τα σχέδια
-# Κάθε σχέδιο παίρνει (img, st, w, h) και ζωγραφίζει με βάση το κάτω μέρος.
+# Κάθε σχέδιο παίρνει (sc, st, n). Κάτοψη u, v σε [0, 4n).
 
-def bp_house(img, st, w, h):
-    b = h - 1
-    wall(img, 2, b - 6, w - 4, 6, st)
-    roof(img, 1, b - 10, w - 2, 4, st)
-    door(img, w // 2 - 1, b - 3, 2, 3)
-    ground(img, 1, b, w - 2)
-
-
-def bp_town_center(img, st, w, h):
-    b = h - 1
-    wall(img, 2, b - 10, w - 4, 10, st)
-    roof(img, 0, b - 16, w, 6, st)
-    door(img, w // 2 - 2, b - 5, 4, 5)
-    trim_line(img, 3, b - 11, w - 6, st)
+def bp_house(sc, st, n):
+    foundation(sc, n)
+    L, R = hall(sc, st, 1.5, 2, 6.5, 6.5, 5, 4)
+    door(sc, L[0], L[1], mid(L, 1.5), 1.5, 4)
     if st.age >= 3:
-        rect(img, 4, b - 8, 2, 2, PEN['K'])
-        rect(img, w - 6, b - 8, 2, 2, PEN['K'])
+        window(sc, R[0], R[1], mid(R, 1), 2)
+
+
+def bp_town_center(sc, st, n):
+    foundation(sc, n)
+    if st.age >= 3:
+        # πλαϊνή πτέρυγα πίσω-δεξιά: το κέντρο πόλης μεγαλώνει με την εποχή
+        walls(sc, st, 9, 1, 15, 6, 6)
+        roof(sc, st, 9, 1, 15, 6, 6, 3)
+    h = 6 + st.age
+    L, R = hall(sc, st, 2, 4, 13, 14, h, 6)
+    door(sc, L[0], L[1], mid(L, 3), 3, 5)
+    if st.shape != 'cone':
+        for a in (L[2] + 1.5, L[3] - 2.5):
+            window(sc, 'L', L[1], a, h - 4, 1, 2)
+        window(sc, 'R', R[1], mid(R, 1), h - 4, 1, 2)
     if st.age >= 2:
-        banner(img, 1, b - 20, 5, st)
-    ground(img, 1, b, w - 2)
+        banner(sc, 2.5, 4.5, h + 6, 6)
 
 
-def bp_granary(img, st, w, h):
-    """Σιταποθήκη: χαμηλή και πλατιά, με σωρούς σταριού μπροστά."""
-    b = h - 1
-    wall(img, 1, b - 7, w - 2, 7, st)
-    roof(img, 0, b - 11, w, 4, st)
-    door(img, w // 2 - 1, b - 3, 2, 3)
-    rect(img, 2, b - 2, 2, 2, PEN['y'])
-    rect(img, w - 4, b - 2, 2, 2, PEN['o'])
-    ground(img, 0, b, w)
+def bp_granary(sc, st, n):
+    foundation(sc, n)
+    L, R = hall(sc, st, 1.5, 1.5, 10, 7, 5, 3)
+    door(sc, L[0], L[1], mid(L, 2), 2, 4)
+    # σωροί σταριού μπροστά
+    for (u, v) in ((2, 9), (5, 9.5), (8, 9)):
+        sc.cone(u + 1, v + 1, 1.3, 0, 3, (PEN['o'], PEN['y']), sides=6)
 
 
-def bp_storage_pit(img, st, w, h):
-    """Αποθήκη: ανοιχτός χώρος με στύλους και εμπορεύματα, όχι κλειστό κτίριο."""
-    b = h - 1
-    rect(img, 1, b - 2, w - 2, 2, PEN['d'])
-    rect(img, 2, b - 7, 1, 5, PEN['d'])
-    rect(img, w - 3, b - 7, 1, 5, PEN['d'])
-    roof(img, 1, b - 10, w - 2, 3, st)
-    rect(img, 4, b - 4, 2, 2, PEN['i'])
-    rect(img, 7, b - 4, 2, 2, PEN['D'])
-    ground(img, 0, b, w)
+def bp_storage_pit(sc, st, n):
+    """Αποθήκη: ανοιχτό υπόστεγο με στύλους και εμπορεύματα."""
+    foundation(sc, n, PEN['d'])
+    sc.floor(1, 1, 7, 7, PEN['D'])
+    crate(sc, 2, 2, 2, PEN['i'], PEN['I'])
+    crate(sc, 4, 3, 1.5, PEN['D'], PEN['D'])
+    for (u, v) in ((1, 1), (6.5, 1), (1, 6.5), (6.5, 6.5)):
+        sc.box(u, v, u + 0.6, v + 0.6, 0, 5, PEN['D'], PEN['d'])
+    crate(sc, 3, 5, 1.5, PEN['S'], PEN['o'])
+    roof(sc, st, 0.5, 0.5, 7.5, 7.5, 5, 3)
 
 
-def bp_barracks(img, st, w, h):
-    """Στρατώνας: ασπίδα στον τοίχο — το σήμα που ξεχωρίζει από μακριά."""
-    b = h - 1
-    wall(img, 1, b - 9, w - 2, 9, st)
-    roof(img, 0, b - 14, w, 5, st)
-    door(img, w // 2 - 1, b - 4, 3, 4)
-    rect(img, 3, b - 7, 3, 3, PEN['T'])
-    rect(img, 4, b - 6, 1, 1, PEN['y'])
+def bp_barracks(sc, st, n):
+    """Στρατώνας: ασπίδα στον τοίχο και ρατσέλι με δόρατα."""
+    foundation(sc, n)
+    L, R = hall(sc, st, 1, 1.5, 10.5, 8.5, 6, 4)
+    door(sc, L[0], L[1], L[2] + 5.5, 2, 5)
+    a = L[2] + 1.5
+    sc.on_wall('L', L[1], a, a + 2, 2, 5, PEN['T'])
+    sc.on_wall('L', L[1], a + 0.5, a + 1.5, 3, 4, PEN['y'])
     if st.age >= 3:
-        rect(img, w - 5, b - 8, 1, 5, PEN['i'])
-    ground(img, 0, b, w)
+        for k in range(3):
+            sc.box(2 + 2 * k, 10, 2.5 + 2 * k, 10.5, 0, 7, PEN['i'], PEN['d'])
+        sc.box(1.5, 10, 7.5, 10.5, 3, 4, PEN['d'], PEN['d'], PEN['D'])
 
 
-def bp_archery(img, st, w, h):
-    """Σκοπευτήριο: στόχος στον τοίχο."""
-    b = h - 1
-    wall(img, 1, b - 8, w - 2, 8, st)
-    roof(img, 0, b - 13, w, 5, st)
-    door(img, 2, b - 4, 2, 4)
-    cx, cy = w - 5, b - 6
-    rect(img, cx, cy, 4, 4, PEN['I'])
-    rect(img, cx + 1, cy + 1, 2, 2, PEN['r'])
-    ground(img, 0, b, w)
+def bp_archery(sc, st, n):
+    """Σκοπευτήριο: στόχος μπροστά από το κτίριο."""
+    foundation(sc, n)
+    L, R = hall(sc, st, 1, 1, 8, 8, 6, 4)
+    door(sc, L[0], L[1], mid(L, 2), 2, 5)
+    # ο στόχος, όρθιος πάνω σε δύο πόδια, στραμμένος προς τα ΝΑ
+    sc.box(10, 3, 10.5, 3.5, 0, 3, PEN['d'], PEN['d'])
+    sc.box(10, 7, 10.5, 7.5, 0, 3, PEN['d'], PEN['d'])
+    sc.on_wall('R', 10.5, 3, 7.5, 3, 7, PEN['I'])
+    sc.on_wall('R', 10.5, 4, 6.5, 4, 6, PEN['r'])
+    sc.on_wall('R', 10.5, 5, 5.5, 4.5, 5.5, PEN['y'])
 
 
-def bp_stable(img, st, w, h):
-    """Στάβλος: φράχτης μπροστά και ανοιχτή πόρτα."""
-    b = h - 1
-    wall(img, 1, b - 8, w - 2, 8, st)
-    roof(img, 0, b - 13, w, 5, st)
-    door(img, w // 2 - 2, b - 5, 4, 5)
-    for i in range(1, w - 1, 3):
-        rect(img, i, b - 2, 1, 2, PEN['d'])
-    rect(img, 1, b - 2, w - 2, 1, PEN['D'])
-    ground(img, 0, b, w)
+def bp_stable(sc, st, n):
+    """Στάβλος: μάντρα με φράχτη μπροστά."""
+    foundation(sc, n)
+    L, R = hall(sc, st, 1, 1, 10, 6, 5, 4)
+    door(sc, L[0], L[1], L[2] + 2, 3, 5)
+    door(sc, L[0], L[1], L[2] + 6, 2, 4)
+    # φράχτης γύρω από τη μάντρα
+    for u in (1, 4, 7, 10.5):
+        sc.box(u, 10.5, u + 0.5, 11, 0, 3, PEN['D'], PEN['d'])
+    for v in (7, 9):
+        sc.box(10.5, v, 11, v + 0.5, 0, 3, PEN['D'], PEN['d'])
+    sc.on_wall('L', 11, 1, 11, 2, 3, PEN['D'])
+    sc.on_wall('R', 11, 7, 11, 2, 3, PEN['d'])
 
 
-def bp_market(img, st, w, h):
-    """Αγορά: ανοιχτοί πάγκοι με τέντα, όχι κλειστοί τοίχοι."""
-    b = h - 1
-    rect(img, 2, b - 6, 1, 6, PEN['d'])
-    rect(img, w - 3, b - 6, 1, 6, PEN['d'])
-    wall(img, 3, b - 5, w - 6, 5, st)
-    for i in range(1, w - 1, 2):
-        rect(img, i, b - 9, 1, 3, PEN['r'])
-        rect(img, i + 1, b - 9, 1, 3, PEN['I'])
-    rect(img, 4, b - 3, 2, 2, PEN['y'])
-    rect(img, w - 6, b - 3, 2, 2, PEN['g'])
-    ground(img, 0, b, w)
+def bp_market(sc, st, n):
+    """Αγορά: ανοιχτοί πάγκοι με ριγέ τέντες, όχι κλειστοί τοίχοι."""
+    foundation(sc, n, PEN['D'])
+    L, R = hall(sc, st, 1, 1, 6, 6, 5, 3)
+    door(sc, L[0], L[1], mid(L, 2), 2, 4)
+    stalls = ((7, 2, PEN['y']), (7, 7, PEN['g']), (2, 7.5, PEN['r']))
+    for u, v, goods in stalls:
+        sc.box(u, v, u + 3.5, v + 3, 0, 2, PEN['d'], PEN['d'], goods)
+        for a in range(0, 4):
+            pen = PEN['r'] if a % 2 == 0 else PEN['I']
+            sc.poly([(u + a, v - 0.5, 5), (u + a + 1, v - 0.5, 5),
+                     (u + a + 1, v + 3.5, 3.5), (u + a, v + 3.5, 3.5)], pen)
 
 
-def bp_dock(img, st, w, h):
-    """Λιμάνι: προβλήτα πάνω από νερό."""
-    b = h - 1
-    rect(img, 0, b - 1, w, 2, PEN['t'])
-    rect(img, 1, b - 3, w - 2, 2, PEN['d'])
-    for i in range(2, w - 2, 3):
-        rect(img, i, b - 2, 1, 2, PEN['K'])
-    wall(img, 2, b - 9, w - 7, 6, st)
-    roof(img, 1, b - 13, w - 5, 4, st)
-    rect(img, w - 4, b - 11, 1, 8, PEN['D'])
-    rect(img, w - 4, b - 11, 3, 4, PEN['I'])
+def bp_dock(sc, st, n):
+    """Λιμάνι: προβλήτα πάνω σε νερό, με αποθήκη και κατάρτι."""
+    sc.floor(0, 0, 12, 12, PEN['c'])
+    sc.floor(0, 0, 12, 4, PEN['o'])
+    sc.box(0, 4, 12, 11, 0, 1, PEN['D'], PEN['d'], PEN['D'])
+    for u in range(1, 12, 3):
+        sc.box(u, 10.5, u + 0.6, 11.1, -2, 1, PEN['d'], PEN['K'])
+    L, R = hall(sc, st, 1, 1, 7, 6, 5, 3)
+    door(sc, L[0], L[1], mid(L, 2), 2, 4)
+    # κατάρτι και πανί
+    sc.box(9, 7, 9.6, 7.6, 1, 12, PEN['D'], PEN['d'])
+    sc.on_wall('L', 7.6, 9.6, 12, 6, 11, PEN['I'])
 
 
-def bp_farm(img, st, w, h):
-    """Χωράφι: αυλάκια, όχι κτίριο. Δεν αλλάζει ποτέ με την εποχή."""
-    b = h - 1
-    rect(img, 0, b - 7, w, 8, PEN['D'])
-    for j in range(b - 6, b, 2):
-        rect(img, 1, j, w - 2, 1, PEN['g'])
-    rect(img, 0, b - 8, w, 1, PEN['d'])
-    ground(img, 0, b, w)
+def bp_farm(sc, st, n):
+    """Χωράφι: αυλάκια σε όργωμα, με φράχτη. Δεν αλλάζει με την εποχή."""
+    sc.floor(0, 0, 12, 12, PEN['d'])
+    sc.floor(0.5, 0.5, 11.5, 11.5, PEN['D'])
+    for u in range(1, 11, 2):
+        sc.floor(u + 0.5, 1, u + 1.2, 11, PEN['g'])
+    sc.box(11.5, 0, 12, 12, 0, 1, None, PEN['d'], PEN['D'])
+    sc.box(0, 11.5, 12, 12, 0, 1, PEN['D'], None, PEN['D'])
 
 
-def bp_tower(img, st, w, h):
-    """Πύργος: ψηλός και στενός. Μεγαλώνει με την αναβάθμιση."""
-    b = h - 1
-    tall = 8 + 2 * (st.age - 2)
-    x = w // 2 - 2
-    wall(img, x, b - tall, 4, tall, st)
-    rect(img, x - 1, b - tall - 2, 6, 2, st.wall_light)
-    for i in range(x - 1, x + 5, 2):
-        rect(img, i, b - tall - 3, 1, 1, st.wall_dark)
-    door(img, x + 1, b - 3, 2, 3)
+def bp_tower(sc, st, n):
+    """Πύργος σκοπιάς: ψηλός και στενός, ψηλώνει με την αναβάθμιση."""
+    foundation(sc, n, inset=1)
+    tall = 10 + 3 * (st.age - 2)
+    if st.age == 2:
+        # ξύλινη σκοπιά: τέσσερα πόδια και πλατφόρμα
+        for (u, v) in ((2, 2), (5.5, 2), (2, 5.5), (5.5, 5.5)):
+            sc.box(u, v, u + 0.6, v + 0.6, 0, tall, PEN['D'], PEN['d'])
+        sc.box(1.5, 1.5, 6.5, 6.5, tall, tall + 3, PEN['D'], PEN['d'],
+               PEN['o'])
+        roof(sc, st, 1.5, 1.5, 6.5, 6.5, tall + 3, 3)
+        return
+    walls(sc, st, 2, 2, 6, 6, tall)
+    sc.box(1.5, 1.5, 6.5, 6.5, tall, tall + 2, st.wall_light, st.wall_dark,
+           st.wall_dark)
+    for a in (1.5, 3.5, 5.5):
+        sc.box(a, 5.5, a + 1, 6.5, tall + 2, tall + 3, st.wall_light,
+               st.wall_dark, st.wall_light)
+        sc.box(5.5, a, 6.5, a + 1, tall + 2, tall + 3, st.wall_light,
+               st.wall_dark, st.wall_light)
+    door(sc, 'L', 6, 3.5, 1.5, 4)
+    window(sc, 'L', 6, 3.5, tall - 4, 1, 2)
     if st.age >= 4:
-        rect(img, x, b - tall + 2, 1, 2, PEN['K'])
-        rect(img, x + 3, b - tall + 2, 1, 2, PEN['K'])
-    ground(img, x - 1, b, 6)
+        window(sc, 'R', 6, 3.5, tall - 4, 1, 2)
+        banner(sc, 2, 2, tall + 3, 5)
 
 
-def bp_wall(img, st, w, h):
-    """Τείχος: τμήμα με επάλξεις. Παχαίνει με την αναβάθμιση."""
-    b = h - 1
+def bp_wall(sc, st, n):
+    """Τείχος: ΕΝΑΣ κύβος που πιάνει όλο το πλακίδιο, ώστε δύο γειτονικοί να
+    ενώνονται σε συνεχές τείχος προς ΟΠΟΙΑΔΗΠΟΤΕ από τις δύο διαγώνιες. Μία
+    εικόνα αντί για δύο (ΒΑ-ΝΔ και ΒΔ-ΝΑ) ή για δεκαέξι γωνίες."""
     tall = 4 + 2 * (st.age - 2)
-    wall(img, 0, b - tall, w, tall, st)
-    for i in range(0, w, 2):
-        rect(img, i, b - tall - 1, 1, 1, st.wall_light)
-    ground(img, 0, b, w)
+    if st.age == 2:
+        # ξύλινη περίφραξη από κορμούς
+        for (u, v) in ((0.5, 0.5), (2, 2), (0.5, 2.5), (2.5, 0.5), (1.5, 1.5)):
+            sc.box(u, v, u + 1.2, v + 1.2, 0, tall + 1, PEN['D'], PEN['d'],
+                   PEN['o'])
+        return
+    sc.box(0, 0, 4, 4, 0, tall, st.wall_light, st.wall_dark, st.wall_dark)
+    sc.on_wall('L', 4, 0, 4, 0, 1, PEN['K'])
+    sc.on_wall('R', 4, 0, 4, 0, 1, PEN['K'])
+    for (u, v) in ((0, 0), (2.5, 0), (0, 2.5), (2.5, 2.5)):
+        sc.box(u, v, u + 1.5, v + 1.5, tall, tall + 1.5, st.wall_light,
+               st.wall_dark, st.wall_light)
 
 
-def bp_temple(img, st, w, h):
-    """Ναός: κιονοστοιχία και μεγάλη στέγη — το πιο επίσημο κτίριο."""
-    b = h - 1
-    rect(img, 0, b - 2, w, 2, st.wall_dark)
-    rect(img, 1, b - 3, w - 2, 1, st.wall_light)
-    columns(img, 2, b - 10, w - 4, 7, st)
-    roof(img, 0, b - 15, w, 5, st)
-    trim_line(img, 1, b - 11, w - 2, st)
-    door(img, w // 2 - 1, b - 6, 2, 3)
+def bp_temple(sc, st, n):
+    """Ναός: κρηπίδωμα, περίστυλο και αέτωμα — το πιο επίσημο κτίριο."""
+    foundation(sc, n)
+    sc.box(0.5, 1, 11.5, 11, 0, 1, st.wall_light, st.wall_dark, st.wall_light)
+    sc.box(1.5, 2, 10.5, 10, 1, 2, st.wall_light, st.wall_dark, st.wall_light)
+    h = 8
+    sc.box(3, 3.5, 9, 8.5, 2, h, PEN['K'], PEN['K'], None)
+    columns(sc, st, 'L', 9.5, 2, 10.5, 2, h)
+    columns(sc, st, 'R', 10.5, 2, 9.5, 2, h)
+    sc.box(1.5, 2, 10.5, 10, h, h + 1, st.wall_light, st.wall_dark,
+           st.wall_light)
+    trim_band(sc, st, 1.5, 2, 10.5, 10, h + 1)
+    if st.shape in ('gable', 'cone', 'pagoda'):
+        sc.gable(1.5, 2, 10.5, 10, h + 1, 4, ramp_roof(st), st.wall_light,
+                 axis='u', over=0.5)
+    else:
+        roof(sc, st, 1.5, 2, 10.5, 10, h + 1, 3)
     if st.age >= 4:
-        banner(img, w - 2, b - 19, 4, st)
-    ground(img, 0, b, w)
+        banner(sc, 1.5, 2, h + 6, 5)
 
 
-def bp_gov_center(img, st, w, h):
-    b = h - 1
-    rect(img, 1, b - 2, w - 2, 2, st.wall_dark)
-    wall(img, 3, b - 11, w - 6, 9, st)
-    columns(img, 4, b - 9, w - 8, 7, st)
-    roof(img, 1, b - 17, w - 2, 6, st)
-    trim_line(img, 3, b - 12, w - 6, st)
-    door(img, w // 2 - 2, b - 6, 4, 4)
-    banner(img, 2, b - 21, 5, st)
-    ground(img, 0, b, w)
+def bp_gov_center(sc, st, n):
+    """Κυβερνείο: μεγάλο σώμα με στοά κιόνων μπροστά."""
+    foundation(sc, n)
+    L, R = hall(sc, st, 1.5, 1.5, 11, 10, 10, 5)
+    # στοά μπροστά από τον αριστερό τοίχο
+    sc.box(1.5, 10, 11, 14, 0, 1, st.wall_light, st.wall_dark, st.wall_light)
+    columns(sc, st, 'L', 13.5, 2, 11, 1, 8)
+    sc.box(1.5, 10, 11, 14, 8, 9, st.wall_light, st.wall_dark, st.wall_dark)
+    door(sc, 'L', 10, 5, 2, 5)
+    banner(sc, 2, 2, 17, 6)
 
 
-def bp_academy(img, st, w, h):
-    b = h - 1
-    rect(img, 1, b - 2, w - 2, 2, st.wall_dark)
-    columns(img, 2, b - 12, w - 4, 10, st)
-    roof(img, 0, b - 18, w, 6, st)
-    trim_line(img, 2, b - 13, w - 4, st)
-    door(img, w // 2 - 2, b - 7, 4, 5)
-    rect(img, w // 2 - 1, b - 21, 2, 3, PEN['i'])
-    ground(img, 0, b, w)
+def bp_academy(sc, st, n):
+    """Ακαδημία: περίστυλη αυλή με τρούλο ή πύργο στη μέση."""
+    foundation(sc, n)
+    sc.box(1, 1, 15, 15, 0, 1, st.wall_light, st.wall_dark, st.wall_light)
+    walls(sc, st, 2, 2, 7, 14, 9)
+    walls(sc, st, 7, 2, 14, 7, 9)
+    sc.box(7, 7, 14, 14, 0, 1, PEN['o'], PEN['o'], PEN['g'])
+    columns(sc, st, 'L', 14, 7, 14, 1, 7)
+    columns(sc, st, 'R', 14, 7, 14, 1, 7)
+    sc.box(7, 7, 14, 14, 7, 8, st.wall_light, st.wall_dark, None)
+    roof(sc, st, 2, 2, 7, 14, 9, 3, axis='v')
+    roof(sc, st, 7, 2, 14, 7, 9, 3)
+    sc.dome(5, 5, 2.5, 12, 4, (PEN['i'], PEN['I']))
 
 
-def bp_siege_works(img, st, w, h):
-    """Πολιορκητικά: ανοιχτό υπόστεγο με βραχίονα καταπέλτη απ' έξω."""
-    b = h - 1
-    wall(img, 1, b - 7, w - 4, 7, st)
-    roof(img, 0, b - 11, w - 2, 4, st)
-    door(img, 3, b - 5, 4, 5)
-    rect(img, w - 4, b - 10, 1, 7, PEN['d'])
-    rect(img, w - 5, b - 11, 3, 1, PEN['d'])
-    rect(img, w - 3, b - 3, 2, 2, PEN['y'])
-    ground(img, 0, b, w)
+def bp_siege_works(sc, st, n):
+    """Πολιορκητικά: υπόστεγο, και ένας καταπέλτης απ' έξω."""
+    foundation(sc, n, PEN['d'])
+    L, R = hall(sc, st, 1, 1, 7, 9, 6, 3)
+    door(sc, L[0], L[1], mid(L, 3), 3, 5)
+    # καταπέλτης: πλαίσιο, ρόδες, βραχίονας
+    sc.box(8.5, 5, 11, 9.5, 1, 2, PEN['D'], PEN['d'], PEN['D'])
+    sc.box(8.5, 9.5, 9.5, 10, 0, 2, PEN['K'], PEN['K'])
+    sc.box(10, 9.5, 11, 10, 0, 2, PEN['K'], PEN['K'])
+    sc.poly([(9.5, 7, 2), (10, 7, 2), (10, 5, 9), (9.5, 5, 9)], PEN['d'])
+    sc.box(9.5, 4.5, 10.5, 5.5, 8, 9, PEN['i'], PEN['i'], PEN['I'])
 
 
-def bp_wonder(img, st, w, h):
+def bp_wonder(sc, st, n):
     """Θαύμα: το σχήμα του πολιτισμού, όχι κοινό κτίριο.
 
     Είναι το μόνο κτίριο που ΔΕΝ βγαίνει από το ίδιο σχέδιο για όλους: μια
     πυραμίδα και ένας Παρθενώνας δεν έχουν κοινή κάτοψη. Εδώ ο πολιτισμός
     διαλέγει σιλουέτα, όχι μόνο υλικό.
     """
-    b = h - 1
     c = st.culture
-    if c in ('egypt',):
-        for j in range(h - 2):
-            inset = j * w // (2 * (h - 2))
-            rect(img, inset, b - 1 - j, w - 2 * inset, 1,
-                 st.wall_light if j % 3 else st.wall_dark)
+    rw = ramp_wall(st)
+    foundation(sc, n, PEN['D'] if c == 'egypt' else None)
+    if c == 'egypt':
+        sc.hip(1, 1, 15, 15, 0, 18, rw, ridge=0)
+        sc.hip(7, 7, 9, 9, 15.4, 2.6, (PEN['o'], PEN['y']), ridge=0)
     elif c in ('babylon', 'persia'):
+        for k in range(5):
+            e = 1 + 1.4 * k
+            sc.box(e, e, 16 - e, 16 - e, 4 * k, 4 * k + 4, st.wall_light,
+                   st.wall_dark, st.wall_light)
+            sc.on_wall('L', 16 - e, e, 16 - e, 4 * k + 3, 4 * k + 4,
+                       st.wall_dark)
+        sc.on_wall('L', 15, 7, 9, 0, 16, PEN['K'])   # η μεγάλη σκάλα
+        if c == 'persia':
+            sc.dome(8, 8, 2.5, 20, 4, ramp_roof(st))
+    elif c == 'asia':
         for k in range(4):
-            y = b - 4 - k * 4
-            inset = 1 + k * 2
-            rect(img, inset, y, w - 2 * inset, 4, st.wall_light)
-            rect(img, inset, y, 1, 4, st.wall_dark)
-            rect(img, inset, y + 3, w - 2 * inset, 1, st.wall_dark)
-    elif c in ('asia',):
-        for k in range(4):
-            y = b - 4 - k * 5
-            inset = 2 + k
-            wall(img, inset + 1, y, w - 2 * inset - 2, 4, st)
-            rect(img, inset - 1, y - 1, w - 2 * inset + 2, 1, st.roof_light)
-            rect(img, inset - 1, y, w - 2 * inset + 2, 1, st.roof_dark)
-    elif c in ('celt',):
-        # Κωνική αχυρένια στέγη. Το `j` μετράει ΑΠΟ ΚΑΤΩ προς τα πάνω, άρα το
-        # στένεμα πρέπει να ΜΕΓΑΛΩΝΕΙ με το j — η πρώτη γραφή το είχε
-        # ανάποδα και το θαύμα έβγαινε ανεστραμμένο χωνί.
-        for j in range(h - 4):
-            inset = j * w // (2 * (h - 4))
-            rect(img, inset, b - 3 - j, w - 2 * inset, 1,
-                 st.roof_light if j % 2 else st.roof_dark)
-        rect(img, 2, b - 3, w - 4, 3, st.wall_light)
+            e = 2.5 + 1.2 * k
+            z = 6 * k
+            walls(sc, st, e, e, 16 - e, 16 - e, 4) if k == 0 else \
+                sc.box(e, e, 16 - e, 16 - e, z, z + 4, st.wall_light,
+                       st.wall_dark, None)
+            sc.hip(e, e, 16 - e, 16 - e, z + 4, 2, ramp_roof(st), ridge=None,
+                   over=1.5)
+        sc.box(7.6, 7.6, 8.4, 8.4, 26, 31, PEN['y'], PEN['o'])
+    elif c == 'celt':
+        # κύκλος από μεγαλίθους γύρω από μια μεγάλη αχυρένια καλύβα
+        sc.prism(8, 8, 4.5, 0, 6, rw)
+        sc.cone(8, 8, 6, 6, 14, ramp_roof(st))
+        import math
+        for k in range(10):
+            a = 2 * math.pi * k / 10 + 0.3
+            u, v = 8 + 7 * math.cos(a), 8 + 7 * math.sin(a)
+            if u + v < 15:
+                continue                    # οι πίσω κρύβονται από την καλύβα
+            sc.box(u - 0.5, v - 0.5, u + 0.5, v + 0.5, 0, 5, PEN['I'],
+                   PEN['i'], PEN['I'])
     else:                                   # greek, rome, phoenicia
-        rect(img, 0, b - 3, w, 3, st.wall_dark)
-        rect(img, 1, b - 4, w - 2, 1, st.wall_light)
-        columns(img, 2, b - 15, w - 4, 11, st)
-        roof(img, 0, b - 21, w, 6, st)
-        trim_line(img, 2, b - 16, w - 4, st)
+        sc.box(0.5, 0.5, 15.5, 15.5, 0, 2, st.wall_light, st.wall_dark,
+               st.wall_light)
+        sc.box(1.5, 1.5, 14.5, 14.5, 2, 3, st.wall_light, st.wall_dark,
+               st.wall_light)
+        h = 13
+        sc.box(4, 4, 12, 12, 3, h, PEN['K'], PEN['K'], None)
+        columns(sc, st, 'L', 14.5, 1.5, 14.5, 3, h)
+        columns(sc, st, 'R', 14.5, 1.5, 14.5, 3, h)
+        sc.box(1.5, 1.5, 14.5, 14.5, h, h + 2, st.wall_light, st.wall_dark,
+               st.wall_light)
+        trim_band(sc, st, 1.5, 1.5, 14.5, 14.5, h + 2)
+        if c == 'phoenicia':
+            sc.box(4, 4, 12, 12, h + 2, h + 4, st.wall_light, st.wall_dark,
+                   st.wall_light)
+            sc.box(6, 6, 10, 10, h + 4, h + 9, st.wall_light, st.wall_dark,
+                   st.wall_light)
+            sc.prism(8, 8, 1.2, h + 9, h + 12, (PEN['r'], PEN['y']))
+        else:
+            sc.gable(1.5, 1.5, 14.5, 14.5, h + 2, 6, ramp_roof(st),
+                     st.wall_light, axis='u', over=0.5)
     if st.trim_pen is not None:
-        rect(img, w // 2 - 1, 0, 2, 2, st.trim_pen)
-    ground(img, 0, b, w)
+        banner(sc, 1, 1, 24, 6)
 
 
 # ------------------------------------------------------------- ο πίνακας
@@ -294,9 +415,9 @@ BUILDINGS = [
     ('market',      'Αγορά',          'M', [2, 3],       bp_market),
     ('archery',     'Σκοπευτήριο',    'M', [2, 3],       bp_archery),
     ('stable',      'Στάβλος',        'M', [2, 3],       bp_stable),
-    ('farm',        'Χωράφι',         'S', [2],          bp_farm),
+    ('farm',        'Χωράφι',         'M', [2],          bp_farm),
     ('tower',       'Πύργος',         'S', [2, 3, 4],    bp_tower),
-    ('wall',        'Τείχος',         'S', [2, 3, 4],    bp_wall),
+    ('wall',        'Τείχος',         'T', [2, 3, 4],    bp_wall),
     ('temple',      'Ναός',           'M', [3, 4],       bp_temple),
     ('gov_center',  'Κυβερνείο',      'L', [3],          bp_gov_center),
     ('academy',     'Ακαδημία',       'L', [3],          bp_academy),
@@ -318,11 +439,17 @@ def covers(ages):
     return out
 
 
-def render(key, culture, age):
+def render(key, culture, age, crop=True):
     _, _, size, _, blueprint = BY_KEY[key]
-    img, w, h = _canvas(size)
-    blueprint(img, Style(culture, age), w, h)
-    return img
+    sc, n = _scene(size)
+    blueprint(sc, Style(culture, age), n)
+    assert all(p is None for p in sc.img[0]), \
+        '%s/%s/%d: ο καμβάς %s δεν φτάνει σε ύψος' % (key, culture, age, size)
+    return trim_top(sc.img) if crop else sc.img
+
+
+def footprint(key):
+    return SIZES[BY_KEY[key][2]][0]
 
 
 def variants(key):

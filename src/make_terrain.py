@@ -18,7 +18,7 @@
 Αυτό είναι η διαφορά από τα κτίρια, που έχουν τρία μεγέθη και χρειάζονται
 πίνακα με πλάτος/ύψος/μετατόπιση. Εδώ η θέση βγαίνει με πολλαπλασιασμό:
 
-    πλακίδιο  index * 32       (αδιαφανές, 4 bytes x 8 γραμμές)
+    πλακίδιο  index * 16       (αδιαφανής ρόμβος, γραμμές 2,2,4,4,2,2 bytes)
     πόρος     (index-1) * 128  (με μάσκα, 8 bytes x 16 γραμμές)
     HUD       index * 128      (με μάσκα, 8 bytes x 16 γραμμές)
 
@@ -33,6 +33,7 @@ import json
 import os
 
 import gfx
+import iso
 import preview
 import terrain as T
 
@@ -40,7 +41,7 @@ OUT = gfx.OUT
 DATA = os.path.join(OUT, 'data')
 PREVIEW = os.path.join(OUT, 'preview')
 
-TILE_SZ = T.TILE_W // 2 * T.TILE_H            # αδιαφανές
+TILE_SZ = iso.DIAMOND_BYTES                   # αδιαφανής ρόμβος
 RES_SZ = T.RES_W * T.RES_H                    # μάσκα + δεδομένα
 HUD_SZ = T.HUD_W * T.HUD_H
 
@@ -86,27 +87,53 @@ def write(stem, what, note, equs, blobs, labels, sz, extra=()):
     return n * sz
 
 
+def encode_diamond(img):
+    """Μόνο τα bytes μέσα στον ρόμβο, γραμμή-γραμμή κατά `iso.SPANS`."""
+    out = bytearray()
+    for y, (b0, nb) in enumerate(iso.SPANS):
+        for b in range(b0, b0 + nb):
+            p, q = img[y][2 * b], img[y][2 * b + 1]
+            assert p is not None and q is not None, 'τρύπα μέσα στον ρόμβο'
+            out.append(gfx.cpcimg.mode0_byte(p, q))
+    return bytes(out)
+
+
+def decode_diamond(blob):
+    img, k = gfx.blank(T.TILE_W, T.TILE_H, None), 0
+    for y, (b0, nb) in enumerate(iso.SPANS):
+        for b in range(b0, b0 + nb):
+            img[y][2 * b], img[y][2 * b + 1] = gfx.cpcimg.mode0_pens(blob[k])
+            k += 1
+    return img
+
+
 def build_terrain():
     blobs, imgs, equs, labels = [], [], [], []
     for i, (key, name, art, passable) in enumerate(T.TERRAIN):
         img = T.tile(art)
-        blob = gfx.encode_opaque(img)
+        blob = encode_diamond(img)
         assert len(blob) == TILE_SZ
-        assert gfx.decode_opaque(blob, T.TILE_W, T.TILE_H) == img, key
+        assert decode_diamond(blob) == img, key
         blobs.append(blob)
         imgs.append((key, img))
         labels.append('%s — %s' % (key, name))
         equs.append(('ter_' + key, i,
                      '%s%s' % (name, '' if passable else ', ΑΔΙΑΒΑΤΟ')))
-    extra = [';', '; ΑΔΙΑΦΑΝΟ: χωρίς μάσκα, μπαίνει με LDI. Τίποτα δεν είναι',
-             '; από κάτω του, οπότε η μάσκα θα ήταν διπλά bytes και διπλός',
-             '; χρόνος για το ίδιο αποτέλεσμα.',
+    extra = [';', '; ΙΣΟΜΕΤΡΙΚΟΣ ΡΟΜΒΟΣ, ΑΔΙΑΦΑΝΟΣ. Κομμένος σε όρια byte, άρα',
+             '; οι γείτονες κουμπώνουν χωρίς επικάλυψη και δεν χρειάζεται μάσκα.',
+             '; Αποθηκεύονται ΜΟΝΟ τα bytes μέσα στον ρόμβο, γραμμή-γραμμή κατά',
+             '; τον πίνακα tile_spans (πρώτο byte, πλήθος) — 8 γραμμές του κουτιού',
+             '; 8x8, η πρώτη και η τελευταία άδειες.',
+             ';',
+             '; Το πλακίδιο (i, j) πάει στο x = (i-j)*4 pixels = (i-j)*2 bytes,',
+             '; y = (i+j)*4 γραμμές, από την αρχή του χάρτη.',
              MAP_NOTE.rstrip('\n'), '',
-             'TILE_W             equ %-4d ; bytes ανά γραμμή — ΑΔΙΑΦΑΝΟ,'
+             'TILE_W             equ %-4d ; bytes πλάτος του κουτιού'
              % (T.TILE_W // 2),
-             ';                            άρα τόσα και στη μνήμη',
-             'TILE_H             equ %-4d ; γραμμές' % T.TILE_H,
-             'TILE_SZ            equ %-4d ; offset = index * TILE_SZ' % TILE_SZ]
+             'TILE_H             equ %-4d ; γραμμές του κουτιού' % T.TILE_H,
+             'TILE_SZ            equ %-4d ; offset = index * TILE_SZ' % TILE_SZ,
+             '', 'tile_spans:'] + [
+                 '  db %d,%d' % s for s in iso.SPANS]
     total = write('terrain', 'πλακίδια εδάφους', '', equs, blobs, labels,
                   TILE_SZ, extra)
     return total, imgs
@@ -182,9 +209,21 @@ def build_hud():
     return total, imgs
 
 
-def tiled(img, nx=3, ny=3):
-    h, w = len(img), len(img[0])
-    return [[img[y % h][x % w] for x in range(w * nx)] for y in range(h * ny)]
+def iso_tiled(img, key, n=3):
+    """n x n ρόμβοι του ίδιου πλακιδίου. Για τις ακτές, η μεσαία στήλη
+    στη μεριά του νερού γίνεται νερό."""
+    water = T.tile(T.WATER_SHALLOW)
+    side = key[6:] if key.startswith('shore_') else None
+    out = gfx.blank(n * 8, n * 8, None)
+    for i in range(n):
+        for j in range(n):
+            t = img
+            if side == 'nw' and i == 0 or side == 'se' and i == n - 1 or \
+                    side == 'ne' and j == 0 or side == 'sw' and j == n - 1:
+                t = water
+            x, y = iso.tile_xy(i, j, (n - 1) * 4, 0)
+            gfx.stamp(out, t, x, y)
+    return out
 
 
 def main():
@@ -196,14 +235,15 @@ def main():
     h_bytes, h_imgs = build_hud()
 
     # Το έδαφος κρίνεται ΜΟΝΟ πλακιασμένο: μια κουκκίδα στην ακμή γίνεται
-    # γραμμή όταν το πλακίδιο μπει δίπλα στον εαυτό του.
+    # γραμμή όταν το πλακίδιο μπει δίπλα στον εαυτό του. Οι ακτές μπαίνουν
+    # δίπλα σε νερό, για να φαίνεται αν η διαγώνιος κουμπώνει.
     preview.contact_sheet(os.path.join(PREVIEW, 'terrain.png'),
-                          [(k, tiled(im)) for k, im in t_imgs], zoom=4, cols=8,
-                          title='έδαφος 8x8, κάθε ένα 3x3 φορές — οι αρμοί',
+                          [(k, iso_tiled(im, k)) for k, im in t_imgs], zoom=4,
+                          cols=8, title='έδαφος: ρόμβοι 8x8 σε διάταξη 3x3',
                           grid=False)
     # Οι πόροι κρίνονται πάνω στο έδαφος που θα πατήσουν.
     def on(bg, art):
-        b = T.tile(bg)
+        b = T.texture(bg)
         return gfx.stamp([list(b[j % T.TILE_H]) for j in range(T.RES_H)], art)
     water = {'fish', 'whale'}
     preview.contact_sheet(

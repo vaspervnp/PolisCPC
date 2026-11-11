@@ -1,11 +1,16 @@
 ; terrain.asm — πλακίδια εδάφους, Amstrad CPC Mode 0
 ; ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από src/make_terrain.py — μην το πειράζεις με το χέρι.
 ;
-; 16 εικόνες x 32 bytes = 512 bytes.
+; 16 εικόνες x 16 bytes = 256 bytes.
 ;
-; ΑΔΙΑΦΑΝΟ: χωρίς μάσκα, μπαίνει με LDI. Τίποτα δεν είναι
-; από κάτω του, οπότε η μάσκα θα ήταν διπλά bytes και διπλός
-; χρόνος για το ίδιο αποτέλεσμα.
+; ΙΣΟΜΕΤΡΙΚΟΣ ΡΟΜΒΟΣ, ΑΔΙΑΦΑΝΟΣ. Κομμένος σε όρια byte, άρα
+; οι γείτονες κουμπώνουν χωρίς επικάλυψη και δεν χρειάζεται μάσκα.
+; Αποθηκεύονται ΜΟΝΟ τα bytes μέσα στον ρόμβο, γραμμή-γραμμή κατά
+; τον πίνακα tile_spans (πρώτο byte, πλήθος) — 8 γραμμές του κουτιού
+; 8x8, η πρώτη και η τελευταία άδειες.
+;
+; Το πλακίδιο (i, j) πάει στο x = (i-j)*4 pixels = (i-j)*2 bytes,
+; y = (i+j)*4 γραμμές, από την αρχή του χάρτη.
 ;
 ; Ο ΧΑΡΤΗΣ ΕΙΝΑΙ ΕΝΑ BYTE ΑΝΑ ΠΛΑΚΙΔΙΟ
 ;
@@ -14,10 +19,19 @@
 ;
 ; 64x64 = 4.096 bytes. 96x96 = 9.216. Και τα δύο χωράνε σε μία τράπεζα.
 
-TILE_W             equ 4    ; bytes ανά γραμμή — ΑΔΙΑΦΑΝΟ,
-;                            άρα τόσα και στη μνήμη
-TILE_H             equ 8    ; γραμμές
-TILE_SZ            equ 32   ; offset = index * TILE_SZ
+TILE_W             equ 4    ; bytes πλάτος του κουτιού
+TILE_H             equ 8    ; γραμμές του κουτιού
+TILE_SZ            equ 16   ; offset = index * TILE_SZ
+
+tile_spans:
+  db 0,0
+  db 1,2
+  db 1,2
+  db 0,4
+  db 0,4
+  db 1,2
+  db 1,2
+  db 0,0
 
 ter_grass          equ 0    ; γρασίδι
 ter_grass_tuft     equ 1    ; γρασίδι θάμνος
@@ -29,59 +43,43 @@ ter_sand_dune      equ 6    ; αμμόλοφος
 ter_rock_floor     equ 7    ; βράχος
 ter_water_deep     equ 8    ; βαθύ νερό, ΑΔΙΑΒΑΤΟ
 ter_water_shallow  equ 9    ; ρηχό νερό, ΑΔΙΑΒΑΤΟ
-ter_shore_n        equ 10   ; ακτή βορρά, ΑΔΙΑΒΑΤΟ
-ter_shore_e        equ 11   ; ακτή ανατολής, ΑΔΙΑΒΑΤΟ
-ter_shore_s        equ 12   ; ακτή νότου, ΑΔΙΑΒΑΤΟ
-ter_shore_w        equ 13   ; ακτή δύσης, ΑΔΙΑΒΑΤΟ
+ter_shore_ne       equ 10   ; ακτή, νερό ΒΑ
+ter_shore_se       equ 11   ; ακτή, νερό ΝΑ
+ter_shore_sw       equ 12   ; ακτή, νερό ΝΔ
+ter_shore_nw       equ 13   ; ακτή, νερό ΒΔ
 ter_cliff          equ 14   ; γκρεμός, ΑΔΙΑΒΑΤΟ
 ter_road           equ 15   ; δρόμος
 
 terrain_gfx:
   ; grass — γρασίδι
-  db #F3,#F3,#F3,#F3,#F3,#73,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#B3,#F3
-  db #F3,#F3,#F3,#F3,#F3,#73,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#F3
+  db #73,#F3,#F3,#F3,#F3,#F3,#B3,#F3,#F3,#F3,#F3,#F3,#73,#F3,#F3,#F3
   ; grass_tuft — γρασίδι θάμνος
-  db #F3,#F3,#F3,#F3,#F3,#B3,#F3,#F3,#F3,#33,#73,#F3,#F3,#B3,#F3,#F3
-  db #F3,#F3,#F3,#F3,#F3,#F3,#B3,#73,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#F3
+  db #B3,#F3,#33,#73,#F3,#B3,#F3,#F3,#F3,#F3,#F3,#F3,#F3,#B3,#F3,#F3
   ; grass_flower — γρασίδι άνθη
-  db #F3,#F3,#F3,#F3,#F3,#73,#F3,#F3,#F3,#F3,#B7,#F3,#F3,#F3,#B3,#F3
-  db #F3,#F3,#F3,#F3,#F3,#5B,#F3,#F3,#F3,#73,#F3,#F3,#F3,#F3,#F3,#F3
+  db #73,#F3,#F3,#B7,#F3,#F3,#B3,#F3,#F3,#F3,#F3,#F3,#5B,#F3,#73,#F3
   ; dirt — χώμα
-  db #CF,#CF,#CF,#CF,#CF,#DA,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#E5
-  db #CF,#CF,#CF,#CF,#DA,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF
+  db #DA,#CF,#CF,#CF,#CF,#CF,#CF,#E5,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF
   ; dirt_rough — χώμα τραχύ
-  db #CF,#CF,#CF,#CF,#CF,#30,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#CF,#47,#CF
-  db #CF,#CF,#9A,#65,#CF,#CF,#CF,#CF,#9A,#CF,#CF,#CF,#CF,#CF,#CF,#CF
+  db #30,#CF,#CF,#CF,#CF,#CF,#47,#CF,#CF,#CF,#9A,#65,#CF,#CF,#CF,#CF
   ; sand — άμμος
-  db #FC,#FC,#FC,#FC,#FC,#ED,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#DE
-  db #FC,#FC,#FC,#FC,#FC,#DE,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC
+  db #ED,#FC,#FC,#FC,#FC,#FC,#FC,#DE,#FC,#FC,#FC,#FC,#DE,#FC,#FC,#FC
   ; sand_dune — αμμόλοφος
-  db #FC,#FC,#FC,#FC,#FC,#ED,#DE,#FC,#FC,#DE,#ED,#FC,#FC,#FC,#FC,#FC
-  db #FC,#FC,#FC,#FC,#FC,#ED,#DE,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC
+  db #ED,#DE,#DE,#ED,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#FC,#ED,#DE,#FC,#FC
   ; rock_floor — βράχος
-  db #03,#03,#03,#03,#03,#81,#03,#03,#03,#03,#03,#03,#03,#03,#42,#03
-  db #03,#03,#03,#03,#42,#03,#03,#03,#03,#03,#03,#03,#03,#03,#03,#03
+  db #81,#03,#03,#03,#03,#03,#42,#03,#03,#03,#03,#03,#03,#03,#03,#03
   ; water_deep — βαθύ νερό
-  db #C0,#C0,#C0,#C0,#C0,#EA,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#EA
-  db #C0,#C0,#C0,#C0,#D5,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0
+  db #EA,#C0,#C0,#C0,#C0,#C0,#C0,#EA,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0
   ; water_shallow — ρηχό νερό
-  db #FF,#FF,#FF,#FF,#FF,#D7,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#D7
-  db #FF,#FF,#FF,#FF,#EB,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF
-  ; shore_n — ακτή βορρά
-  db #FF,#FF,#FF,#FF,#EB,#FF,#EB,#FF,#C3,#C3,#C3,#C3,#FC,#FC,#FC,#FC
-  db #FC,#ED,#FC,#FC,#F6,#F6,#F6,#F6,#F3,#F3,#F3,#F3,#F3,#73,#F3,#F3
-  ; shore_e — ακτή ανατολής
-  db #F3,#F6,#E9,#FF,#F3,#76,#E9,#FF,#F3,#F6,#E9,#EB,#F6,#F6,#E9,#FF
-  db #F3,#F6,#E9,#FF,#B3,#F6,#E9,#FF,#F3,#F6,#E9,#EB,#F3,#F6,#E9,#FF
-  ; shore_s — ακτή νότου
-  db #F3,#F3,#F3,#F3,#F3,#73,#F3,#F3,#F6,#F6,#F6,#F6,#FC,#ED,#FC,#FC
-  db #FC,#FC,#FC,#FC,#C3,#C3,#C3,#C3,#EB,#FF,#EB,#FF,#FF,#FF,#FF,#FF
-  ; shore_w — ακτή δύσης
-  db #FF,#D6,#F9,#F3,#FF,#D6,#B9,#F3,#D7,#D6,#F9,#F3,#FF,#D6,#F9,#F9
-  db #FF,#D6,#F9,#F3,#FF,#D6,#F9,#B3,#D7,#D6,#F9,#F3,#FF,#D6,#F9,#F3
+  db #D7,#FF,#FF,#FF,#FF,#FF,#FF,#D7,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF
+  ; shore_ne — ακτή, νερό ΒΑ
+  db #DE,#E9,#F6,#DE,#F3,#F3,#FC,#CB,#F3,#F3,#F6,#FC,#73,#F3,#F3,#F3
+  ; shore_se — ακτή, νερό ΝΑ
+  db #73,#F3,#F3,#F6,#F3,#F3,#FC,#DE,#F3,#F6,#FC,#E9,#ED,#FC,#FC,#E9
+  ; shore_sw — ακτή, νερό ΝΔ
+  db #73,#F3,#F3,#F3,#FC,#F9,#B3,#F3,#C7,#FC,#F3,#F3,#ED,#F9,#D6,#ED
+  ; shore_nw — ακτή, νερό ΒΔ
+  db #D6,#FC,#FC,#DE,#D6,#FC,#B9,#F3,#ED,#FC,#F3,#F3,#F9,#F3,#F3,#F3
   ; cliff — γκρεμός
-  db #03,#03,#03,#03,#C3,#83,#C3,#03,#42,#03,#03,#81,#03,#03,#03,#03
-  db #42,#03,#42,#03,#03,#03,#03,#03,#81,#03,#81,#03,#03,#03,#03,#03
+  db #83,#C3,#03,#03,#03,#03,#03,#03,#42,#03,#42,#03,#03,#03,#03,#81
   ; road — δρόμος
-  db #F0,#F0,#F0,#F0,#E5,#F0,#E5,#F0,#F0,#F0,#F0,#F0,#F0,#DA,#F0,#E5
-  db #F0,#F0,#F0,#F0,#E5,#F0,#DA,#F0,#F0,#F0,#F0,#F0,#F0,#F0,#DA,#F0
+  db #F0,#E5,#F0,#F0,#F0,#DA,#F0,#E5,#F0,#F0,#F0,#F0,#F0,#DA,#F0,#F0

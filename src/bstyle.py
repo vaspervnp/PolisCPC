@@ -19,6 +19,7 @@
 Στη Λίθινη ΟΛΟΙ οι πολιτισμοί μοιάζουν — καλύβες είναι. Η ταυτότητα
 εμφανίζεται από τη Χαλκού και μετά, που είναι και ιστορικά το σωστό.
 """
+import iso
 from gfx import PEN
 
 # (κλειδί, όνομα, τοίχος σκιά/φως, στέγη σκιά/φως, σχήμα στέγης, στολίδι)
@@ -87,87 +88,114 @@ class Style:
 
 
 # ------------------------------------------------------------- σχήματα
-
-def rect(img, x, y, w, h, pen):
-    for j in range(y, min(y + h, len(img))):
-        for i in range(x, min(x + w, len(img[0]))):
-            if i >= 0 and j >= 0:
-                img[j][i] = pen
+#
+# Όλα δουλεύουν σε συντεταγμένες κόσμου (u, v, z) πάνω σε `iso.Scene`: u, v
+# σε βήματα (4 = ένα πλακίδιο), z σε γραμμές. Ο αριστερός τοίχος («L», κοιτάει
+# ΝΔ) είναι ο φωτεινός, ο δεξιός («R», ΝΑ) η σκιά.
 
 
-def wall(img, x, y, w, h, st):
-    """Τοίχος: φωτεινός, με μια σκοτεινή στήλη αριστερά για όγκο.
-
-    Ένα κτίριο σε ένα μόνο χρώμα διαβάζεται ως πλακάκι, όχι ως όγκος. Μία
-    στήλη σκιάς είναι το φθηνότερο που δίνει τρίτη διάσταση σε 16 pixels.
-    """
-    rect(img, x, y, w, h, st.wall_light)
-    rect(img, x, y, 1, h, st.wall_dark)
-    rect(img, x, y + h - 1, w, 1, st.wall_dark)
+def ramp_wall(st):
+    return (st.wall_dark, st.wall_light)
 
 
-def door(img, x, y, w, h, pen=None):
-    rect(img, x, y, w, h, pen if pen is not None else PEN['K'])
+def ramp_roof(st):
+    return (st.roof_dark, st.roof_light)
 
 
-def roof(img, x, y, w, h, st):
-    """Η στέγη, στο σχήμα του πολιτισμού. Το σχήμα είναι ό,τι ξεχωρίζει έναν
-    ναό από έναν άλλο από μακριά — πιο πολύ κι από το χρώμα."""
+def foundation(sc, n, pen=None, inset=0.0):
+    """Το πατημένο χώμα κάτω από το κτίριο — αυτό το «γειώνει» πάνω στο
+    γρασίδι, όπως στο Age of Empires. Πιάνει όλη την κάτοψη."""
+    e = 4 * n - inset
+    sc.floor(inset, inset, e, e, PEN['o'] if pen is None else pen)
+
+
+def walls(sc, st, u0, v0, u1, v1, h, z0=0):
+    """Το σώμα: δύο ορατοί τοίχοι, φωτεινός αριστερά, σκιά δεξιά, και μια
+    σκοτεινή γραμμή στη βάση που το κολλάει στο έδαφος."""
+    sc.box(u0, v0, u1, v1, z0, z0 + h, st.wall_light, st.wall_dark,
+           st.wall_light)
+    if z0 == 0:
+        sc.on_wall('L', v1, u0, u1, 0, 1, PEN['K'])
+        sc.on_wall('R', u1, v0, v1, 0, 1, PEN['K'])
+
+
+def door(sc, side, k, a, w, h, pen=None):
+    sc.on_wall(side, k, a, a + w, 1 if h > 2 else 0, h,
+               PEN['K'] if pen is None else pen)
+
+
+def window(sc, side, k, a, z, w=1, h=2, pen=None):
+    sc.on_wall(side, k, a, a + w, z, z + h, PEN['K'] if pen is None else pen)
+
+
+def trim_band(sc, st, u0, v0, u1, v1, z):
+    """Στολίδι του πολιτισμού: μια λωρίδα στην κορυφή των δύο τοίχων."""
+    if st.trim_pen is None:
+        return
+    sc.on_wall('L', v1, u0, u1, z - 1, z, st.trim_pen)
+    sc.on_wall('R', u1, v0, v1, z - 1, z, st.trim_pen)
+
+
+def roof(sc, st, u0, v0, u1, v1, z, h, axis='u'):
+    """Η στέγη, στο σχήμα του πολιτισμού. Το σχήμα ξεχωρίζει έναν ναό από
+    έναν άλλο από μακριά — πιο πολύ κι από το χρώμα."""
     s = st.shape
-    if s == 'flat':
-        rect(img, x, y + h - 2, w, 2, st.roof_light)
-        rect(img, x, y + h - 2, w, 1, st.roof_dark)
-    elif s == 'gable':
-        for j in range(h):
-            inset = (h - 1 - j) * w // (2 * h)
-            rect(img, x + inset, y + j, w - 2 * inset, 1,
-                 st.roof_light if j else st.roof_dark)
+    rr = ramp_roof(st)
+    if s == 'gable':
+        sc.gable(u0, v0, u1, v1, z, h, rr, st.wall_dark, axis=axis, over=0.5)
     elif s == 'cone':
-        for j in range(h):
-            inset = (h - 1 - j) * (w // 2) // max(1, h - 1)
-            rect(img, x + inset, y + j, w - 2 * inset, 1,
-                 st.roof_light if j % 2 else st.roof_dark)
-    elif s == 'dome':
-        for j in range(h):
-            inset = max(0, (h - 1 - j) * w // (3 * h))
-            rect(img, x + inset, y + j, w - 2 * inset, 1,
-                 st.roof_dark if j == 0 else st.roof_light)
-        rect(img, x + w // 2, y, 1, 1, st.roof_dark)
+        cu, cv = (u0 + u1) / 2, (v0 + v1) / 2
+        r = max(u1 - u0, v1 - v0) / 2 * 1.15
+        sc.cone(cu, cv, r, z, h + 2, rr)
     elif s == 'pagoda':
-        for j in range(h):
-            out = j
-            rect(img, x - out, y + j, w + 2 * out, 1,
-                 st.roof_dark if j == h - 1 else st.roof_light)
+        sc.hip(u0, v0, u1, v1, z, max(2, h - 1), rr, ridge=None, over=1.5)
+    elif s == 'dome':
+        cu, cv = (u0 + u1) / 2, (v0 + v1) / 2
+        r = min(u1 - u0, v1 - v0) / 2
+        sc.dome(cu, cv, r * 0.9, z, h + 1, rr)
+        sc.poly([(cu, cv, z + h + 1), (cu, cv, z + h + 3),
+                 (cu + 0.5, cv + 0.5, z + h + 3)], st.roof_dark)
+    elif s == 'flat':
+        sc.box(u0, v0, u1, v1, z, z + 1, st.roof_light, st.roof_dark,
+               st.roof_dark)
+        sc.box(u0 + 1, v0 + 1, u1 - 1, v1 - 1, z + 1, z + 1, None, None,
+               st.roof_light)
     elif s == 'step':
-        for j in range(h):
-            inset = (h - 1 - j)
-            rect(img, x + inset, y + j, w - 2 * inset, 1,
-                 st.roof_light if j % 2 else st.roof_dark)
+        k, uu0, vv0, uu1, vv1, zz = 0, u0, v0, u1, v1, z
+        while uu1 - uu0 > 1.5 and vv1 - vv0 > 1.5 and k < max(1, h // 2):
+            sc.box(uu0, vv0, uu1, vv1, zz, zz + 2, st.roof_light,
+                   st.roof_dark, st.roof_light)
+            uu0, vv0, uu1, vv1, zz, k = uu0 + 1, vv0 + 1, uu1 - 1, vv1 - 1, \
+                zz + 2, k + 1
     elif s == 'pylon':
-        rect(img, x, y, w, h, st.wall_light)
-        rect(img, x, y, 1, h, st.wall_dark)
-        rect(img, x + w - 1, y, 1, h, st.wall_dark)
-        rect(img, x, y, w, 1, st.roof_dark)
+        # Αιγυπτιακό: επίπεδη στέγη με φαρδύ γείσο (κοίλο κορνίζωμα).
+        sc.box(u0 - 0.5, v0 - 0.5, u1 + 0.5, v1 + 0.5, z, z + 2,
+               st.roof_dark, st.roof_dark, st.roof_light)
 
 
-def banner(img, x, y, h, st):
-    """Σημαία στο χρώμα του παίκτη — ποιος ελέγχει το κτίριο."""
-    rect(img, x, y, 1, h, PEN['d'])
-    rect(img, x + 1, y, 2, 2, PEN['T'])
-    rect(img, x + 1, y + 2, 2, 1, PEN['t'])
+def banner(sc, u, v, z, h):
+    """Σημαία στο χρώμα του παίκτη — ποιος ελέγχει το κτίριο. Ο ιστός είναι
+    στο σημείο (u, v, z) του κόσμου· το πανί ανεμίζει δεξιά στην οθόνη."""
+    x, y = iso.project((u, v, z), sc.ox, sc.oy)
+    x, y = int(round(x)), int(round(y))
+    img = sc.img
+    def put(xx, yy, p):
+        if 0 <= yy < len(img) and 0 <= xx < len(img[0]):
+            img[yy][xx] = p
+    for k in range(h):
+        put(x, y - 1 - k, PEN['d'])
+    for yy in range(y - h, y - h + 2):
+        put(x + 1, yy, PEN['T'])
+        put(x + 2, yy, PEN['T'])
+    put(x + 1, y - h + 2, PEN['t'])
 
 
-def trim_line(img, x, y, w, st):
-    if st.trim_pen is not None:
-        rect(img, x, y, w, 1, st.trim_pen)
-
-
-def columns(img, x, y, w, h, st, step=2):
-    """Κιονοστοιχία — το σήμα του ελληνικού και του ρωμαϊκού ναού."""
-    for i in range(x, x + w, step):
-        rect(img, i, y, 1, h, st.wall_light)
-        rect(img, i + 1, y, 1, h, st.wall_dark) if step > 1 else None
-
-
-def ground(img, x, y, w, pen=None):
-    rect(img, x, y, w, 1, pen if pen is not None else PEN['K'])
+def columns(sc, st, side, k, a0, a1, z0, z1, step=2):
+    """Κιονοστοιχία πάνω σε τοίχο: κολόνες φωτεινές, κενά σκοτεινά — το σήμα
+    του ελληνικού και του ρωμαϊκού ναού."""
+    sc.on_wall(side, k, a0, a1, z0, z1, PEN['K'])
+    a = a0
+    pen = st.wall_light if side == 'L' else st.wall_dark
+    while a < a1:
+        sc.on_wall(side, k, a, min(a + 1, a1), z0, z1, pen)
+        a += step

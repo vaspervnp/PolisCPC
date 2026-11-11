@@ -10,9 +10,11 @@
 
 ΓΙΑΤΙ ΧΡΕΙΑΖΕΤΑΙ ΠΙΝΑΚΑΣ
 
-Τα κτίρια ΔΕΝ έχουν ίδιο μέγεθος: 12x16, 16x20 και 24x24. Δεν μπορεί να
-υπολογιστεί η θέση τους με πολλαπλασιασμό, όπως στις μονάδες — μπαίνει
-πίνακας με πλάτος, ύψος και μετατόπιση ανά καταχώριση.
+Τα κτίρια ΔΕΝ έχουν ίδιο μέγεθος: το πλάτος είναι η κάτοψη (8, 16, 24 ή 32
+pixels για 1x1 ώς 4x4 πλακίδια) και το ύψος είναι ΟΣΟ ΧΡΕΙΑΖΕΤΑΙ — ο καμβάς
+κόβεται από πάνω. Δεν μπορεί να υπολογιστεί η θέση τους με πολλαπλασιασμό,
+όπως στις μονάδες — μπαίνει πίνακας με πλάτος, ύψος και μετατόπιση ανά
+καταχώριση.
 """
 import json
 import os
@@ -45,8 +47,13 @@ ASM_HEAD = """; buildings_%(c)s.asm — %(name)s, Amstrad CPC Mode 0
 ; %(n)d εικόνες, %(bytes)d bytes. Δεδομένα ΜΕ ΜΑΣΚΑ, πλεγμένα mask,data ανά
 ; ζευγάρι pixels: AND mask / OR data.
 ;
-; Τα κτίρια ΔΕΝ έχουν ίδιο μέγεθος, οπότε η θέση τους ΔΕΝ βγαίνει με
-; πολλαπλασιασμό. Ο πίνακας %(c)s_table δίνει ανά καταχώριση:
+; ΙΣΟΜΕΤΡΙΚΑ. Το πλάτος είναι η κάτοψη (1x1 = 8 pixels ... 4x4 = 32) και
+; το ύψος όσο χρειάζεται η κάθε εικόνα, οπότε η θέση ΔΕΝ βγαίνει με
+; πολλαπλασιασμό.
+;
+; ΤΟΠΟΘΕΤΗΣΗ: η κάτω γραμμή της εικόνας είναι η κάτω γραμμή του κουτιού του
+; ΜΠΡΟΣΤΙΝΟΥ πλακιδίου (i0+n-1, j0+n-1). Οριζόντια, η εικόνα αρχίζει
+; (n-1)*2 bytes αριστερά από το κουτί του ΠΙΣΩ πλακιδίου (i0, j0). Ο πίνακας %(c)s_table δίνει ανά καταχώριση:
 ;
 ;       db πλάτος_σε_bytes_ΔΕΔΟΜΕΝΩΝ, ύψος_σε_γραμμές
 ;       dw μετατόπιση από το %(c)s_gfx
@@ -73,7 +80,8 @@ def write_culture(culture, name, ents, blobs, outdir):
     lines += ['', '%s_table:' % culture]
     off = 0
     for (key, _, age, size), blob in zip(ents, blobs):
-        w, h = B.SIZES[size]
+        w = B.SIZES[size][1]
+        h = len(blob) // w
         lines.append('  db %d,%d' % (w // 2, h))
         lines.append('  dw %d        ; %s %s' % (off, key,
                                                  bstyle.AGE_NAMES[age]))
@@ -117,14 +125,17 @@ def main():
 
     ents = entries()
     doc = {'ages': {str(k): v for k, v in AGE_GR.items()},
-           'sizes': {k: {'w': v[0], 'h': v[1]} for k, v in B.SIZES.items()},
+           'projection': 'isometric 2:1, tile = diamond 8x8 pixels',
+           'sizes': {k: {'tiles': v[0], 'w': v[1], 'max_h': v[2]}
+                     for k, v in B.SIZES.items()},
            'rule': ('Μια εικόνα ισχύει ώσπου να έρθει η επόμενη. Κτίριο που '
                     'δεν υπάρχει ακόμα σε μια εποχή δεν έχει καθόλου εικόνα.'),
            'buildings': [], 'cultures': []}
     for key, name, size, ages, _ in B.BUILDINGS:
         doc['buildings'].append({
             'key': key, 'name': name, 'size': size,
-            'pixels': {'w': B.SIZES[size][0], 'h': B.SIZES[size][1]},
+            'footprint': B.SIZES[size][0],
+            'w': B.SIZES[size][1],
             'drawn_at_ages': ages,
             'age_to_variant': {str(a): bstyle.AGE_NAMES[v]
                                for a, v in B.covers(ages).items()},
@@ -140,7 +151,7 @@ def main():
         # επαλήθευση: όλο το blob πίσω σε pens
         bad = 0
         for (key, _, age, size), blob, (_, img) in zip(ents, blobs, imgs):
-            w, h = B.SIZES[size]
+            w, h = len(img[0]), len(img)
             got = gfx.decode_masked(blob, w, h)
             for a, b in zip(got, img):
                 bad += sum(1 for p, q in zip(a, b) if p != q)
@@ -164,20 +175,22 @@ def main():
 
 
 def sheet(path, imgs, title):
-    """Τα κτίρια έχουν τρία μεγέθη — στοιχίζονται στη ΒΑΣΗ, όπως στον χάρτη."""
+    """Τα κτίρια έχουν τέσσερα πλάτη και ελεύθερο ύψος — στοιχίζονται στη
+    ΒΑΣΗ, όπως στον χάρτη, πάνω σε γρασίδι για να φαίνεται η κάτοψη."""
     from PIL import Image, ImageDraw
     z, cols = 3, 9
-    cw, ch = 24 * 2 * z + 10, 24 * z + 15
+    MW, MH = 32, max(len(im) for _, im in imgs)
+    cw, ch = MW * 2 * z + 10, MH * z + 15
     rows = (len(imgs) + cols - 1) // cols
-    im = Image.new('RGB', (cols * cw + 12, 26 + rows * ch), (24, 26, 34))
+    im = Image.new('RGB', (cols * cw + 12, 26 + rows * ch), (36, 70, 40))
     d = ImageDraw.Draw(im)
     d.text((8, 8), title, fill=(255, 206, 92))
     for i, (lab, img) in enumerate(imgs):
         ox = 6 + (i % cols) * cw
         oy = 24 + (i // cols) * ch
         w, h = len(img[0]), len(img)
-        preview.draw(d, img, ox + (24 - w) * z, oy + (24 - h) * z, z)
-        d.text((ox, oy + 24 * z + 2), lab[:16], fill=(190, 192, 205))
+        preview.draw(d, img, ox + (MW - w) * z, oy + (MH - h) * z, z)
+        d.text((ox, oy + MH * z + 2), lab[:16], fill=(220, 222, 230))
     im.save(path)
 
 

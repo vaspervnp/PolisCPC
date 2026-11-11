@@ -2,42 +2,89 @@
 
 ΔΥΟ ΔΙΑΦΟΡΕΤΙΚΑ ΠΡΑΓΜΑΤΑ
 
-    έδαφος   8x8 pixels, ΑΔΙΑΦΑΝΟ   16 τύποι, 4 bits του byte πλακιδίου
+    έδαφος   ρόμβος 8x8, ΑΔΙΑΦΑΝΟ   16 τύποι, 4 bits του byte πλακιδίου
     πόροι    8x16 pixels, ΜΕ ΜΑΣΚΑ  16 τύποι, τα άλλα 4 bits
 
-Το έδαφος είναι αδιαφανές επίτηδες. Δεν έχει τίποτα από κάτω του, άρα η μάσκα
-θα ήταν σκέτη σπατάλη: διπλάσια bytes και διπλάσιος χρόνος σε κάτι που
-ζωγραφίζεται σε ΟΛΟ το παράθυρο. Ένα πλακίδιο είναι 32 bytes και μπαίνει με
-`LDI`, χωρίς AND/OR.
+Το έδαφος είναι αδιαφανές επίτηδες, ΚΑΙ ΣΤΗΝ ΙΣΟΜΕΤΡΙΚΗ. Ο ρόμβος του
+κόβεται σε όρια BYTE (`iso.DIAMOND`): γραμμές των 2, 2, 4, 4, 2, 2 bytes,
+όλες στοιχισμένες. Οι γειτονικοί ρόμβοι κουμπώνουν χωρίς κενό και χωρίς
+επικάλυψη, άρα δεν υπάρχει τίποτα να μασκαριστεί: κάθε γραμμή μπαίνει με
+`LDI` από τον πίνακα `iso.SPANS`. 16 bytes ανά πλακίδιο — μισά από το
+τετράγωνο 8x8 που υπήρχε πριν.
 
 Οι πόροι έχουν μάσκα γιατί κάθονται ΠΑΝΩ στο έδαφος και είναι ψηλότεροι από
 το πλακίδιο τους — ένα δέντρο πατάει σε ένα πλακίδιο αλλά σκεπάζει και το από
 πάνω. Ζωγραφίζονται μία φορά όταν χτίζεται το φόντο, όχι κάθε καρέ.
 
-ΤΟ ΠΛΑΚΙΔΙΟ ΕΙΝΑΙ 16x8 ΜΟΝΑΔΕΣ ΟΘΟΝΗΣ
+ΤΟ ΠΛΑΚΙΔΙΟ ΕΙΝΑΙ ΡΟΜΒΟΣ 16x8 ΜΟΝΑΔΩΝ ΟΘΟΝΗΣ
 
-8 pixels επί 2 μονάδες το καθένα = 16 μονάδες πλάτος, 8 γραμμές ύψος. Φαρδύ
-και χαμηλό — που είναι σωστό για πάτωμα που το βλέπεις υπό γωνία.
+8 pixels επί 2 μονάδες το καθένα = 16 μονάδες πλάτος, 8 γραμμές ύψος: η
+αναλογία 2:1 της ισομετρικής του Age of Empires. Τα πλακίδια μπαίνουν σε
+διάταξη ρόμβων: το (i, j) πάει στο x = (i-j)*4, y = (i+j)*4.
+
+Οι υφές γράφονται ακόμα ως τετράγωνα 8x8 και κόβονται στον ρόμβο από το
+`tile`. Οι ακτές ΔΕΝ είναι ASCII: είναι διαγώνιες, και βγαίνουν από τη
+γεωμετρία (`shore`).
 
 ΤΑ ΠΛΑΚΙΔΙΑ ΕΝΩΝΟΝΤΑΙ
 
-Οι κουκκίδες μένουν ΜΑΚΡΙΑ από τις τέσσερις ακμές. Μια κουκκίδα στην ακμή
-γίνεται γραμμή όταν το πλακίδιο επαναληφθεί δίπλα στον εαυτό του, και το μάτι
-πιάνει αμέσως το πλέγμα.
+Οι κουκκίδες μένουν ΜΑΚΡΙΑ από τις ακμές. Μια κουκκίδα στην ακμή γίνεται
+γραμμή όταν το πλακίδιο επαναληφθεί δίπλα στον εαυτό του, και το μάτι πιάνει
+αμέσως το πλέγμα.
 """
+import iso
 from gfx import PEN, blank, parse_art
 
-TILE_W, TILE_H = 8, 8
+TILE_W, TILE_H = iso.TW, iso.TH
 RES_W, RES_H = 8, 16
 
 
-def tile(text):
+def texture(text):
     rows = parse_art(text)
     assert len(rows) == TILE_H and all(len(r) == TILE_W for r in rows), \
-        'πλακίδιο %dx%d' % (len(rows[0]), len(rows))
+        'υφή %dx%d' % (len(rows[0]), len(rows))
     assert all(p is not None for r in rows for p in r), \
-        'το έδαφος είναι ΑΔΙΑΦΑΝΟ — χωρίς διάφανα'
+        'η υφή είναι ΑΔΙΑΦΑΝΗ — χωρίς διάφανα'
     return rows
+
+
+def tile(art):
+    """Υφή 8x8 (ASCII) ή ήδη έτοιμη εικόνα -> πλακίδιο-ρόμβος. Ό,τι πέφτει
+    έξω από τον ρόμβο των bytes γίνεται διάφανο."""
+    if isinstance(art, str) and art.startswith('shore:'):
+        img = shore(art[6:])
+    else:
+        img = texture(art) if isinstance(art, str) else art
+    return iso.clip(img, iso.DIAMOND)
+
+
+def _uv(x, y):
+    """Το κέντρο του pixel σε συντεταγμένες κάτοψης του πλακιδίου, [0,4)."""
+    X, Y = x + 0.5 - 4, y + 0.5
+    return (X + Y) / 2, (Y - X) / 2
+
+
+def shore(side):
+    """Ακτή: ΣΤΕΡΙΑ με το νερό στη μεριά `side` (ne, se, sw, nw).
+
+    Οι τέσσερις μεριές είναι οι τέσσερις ΔΙΑΓΩΝΙΕΣ ακμές του ρόμβου — στον
+    ισομετρικό χάρτη δεν υπάρχει «πάνω» ακμή. Η ακτή ζωγραφίζεται στο
+    πλακίδιο της στεριάς: μια λίμνη ορθογώνια σε (i, j) είναι ρόμβος στην
+    οθόνη, και κάθε πλακίδιο στεριάς δίπλα της αγγίζει το νερό σε ΜΙΑ ακμή.
+    """
+    base = texture(GRASS)
+    img = [list(r) for r in base]
+    for y in range(TILE_H):
+        for x in range(TILE_W):
+            u, v = _uv(x, y)
+            d = {'nw': u, 'se': 4 - u, 'ne': v, 'sw': 4 - v}[side]
+            if d < 0.5:
+                img[y][x] = PEN['I']
+            elif d < 1.6:
+                img[y][x] = PEN['S'] if (x * 3 + y) % 7 else PEN['o']
+            elif d < 2.1:
+                img[y][x] = PEN['S'] if (x + y) % 2 else PEN['n']
+    return img
 
 
 def res(text):
@@ -161,51 +208,6 @@ cccccccc
 cccccccc
 """
 
-# Ακτές: νερό από τη μία, στεριά από την άλλη, με αφρό στη συνάντηση.
-SHORE_N = """
-cccccccc
-cIcccIcc
-IIIIIIII
-SSSSSSSS
-SSSoSSSS
-nSnSnSnS
-nnnnnnnn
-nngnnnnn
-"""
-
-SHORE_S = """
-nnnnnnnn
-nngnnnnn
-nSnSnSnS
-SSSoSSSS
-SSSSSSSS
-IIIIIIII
-cIcccIcc
-cccccccc
-"""
-
-SHORE_E = """
-nnnSSIcc
-nngSSIcc
-nnnSSIcI
-nSnSSIcc
-nnnSSIcc
-ngnSSIcc
-nnnSSIcI
-nnnSSIcc
-"""
-
-SHORE_W = """
-ccISSnnn
-ccISSgnn
-IcISSnnn
-ccISSnSn
-ccISSnnn
-ccISSnng
-IcISSnnn
-ccISSnnn
-"""
-
 CLIFF = """
 iiiiiiii
 IIIiIIii
@@ -241,10 +243,10 @@ TERRAIN = [
     ('rock_floor',    'βράχος',         ROCK_FLOOR,    True),
     ('water_deep',    'βαθύ νερό',      WATER_DEEP,    False),
     ('water_shallow', 'ρηχό νερό',      WATER_SHALLOW, False),
-    ('shore_n',       'ακτή βορρά',     SHORE_N,       False),
-    ('shore_e',       'ακτή ανατολής',  SHORE_E,       False),
-    ('shore_s',       'ακτή νότου',     SHORE_S,       False),
-    ('shore_w',       'ακτή δύσης',     SHORE_W,       False),
+    ('shore_ne',      'ακτή, νερό ΒΑ',  'shore:ne',    True),
+    ('shore_se',      'ακτή, νερό ΝΑ',  'shore:se',    True),
+    ('shore_sw',      'ακτή, νερό ΝΔ',  'shore:sw',    True),
+    ('shore_nw',      'ακτή, νερό ΒΔ',  'shore:nw',    True),
     ('cliff',         'γκρεμός',        CLIFF,         False),
     ('road',          'δρόμος',         ROAD,          True),
 ]

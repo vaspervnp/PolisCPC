@@ -65,27 +65,27 @@
    "index": 9
   },
   {
-   "key": "shore_n",
-   "name": "ακτή βορρά",
-   "passable": false,
+   "key": "shore_ne",
+   "name": "ακτή, νερό ΒΑ",
+   "passable": true,
    "index": 10
   },
   {
-   "key": "shore_e",
-   "name": "ακτή ανατολής",
-   "passable": false,
+   "key": "shore_se",
+   "name": "ακτή, νερό ΝΑ",
+   "passable": true,
    "index": 11
   },
   {
-   "key": "shore_s",
-   "name": "ακτή νότου",
-   "passable": false,
+   "key": "shore_sw",
+   "name": "ακτή, νερό ΝΔ",
+   "passable": true,
    "index": 12
   },
   {
-   "key": "shore_w",
-   "name": "ακτή δύσης",
-   "passable": false,
+   "key": "shore_nw",
+   "name": "ακτή, νερό ΒΔ",
+   "passable": true,
    "index": 13
   },
   {
@@ -378,7 +378,7 @@
   }
  ],
  "bytes": {
-  "terrain": 512,
+  "terrain": 256,
   "resources": 1920,
   "hud": 3072
  }
