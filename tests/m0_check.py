@@ -3,12 +3,11 @@
     python3 tests/m0_check.py [--shots]
 
 Χρειάζεται τον headless emulator (floooh/chips) στο ~/cpcemu ή όπου δείχνει
-το CPCEMU. Ελέγχει και τις δύο εξόδους του game/build.sh:
+το CPCEMU. Ελέγχει το build/m0_bars.sna — την οθόνη ελέγχου της παλέτας, που
+το game/build.sh χτίζει με -DBARS=1 από τον ίδιο κώδικα. (Το κανονικό
+polis.sna/.dsk δείχνει πια τον χάρτη· αυτά τα ελέγχει το tests/m1_check.py.)
 
-    polis.sna   φορτώνει και ξεκινάει κατευθείαν
-    polis.dsk   εκκίνηση BASIC, RUN"POLIS
-
-και για την καθεμία:
+Ελέγχει:
 
     * Mode 0
     * η οθόνη έχει 16 λωρίδες των 10 pixels, pen 0..15 — διαβασμένες από τη
@@ -90,16 +89,9 @@ def main():
 
     c = CPC()
     c.run_frames(5)
-    assert c.quickload(os.path.join(BUILD, 'polis.sna')), 'quickload'
+    assert c.quickload(os.path.join(BUILD, 'm0_bars.sna')), 'quickload'
     c.run_frames(25)                    # οι λωρίδες θέλουν ~5 καρέ
-    ok &= check(c, 'sna', shots)
-
-    c = CPC()
-    c.run_frames(150)                   # ώς το Ready της BASIC
-    c.insert_disc(os.path.join(BUILD, 'polis.dsk'))
-    c.type_text('RUN"POLIS\n')
-    c.run_frames(250)
-    ok &= check(c, 'dsk', shots)
+    ok &= check(c, 'bars', shots)
 
     sys.exit(0 if ok else 1)
 

@@ -1,0 +1,9 @@
+{
+ "size": 96,
+ "byte": {
+  "bits_4_7": "terrain index",
+  "bits_0_3": "resource index, 0=none"
+ },
+ "order": "j*96 + i",
+ "bytes": 9216
+}

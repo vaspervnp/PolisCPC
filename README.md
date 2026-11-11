@@ -65,12 +65,20 @@ python3 src/mockup.py
 ```
 
 ```bash
-python3 tests/m0_check.py
+python3 src/make_map.py
 ```
 
-Το πρώτο βγάζει `build/polis.dsk` (`RUN"POLIS`) και `build/polis.sna`· το
-δεύτερο τα τρέχει σε headless CPC 6128 και ελέγχει ότι η οθόνη και η παλέτα
-βγαίνουν σωστές.
+```bash
+python3 tests/m1_check.py
+```
+
+Το `build.sh` βγάζει `build/polis.dsk` (`RUN"POLIS`) και `build/polis.sna`:
+ο χάρτης 96×96, ισομετρικός, με τους πόρους του. Το `make_map.py` γράφει τον
+χάρτη (`data/map96.bin`) από το ίδιο σενάριο με το mockup. Το `m1_check.py`
+τρέχει το παιχνίδι σε headless CPC 6128 και ελέγχει ότι η οθόνη είναι ίδια
+pixel προς pixel με το mockup, σε πέντε θέσεις κάμερας, και μετράει τον
+χρόνο (`tests/profile.py` δείχνει πού πάει). Το `tests/m0_check.py` ελέγχει
+την παλέτα.
 
 Το πρώτο βγάζει τις μονάδες, το δεύτερο τα κτίρια των οκτώ πολιτισμών, το
 τρίτο το έδαφος/πόρους/HUD. Όλα γράφουν `data/*.bin` + `*.asm` και

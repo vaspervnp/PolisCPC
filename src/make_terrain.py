@@ -54,8 +54,9 @@ HEAD = """; %(file)s — %(what)s, Amstrad CPC Mode 0
 MAP_NOTE = """;
 ; Ο ΧΑΡΤΗΣ ΕΙΝΑΙ ΕΝΑ BYTE ΑΝΑ ΠΛΑΚΙΔΙΟ
 ;
-;       bits 0-3   τύπος εδάφους, 0-15
-;       bits 4-7   πόρος, 0 = τίποτα
+;       bits 4-7   τύπος εδάφους, 0-15 — byte AND #F0 = θέση στη σελίδα
+;                  των πλακιδίων (16 x 16 bytes = 256, στοιχισμένα)
+;       bits 0-3   πόρος, 0 = τίποτα
 ;
 ; 64x64 = 4.096 bytes. 96x96 = 9.216. Και τα δύο χωράνε σε μία τράπεζα.
 """
@@ -259,7 +260,7 @@ def main():
         grid=False)
 
     doc = {
-        'map_byte': {'bits_0_3': 'έδαφος 0-15', 'bits_4_7': 'πόρος, 0=τίποτα'},
+        'map_byte': {'bits_4_7': 'έδαφος 0-15', 'bits_0_3': 'πόρος, 0=τίποτα'},
         'terrain': [{'key': k, 'name': n, 'passable': p, 'index': i}
                     for i, (k, n, _, p) in enumerate(T.TERRAIN)],
         'resources': [{'key': k, 'name': n, 'index': i, 'gathers': kind,

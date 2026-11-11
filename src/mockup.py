@@ -294,9 +294,10 @@ def world_xy(i, j):
     return iso.tile_xy(i, j, WX0, TOP)
 
 
-def render_world(grd, res):
+def render_world(grd, res, towns=True):
     """Όλος ο χάρτης σε ΕΝΑ buffer pixels. Η οθόνη είναι ένα κομμάτι του —
-    αυτό ακριβώς είναι η κύλιση."""
+    αυτό ακριβώς είναι η κύλιση. Με towns=False μόνο έδαφος και πόροι: αυτό
+    ζωγραφίζει το παιχνίδι στο M1, και με αυτό συγκρίνει το tests/m1_check.py."""
     # Έξω από τον ρόμβο: pen 0, που στον χάρτη είναι μαύρο — όπως το «κενό»
     # γύρω από τον χάρτη στο Age of Empires. Όχι pen 1: αυτό είναι η βαθιά
     # θάλασσα, και ο χάρτης θα έλιωνε μέσα στο περίγραμμα.
@@ -318,7 +319,7 @@ def render_world(grd, res):
                 x, y = world_xy(i, j)
                 objs.append((i + j, i, arts[res[j][i]], x, y - 10))
     red = dict(enumerate(gfx.team_table(1)))
-    for key, culture, age, i0, j0, who in TOWNS:
+    for key, culture, age, i0, j0, who in (TOWNS if towns else ()):
         b = B.render(key, culture, age)
         if who:
             b = gfx.recolour(b, red)
@@ -329,7 +330,7 @@ def render_world(grd, res):
         depth = -1 if key == 'farm' else i0 + j0 + 2 * (n - 1)
         objs.append((depth, i0 + n - 1, b, x + 4 - 4 * n, fy + 8 - len(b)))
     sets = {s.name: s for s in units.all_sets()}
-    for name, frame, i, j, who in UNITS:
+    for name, frame, i, j, who in (UNITS if towns else ()):
         f = sets[name].frames[frame]
         if who:
             f = gfx.recolour(f, red)

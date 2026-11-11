@@ -1,8 +1,12 @@
-; main.asm — Polis, Amstrad CPC 6128. M0: υποδομή.
+; main.asm — Polis, Amstrad CPC 6128.
 ;
 ;     ./game/build.sh            -> build/polis.dsk, build/polis.sna, .sym
 ;
-; Τι κάνει το M0, και τίποτα παραπάνω:
+; M1: ο χάρτης 96x96 στη μνήμη (#8000) και το ισομετρικό έδαφος + οι πόροι
+; σε ολόκληρο το παράθυρο χάρτη (ground.asm, res.asm). Με -DBARS=1 βγαίνει η
+; οθόνη ελέγχου του M0 (λωρίδες παλέτας) αντί για τον χάρτη.
+;
+; Τι κάνει το M0 (η υποδομή κάτω από όλα):
 ;
 ;   1. κλείνει το firmware: δικός μας χειριστής διακοπής (EI/RET στο #38),
 ;      ROMs κλειστές, στοίβα στην κορυφή της περιοχής δεδομένων
@@ -54,14 +58,34 @@ start:
 
         call crtc_setup
         call set_palette
+        ifdef BARS
         call draw_bars
+        else
+        call clear_screen
+        ld hl,map_src           ; ο χάρτης στη θέση του (#8000)
+        ld de,MAP
+        ld bc,MAPW * MAPW
+        ldir
+        ld a,1
+        ld (redraw),a
+        endif
         ei
 
 ; ---------------------------------------------------------- κύριος βρόχος
 
 frame:
         call wait_vsync
-        ld a,HW_RED
+        ld a,(redraw)           ; ολόκληρο το παράθυρο, μόνο όταν ζητηθεί:
+        or a                    ; στην αρχή και σε άλμα της κάμερας
+        jr z,.idle
+        xor a
+        ld (redraw),a
+        inc a
+        ld (phase),a            ; 1 = σχεδιάζει (το διαβάζει το tests/m1_check.py)
+        call render
+        ld a,2
+        ld (phase),a
+.idle:  ld a,HW_RED
         call border
         call frame_work         ; ό,τι κάνει το καρέ — μετριέται από το border
         ld a,HW_BLACK
@@ -71,6 +95,20 @@ frame:
 ; Η δουλειά του καρέ. Στο M0 είναι άδεια: η κόκκινη λωρίδα δείχνει μόνο το
 ; κόστος του ίδιου του μετρητή. Τα επόμενα milestones μπαίνουν εδώ.
 frame_work:
+        ret
+
+; Το παράθυρο χάρτη από το μηδέν: έδαφος, μετά οι πόροι από πάνω.
+render:
+        call draw_ground
+        jp draw_resources
+
+; Όλη η οθόνη pen 0.
+clear_screen:
+        ld hl,SCREEN
+        ld de,SCREEN + 1
+        ld bc,#3FFF
+        ld (hl),0
+        ldir
         ret
 
 ; ------------------------------------------------------------ ρουτίνες
@@ -183,9 +221,62 @@ pen_pair:
         db #00,#C0,#0C,#CC,#30,#F0,#3C,#FC,#03,#C3,#0F,#CF,#33,#F3,#3F,#FF
 
         include "../palette.asm"
+        include "ground.asm"
+        include "res.asm"
 
 linebuf:
         ds 80
+
+; Η διεύθυνση κάθε γραμμής οθόνης: #C000 + (y%8)*#800 + (y/8)*80.
+line_addr:
+ly = 0
+        repeat 200
+        dw SCREEN + (ly & 7) * #800 + (ly >> 3) * 80
+ly = ly + 1
+        rend
+
+zeros:  ds 16                   ; «πλακίδιο» έξω από τον χάρτη
+
+; ---------------------------------------------------------- μεταβλητές
+cam_x:      dw 98               ; bytes κόσμου, ζυγό — η πόλη του παίκτη
+cam_y:      dw 303              ; γραμμές κόσμου, ≡ 3 (mod 4)
+cam_h:      dw 0                ; (cam_x - XOFF) / 2
+redraw:     db 0
+phase:      db 0
+scr:        dw 0
+ptype:      db 0
+lead:       db 0
+fast:       db 0
+var_r:      dw 0
+var_i:      dw 0
+var_j:      dw 0
+p_off:      db 0
+p_n:        db 0
+p_str:      db 0
+rows_left:  db 0
+rx:         db 0
+ry:         db 0
+rj:         db 0
+b_src:      dw 0
+b_c0:       db 0
+b_n:        db 0
+b_l0:       db 0
+b_lines:    db 0
+b_y:        db 0
+
+; ------------------------------------------------------------ γραφικά
+; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη: το byte του χάρτη
+; AND #F0 είναι κατευθείαν το low byte της διεύθυνσης.
+        align 256
+tile_gfx:
+        incbin "../data/terrain.bin"
+TILE_PAGE   equ tile_gfx >> 8
+        assert $ - tile_gfx == 256, 'terrain.bin must be exactly one page'
+res_gfx:                        ; στοιχισμένο στα 128 (το blit το χρειάζεται)
+        assert (res_gfx & 127) == 0, 'res_gfx must be 128-aligned'
+        incbin "../data/resources.bin"
+map_src:
+        incbin "../data/map96.bin"
 
 end:
 
