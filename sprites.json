@@ -1,0 +1,1606 @@
+{
+ "palette": [
+  {
+   "pen": 0,
+   "char": ".",
+   "firmware": 0,
+   "name": "Black",
+   "rgb": "#000000",
+   "use": "ΔΙΑΦΑΝΟ — η μάσκα, ποτέ χρώμα"
+  },
+  {
+   "pen": 1,
+   "char": "K",
+   "firmware": 1,
+   "name": "Blue",
+   "rgb": "#000080",
+   "use": "περίγραμμα και βαθιά σκιά (περνάει για μαύρο)"
+  },
+  {
+   "pen": 2,
+   "char": "T",
+   "firmware": 2,
+   "name": "Bright blue",
+   "rgb": "#0000FF",
+   "use": "ΟΜΑΔΑ φωτεινό — αλλάζει ανά παίκτη"
+  },
+  {
+   "pen": 3,
+   "char": "t",
+   "firmware": 11,
+   "name": "Sky blue",
+   "rgb": "#0080FF",
+   "use": "ΟΜΑΔΑ σκιά — αλλάζει ανά παίκτη"
+  },
+  {
+   "pen": 4,
+   "char": "d",
+   "firmware": 3,
+   "name": "Red",
+   "rgb": "#800000",
+   "use": "καφέ σκούρο: ξύλο, δέρμα, μαλλιά, σκουριά"
+  },
+  {
+   "pen": 5,
+   "char": "D",
+   "firmware": 15,
+   "name": "Orange",
+   "rgb": "#FF8000",
+   "use": "καφέ φωτεινό: κοντάρι, τρίχωμα, χώμα"
+  },
+  {
+   "pen": 6,
+   "char": "s",
+   "firmware": 16,
+   "name": "Pink",
+   "rgb": "#FF8080",
+   "use": "δέρμα"
+  },
+  {
+   "pen": 7,
+   "char": "S",
+   "firmware": 25,
+   "name": "Pastel yellow",
+   "rgb": "#FFFF80",
+   "use": "δέρμα στο φως, λινό, άχυρο"
+  },
+  {
+   "pen": 8,
+   "char": "i",
+   "firmware": 13,
+   "name": "White",
+   "rgb": "#808080",
+   "use": "σίδερο, πέτρα, ατσάλι"
+  },
+  {
+   "pen": 9,
+   "char": "I",
+   "firmware": 26,
+   "name": "Bright white",
+   "rgb": "#FFFFFF",
+   "use": "ανταύγεια μετάλλου, λευκό ύφασμα"
+  },
+  {
+   "pen": 10,
+   "char": "y",
+   "firmware": 24,
+   "name": "Bright yellow",
+   "rgb": "#FFFF00",
+   "use": "χρυσό, μπρούντζος στο φως"
+  },
+  {
+   "pen": 11,
+   "char": "o",
+   "firmware": 12,
+   "name": "Yellow",
+   "rgb": "#808000",
+   "use": "λαδί: μπρούντζος σκιά, άχυρο σκιά"
+  },
+  {
+   "pen": 12,
+   "char": "g",
+   "firmware": 18,
+   "name": "Bright green",
+   "rgb": "#00FF00",
+   "use": "πράσινο φωτεινό: φυτά, λοφίο"
+  },
+  {
+   "pen": 13,
+   "char": "n",
+   "firmware": 9,
+   "name": "Green",
+   "rgb": "#008000",
+   "use": "πράσινο σκούρο"
+  },
+  {
+   "pen": 14,
+   "char": "r",
+   "firmware": 6,
+   "name": "Bright red",
+   "rgb": "#FF0000",
+   "use": "κόκκινο: αίμα, λάβαρο, φωτιά"
+  },
+  {
+   "pen": 15,
+   "char": "c",
+   "firmware": 20,
+   "name": "Bright cyan",
+   "rgb": "#00FFFF",
+   "use": "ΝΕΡΟ, πάγος, γυαλί, γαλάζιο στολίδι"
+  }
+ ],
+ "teams": [
+  {
+   "name": "blue",
+   "table": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  },
+  {
+   "name": "red",
+   "table": [
+    0,
+    1,
+    14,
+    4,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  },
+  {
+   "name": "yellow",
+   "table": [
+    0,
+    1,
+    10,
+    11,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  },
+  {
+   "name": "green",
+   "table": [
+    0,
+    1,
+    12,
+    13,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  }
+ ],
+ "units": [
+  {
+   "name": "villager_m",
+   "category": "χωρικοί",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "villager_m_walk_s0",
+    "villager_m_walk_s1",
+    "villager_m_walk_s2",
+    "villager_m_walk_s3",
+    "villager_m_walk_e0",
+    "villager_m_walk_e1",
+    "villager_m_walk_e2",
+    "villager_m_walk_e3",
+    "villager_m_walk_n0",
+    "villager_m_walk_n1",
+    "villager_m_walk_n2",
+    "villager_m_walk_n3",
+    "villager_m_atk_s0",
+    "villager_m_atk_s1",
+    "villager_m_atk_e0",
+    "villager_m_atk_e1",
+    "villager_m_atk_n0",
+    "villager_m_atk_n1",
+    "villager_m_die0",
+    "villager_m_die1",
+    "villager_m_die2"
+   ]
+  },
+  {
+   "name": "villager_f",
+   "category": "χωρικοί",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "villager_f_walk_s0",
+    "villager_f_walk_s1",
+    "villager_f_walk_s2",
+    "villager_f_walk_s3",
+    "villager_f_walk_e0",
+    "villager_f_walk_e1",
+    "villager_f_walk_e2",
+    "villager_f_walk_e3",
+    "villager_f_walk_n0",
+    "villager_f_walk_n1",
+    "villager_f_walk_n2",
+    "villager_f_walk_n3",
+    "villager_f_atk_s0",
+    "villager_f_atk_s1",
+    "villager_f_atk_e0",
+    "villager_f_atk_e1",
+    "villager_f_atk_n0",
+    "villager_f_atk_n1",
+    "villager_f_die0",
+    "villager_f_die1",
+    "villager_f_die2"
+   ]
+  },
+  {
+   "name": "clubman",
+   "category": "πεζικό",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "clubman_walk_s0",
+    "clubman_walk_s1",
+    "clubman_walk_s2",
+    "clubman_walk_s3",
+    "clubman_walk_e0",
+    "clubman_walk_e1",
+    "clubman_walk_e2",
+    "clubman_walk_e3",
+    "clubman_walk_n0",
+    "clubman_walk_n1",
+    "clubman_walk_n2",
+    "clubman_walk_n3",
+    "clubman_atk_s0",
+    "clubman_atk_s1",
+    "clubman_atk_e0",
+    "clubman_atk_e1",
+    "clubman_atk_n0",
+    "clubman_atk_n1",
+    "clubman_die0",
+    "clubman_die1",
+    "clubman_die2"
+   ]
+  },
+  {
+   "name": "axeman",
+   "category": "πεζικό",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "axeman_walk_s0",
+    "axeman_walk_s1",
+    "axeman_walk_s2",
+    "axeman_walk_s3",
+    "axeman_walk_e0",
+    "axeman_walk_e1",
+    "axeman_walk_e2",
+    "axeman_walk_e3",
+    "axeman_walk_n0",
+    "axeman_walk_n1",
+    "axeman_walk_n2",
+    "axeman_walk_n3",
+    "axeman_atk_s0",
+    "axeman_atk_s1",
+    "axeman_atk_e0",
+    "axeman_atk_e1",
+    "axeman_atk_n0",
+    "axeman_atk_n1",
+    "axeman_die0",
+    "axeman_die1",
+    "axeman_die2"
+   ]
+  },
+  {
+   "name": "swordsman",
+   "category": "πεζικό",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "swordsman_walk_s0",
+    "swordsman_walk_s1",
+    "swordsman_walk_s2",
+    "swordsman_walk_s3",
+    "swordsman_walk_e0",
+    "swordsman_walk_e1",
+    "swordsman_walk_e2",
+    "swordsman_walk_e3",
+    "swordsman_walk_n0",
+    "swordsman_walk_n1",
+    "swordsman_walk_n2",
+    "swordsman_walk_n3",
+    "swordsman_atk_s0",
+    "swordsman_atk_s1",
+    "swordsman_atk_e0",
+    "swordsman_atk_e1",
+    "swordsman_atk_n0",
+    "swordsman_atk_n1",
+    "swordsman_die0",
+    "swordsman_die1",
+    "swordsman_die2"
+   ]
+  },
+  {
+   "name": "spearman",
+   "category": "πεζικό",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "spearman_walk_s0",
+    "spearman_walk_s1",
+    "spearman_walk_s2",
+    "spearman_walk_s3",
+    "spearman_walk_e0",
+    "spearman_walk_e1",
+    "spearman_walk_e2",
+    "spearman_walk_e3",
+    "spearman_walk_n0",
+    "spearman_walk_n1",
+    "spearman_walk_n2",
+    "spearman_walk_n3",
+    "spearman_atk_s0",
+    "spearman_atk_s1",
+    "spearman_atk_e0",
+    "spearman_atk_e1",
+    "spearman_atk_n0",
+    "spearman_atk_n1",
+    "spearman_die0",
+    "spearman_die1",
+    "spearman_die2"
+   ]
+  },
+  {
+   "name": "hoplite",
+   "category": "πεζικό",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "hoplite_walk_s0",
+    "hoplite_walk_s1",
+    "hoplite_walk_s2",
+    "hoplite_walk_s3",
+    "hoplite_walk_e0",
+    "hoplite_walk_e1",
+    "hoplite_walk_e2",
+    "hoplite_walk_e3",
+    "hoplite_walk_n0",
+    "hoplite_walk_n1",
+    "hoplite_walk_n2",
+    "hoplite_walk_n3",
+    "hoplite_atk_s0",
+    "hoplite_atk_s1",
+    "hoplite_atk_e0",
+    "hoplite_atk_e1",
+    "hoplite_atk_n0",
+    "hoplite_atk_n1",
+    "hoplite_die0",
+    "hoplite_die1",
+    "hoplite_die2"
+   ]
+  },
+  {
+   "name": "archer",
+   "category": "βαλλιστές",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "archer_walk_s0",
+    "archer_walk_s1",
+    "archer_walk_s2",
+    "archer_walk_s3",
+    "archer_walk_e0",
+    "archer_walk_e1",
+    "archer_walk_e2",
+    "archer_walk_e3",
+    "archer_walk_n0",
+    "archer_walk_n1",
+    "archer_walk_n2",
+    "archer_walk_n3",
+    "archer_atk_s0",
+    "archer_atk_s1",
+    "archer_atk_e0",
+    "archer_atk_e1",
+    "archer_atk_n0",
+    "archer_atk_n1",
+    "archer_die0",
+    "archer_die1",
+    "archer_die2"
+   ]
+  },
+  {
+   "name": "slinger",
+   "category": "βαλλιστές",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "slinger_walk_s0",
+    "slinger_walk_s1",
+    "slinger_walk_s2",
+    "slinger_walk_s3",
+    "slinger_walk_e0",
+    "slinger_walk_e1",
+    "slinger_walk_e2",
+    "slinger_walk_e3",
+    "slinger_walk_n0",
+    "slinger_walk_n1",
+    "slinger_walk_n2",
+    "slinger_walk_n3",
+    "slinger_atk_s0",
+    "slinger_atk_s1",
+    "slinger_atk_e0",
+    "slinger_atk_e1",
+    "slinger_atk_n0",
+    "slinger_atk_n1",
+    "slinger_die0",
+    "slinger_die1",
+    "slinger_die2"
+   ]
+  },
+  {
+   "name": "priest",
+   "category": "ειδικοί",
+   "pixels": {
+    "w": 8,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 16,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 4,
+   "row_bytes_in_memory": 8,
+   "bytes_per_frame": 128,
+   "total_bytes": 2688,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "priest_walk_s0",
+    "priest_walk_s1",
+    "priest_walk_s2",
+    "priest_walk_s3",
+    "priest_walk_e0",
+    "priest_walk_e1",
+    "priest_walk_e2",
+    "priest_walk_e3",
+    "priest_walk_n0",
+    "priest_walk_n1",
+    "priest_walk_n2",
+    "priest_walk_n3",
+    "priest_atk_s0",
+    "priest_atk_s1",
+    "priest_atk_e0",
+    "priest_atk_e1",
+    "priest_atk_n0",
+    "priest_atk_n1",
+    "priest_die0",
+    "priest_die1",
+    "priest_die2"
+   ]
+  },
+  {
+   "name": "scout",
+   "category": "ιππικό",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "scout_walk_s0",
+    "scout_walk_s1",
+    "scout_walk_s2",
+    "scout_walk_s3",
+    "scout_walk_e0",
+    "scout_walk_e1",
+    "scout_walk_e2",
+    "scout_walk_e3",
+    "scout_walk_n0",
+    "scout_walk_n1",
+    "scout_walk_n2",
+    "scout_walk_n3",
+    "scout_atk_s0",
+    "scout_atk_s1",
+    "scout_atk_e0",
+    "scout_atk_e1",
+    "scout_atk_n0",
+    "scout_atk_n1",
+    "scout_die0",
+    "scout_die1",
+    "scout_die2"
+   ]
+  },
+  {
+   "name": "cavalry",
+   "category": "ιππικό",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "cavalry_walk_s0",
+    "cavalry_walk_s1",
+    "cavalry_walk_s2",
+    "cavalry_walk_s3",
+    "cavalry_walk_e0",
+    "cavalry_walk_e1",
+    "cavalry_walk_e2",
+    "cavalry_walk_e3",
+    "cavalry_walk_n0",
+    "cavalry_walk_n1",
+    "cavalry_walk_n2",
+    "cavalry_walk_n3",
+    "cavalry_atk_s0",
+    "cavalry_atk_s1",
+    "cavalry_atk_e0",
+    "cavalry_atk_e1",
+    "cavalry_atk_n0",
+    "cavalry_atk_n1",
+    "cavalry_die0",
+    "cavalry_die1",
+    "cavalry_die2"
+   ]
+  },
+  {
+   "name": "knight",
+   "category": "ιππικό",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "knight_walk_s0",
+    "knight_walk_s1",
+    "knight_walk_s2",
+    "knight_walk_s3",
+    "knight_walk_e0",
+    "knight_walk_e1",
+    "knight_walk_e2",
+    "knight_walk_e3",
+    "knight_walk_n0",
+    "knight_walk_n1",
+    "knight_walk_n2",
+    "knight_walk_n3",
+    "knight_atk_s0",
+    "knight_atk_s1",
+    "knight_atk_e0",
+    "knight_atk_e1",
+    "knight_atk_n0",
+    "knight_atk_n1",
+    "knight_die0",
+    "knight_die1",
+    "knight_die2"
+   ]
+  },
+  {
+   "name": "camel",
+   "category": "ιππικό",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "camel_walk_s0",
+    "camel_walk_s1",
+    "camel_walk_s2",
+    "camel_walk_s3",
+    "camel_walk_e0",
+    "camel_walk_e1",
+    "camel_walk_e2",
+    "camel_walk_e3",
+    "camel_walk_n0",
+    "camel_walk_n1",
+    "camel_walk_n2",
+    "camel_walk_n3",
+    "camel_atk_s0",
+    "camel_atk_s1",
+    "camel_atk_e0",
+    "camel_atk_e1",
+    "camel_atk_n0",
+    "camel_atk_n1",
+    "camel_die0",
+    "camel_die1",
+    "camel_die2"
+   ]
+  },
+  {
+   "name": "elephant",
+   "category": "ιππικό",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "elephant_walk_s0",
+    "elephant_walk_s1",
+    "elephant_walk_s2",
+    "elephant_walk_s3",
+    "elephant_walk_e0",
+    "elephant_walk_e1",
+    "elephant_walk_e2",
+    "elephant_walk_e3",
+    "elephant_walk_n0",
+    "elephant_walk_n1",
+    "elephant_walk_n2",
+    "elephant_walk_n3",
+    "elephant_atk_s0",
+    "elephant_atk_s1",
+    "elephant_atk_e0",
+    "elephant_atk_e1",
+    "elephant_atk_n0",
+    "elephant_atk_n1",
+    "elephant_die0",
+    "elephant_die1",
+    "elephant_die2"
+   ]
+  },
+  {
+   "name": "chariot",
+   "category": "πολιορκητικά",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "chariot_walk_s0",
+    "chariot_walk_s1",
+    "chariot_walk_s2",
+    "chariot_walk_s3",
+    "chariot_walk_e0",
+    "chariot_walk_e1",
+    "chariot_walk_e2",
+    "chariot_walk_e3",
+    "chariot_walk_n0",
+    "chariot_walk_n1",
+    "chariot_walk_n2",
+    "chariot_walk_n3",
+    "chariot_atk_s0",
+    "chariot_atk_s1",
+    "chariot_atk_e0",
+    "chariot_atk_e1",
+    "chariot_atk_n0",
+    "chariot_atk_n1",
+    "chariot_die0",
+    "chariot_die1",
+    "chariot_die2"
+   ]
+  },
+  {
+   "name": "catapult",
+   "category": "πολιορκητικά",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "catapult_walk_s0",
+    "catapult_walk_s1",
+    "catapult_walk_s2",
+    "catapult_walk_s3",
+    "catapult_walk_e0",
+    "catapult_walk_e1",
+    "catapult_walk_e2",
+    "catapult_walk_e3",
+    "catapult_walk_n0",
+    "catapult_walk_n1",
+    "catapult_walk_n2",
+    "catapult_walk_n3",
+    "catapult_atk_s0",
+    "catapult_atk_s1",
+    "catapult_atk_e0",
+    "catapult_atk_e1",
+    "catapult_atk_n0",
+    "catapult_atk_n1",
+    "catapult_die0",
+    "catapult_die1",
+    "catapult_die2"
+   ]
+  },
+  {
+   "name": "ballista",
+   "category": "πολιορκητικά",
+   "pixels": {
+    "w": 12,
+    "h": 16
+   },
+   "screen_units": {
+    "w": 24,
+    "h": 16
+   },
+   "frames": 21,
+   "data_bytes_per_row": 6,
+   "row_bytes_in_memory": 12,
+   "bytes_per_frame": 192,
+   "total_bytes": 4032,
+   "animations": [
+    {
+     "tag": "walk_s",
+     "first": 0,
+     "count": 4
+    },
+    {
+     "tag": "walk_e",
+     "first": 4,
+     "count": 4
+    },
+    {
+     "tag": "walk_n",
+     "first": 8,
+     "count": 4
+    },
+    {
+     "tag": "atk_s",
+     "first": 12,
+     "count": 2
+    },
+    {
+     "tag": "atk_e",
+     "first": 14,
+     "count": 2
+    },
+    {
+     "tag": "atk_n",
+     "first": 16,
+     "count": 2
+    },
+    {
+     "tag": "die",
+     "first": 18,
+     "count": 3
+    }
+   ],
+   "frame_names": [
+    "ballista_walk_s0",
+    "ballista_walk_s1",
+    "ballista_walk_s2",
+    "ballista_walk_s3",
+    "ballista_walk_e0",
+    "ballista_walk_e1",
+    "ballista_walk_e2",
+    "ballista_walk_e3",
+    "ballista_walk_n0",
+    "ballista_walk_n1",
+    "ballista_walk_n2",
+    "ballista_walk_n3",
+    "ballista_atk_s0",
+    "ballista_atk_s1",
+    "ballista_atk_e0",
+    "ballista_atk_e1",
+    "ballista_atk_n0",
+    "ballista_atk_n1",
+    "ballista_die0",
+    "ballista_die1",
+    "ballista_die2"
+   ]
+  }
+ ]
+}

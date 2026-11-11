@@ -1,0 +1,385 @@
+{
+ "map_byte": {
+  "bits_0_3": "έδαφος 0-15",
+  "bits_4_7": "πόρος, 0=τίποτα"
+ },
+ "terrain": [
+  {
+   "key": "grass",
+   "name": "γρασίδι",
+   "passable": true,
+   "index": 0
+  },
+  {
+   "key": "grass_tuft",
+   "name": "γρασίδι θάμνος",
+   "passable": true,
+   "index": 1
+  },
+  {
+   "key": "grass_flower",
+   "name": "γρασίδι άνθη",
+   "passable": true,
+   "index": 2
+  },
+  {
+   "key": "dirt",
+   "name": "χώμα",
+   "passable": true,
+   "index": 3
+  },
+  {
+   "key": "dirt_rough",
+   "name": "χώμα τραχύ",
+   "passable": true,
+   "index": 4
+  },
+  {
+   "key": "sand",
+   "name": "άμμος",
+   "passable": true,
+   "index": 5
+  },
+  {
+   "key": "sand_dune",
+   "name": "αμμόλοφος",
+   "passable": true,
+   "index": 6
+  },
+  {
+   "key": "rock_floor",
+   "name": "βράχος",
+   "passable": true,
+   "index": 7
+  },
+  {
+   "key": "water_deep",
+   "name": "βαθύ νερό",
+   "passable": false,
+   "index": 8
+  },
+  {
+   "key": "water_shallow",
+   "name": "ρηχό νερό",
+   "passable": false,
+   "index": 9
+  },
+  {
+   "key": "shore_n",
+   "name": "ακτή βορρά",
+   "passable": false,
+   "index": 10
+  },
+  {
+   "key": "shore_e",
+   "name": "ακτή ανατολής",
+   "passable": false,
+   "index": 11
+  },
+  {
+   "key": "shore_s",
+   "name": "ακτή νότου",
+   "passable": false,
+   "index": 12
+  },
+  {
+   "key": "shore_w",
+   "name": "ακτή δύσης",
+   "passable": false,
+   "index": 13
+  },
+  {
+   "key": "cliff",
+   "name": "γκρεμός",
+   "passable": false,
+   "index": 14
+  },
+  {
+   "key": "road",
+   "name": "δρόμος",
+   "passable": true,
+   "index": 15
+  }
+ ],
+ "resources": [
+  {
+   "key": "none",
+   "name": "τίποτα",
+   "index": 0,
+   "gathers": null,
+   "amount": 0
+  },
+  {
+   "key": "tree",
+   "name": "δέντρο",
+   "index": 1,
+   "gathers": "ξύλο",
+   "amount": 120
+  },
+  {
+   "key": "tree_pine",
+   "name": "πεύκο",
+   "index": 2,
+   "gathers": "ξύλο",
+   "amount": 120
+  },
+  {
+   "key": "tree_palm",
+   "name": "φοίνικας",
+   "index": 3,
+   "gathers": "ξύλο",
+   "amount": 100
+  },
+  {
+   "key": "stump",
+   "name": "κούτσουρο",
+   "index": 4,
+   "gathers": null,
+   "amount": 0
+  },
+  {
+   "key": "berry_bush",
+   "name": "θάμνος μούρων",
+   "index": 5,
+   "gathers": "τροφή",
+   "amount": 150
+  },
+  {
+   "key": "bush_empty",
+   "name": "θάμνος άδειος",
+   "index": 6,
+   "gathers": null,
+   "amount": 0
+  },
+  {
+   "key": "gold_rock",
+   "name": "χρυσός",
+   "index": 7,
+   "gathers": "χρυσό",
+   "amount": 200
+  },
+  {
+   "key": "stone_rock",
+   "name": "πέτρα",
+   "index": 8,
+   "gathers": "πέτρα",
+   "amount": 250
+  },
+  {
+   "key": "rock_small",
+   "name": "πετρούλες",
+   "index": 9,
+   "gathers": null,
+   "amount": 0
+  },
+  {
+   "key": "fish",
+   "name": "ψάρια",
+   "index": 10,
+   "gathers": "τροφή",
+   "amount": 200
+  },
+  {
+   "key": "whale",
+   "name": "φάλαινα",
+   "index": 11,
+   "gathers": "τροφή",
+   "amount": 450
+  },
+  {
+   "key": "gazelle",
+   "name": "γαζέλα",
+   "index": 12,
+   "gathers": "τροφή",
+   "amount": 100
+  },
+  {
+   "key": "reeds",
+   "name": "καλάμια",
+   "index": 13,
+   "gathers": null,
+   "amount": 0
+  },
+  {
+   "key": "farm_plot",
+   "name": "χωράφι",
+   "index": 14,
+   "gathers": "τροφή",
+   "amount": 250
+  },
+  {
+   "key": "ruins",
+   "name": "ερείπια",
+   "index": 15,
+   "gathers": null,
+   "amount": 0
+  }
+ ],
+ "hud": [
+  {
+   "key": "food",
+   "name": "τροφή",
+   "index": 0,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "wood",
+   "name": "ξύλο",
+   "index": 1,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "gold",
+   "name": "χρυσό",
+   "index": 2,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "stone",
+   "name": "πέτρα",
+   "index": 3,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "pop",
+   "name": "πληθυσμός",
+   "index": 4,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "age",
+   "name": "εποχή",
+   "index": 5,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "idle",
+   "name": "αδρανής χωρικός",
+   "index": 6,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "alert",
+   "name": "δέχεσαι επίθεση",
+   "index": 7,
+   "role": "κατάσταση"
+  },
+  {
+   "key": "move",
+   "name": "κίνηση",
+   "index": 8,
+   "role": "εντολή",
+   "for": "μονάδα"
+  },
+  {
+   "key": "attack",
+   "name": "επίθεση",
+   "index": 9,
+   "role": "εντολή",
+   "for": "μονάδα"
+  },
+  {
+   "key": "stop",
+   "name": "στάση",
+   "index": 10,
+   "role": "εντολή",
+   "for": "μονάδα"
+  },
+  {
+   "key": "stand",
+   "name": "κράτα τη θέση",
+   "index": 11,
+   "role": "εντολή",
+   "for": "μονάδα"
+  },
+  {
+   "key": "patrol",
+   "name": "περιπολία",
+   "index": 12,
+   "role": "εντολή",
+   "for": "μονάδα"
+  },
+  {
+   "key": "build",
+   "name": "χτίσε",
+   "index": 13,
+   "role": "εντολή",
+   "for": "χωρικός"
+  },
+  {
+   "key": "repair",
+   "name": "επισκευή",
+   "index": 14,
+   "role": "εντολή",
+   "for": "χωρικός"
+  },
+  {
+   "key": "garrison",
+   "name": "μπες μέσα",
+   "index": 15,
+   "role": "εντολή",
+   "for": "μονάδα"
+  },
+  {
+   "key": "eject",
+   "name": "βγάλε τους έξω",
+   "index": 16,
+   "role": "εντολή",
+   "for": "κτίριο"
+  },
+  {
+   "key": "heal",
+   "name": "θεραπεία",
+   "index": 17,
+   "role": "εντολή",
+   "for": "ιερέας"
+  },
+  {
+   "key": "convert",
+   "name": "προσηλύτιση",
+   "index": 18,
+   "role": "εντολή",
+   "for": "ιερέας"
+  },
+  {
+   "key": "research",
+   "name": "τεχνολογία",
+   "index": 19,
+   "role": "εντολή",
+   "for": "κτίριο"
+  },
+  {
+   "key": "age_up",
+   "name": "επόμενη εποχή",
+   "index": 20,
+   "role": "εντολή",
+   "for": "κέντρο πόλης"
+  },
+  {
+   "key": "rally",
+   "name": "σημείο συγκέντρωσης",
+   "index": 21,
+   "role": "εντολή",
+   "for": "κτίριο"
+  },
+  {
+   "key": "delete",
+   "name": "γκρέμισμα",
+   "index": 22,
+   "role": "εντολή",
+   "for": "μονάδα/κτίριο"
+  },
+  {
+   "key": "cancel",
+   "name": "άκυρο",
+   "index": 23,
+   "role": "εντολή",
+   "for": "παντού"
+  }
+ ],
+ "bytes": {
+  "terrain": 512,
+  "resources": 1920,
+  "hud": 3072
+ }
+}
