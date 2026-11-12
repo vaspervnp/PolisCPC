@@ -78,8 +78,68 @@ def nav_asm():
             % (','.join(map(str, ter)), ','.join(map(str, res))))
 
 
+# Οι πόροι που μαζεύονται (M6). Ένας ορισμός για τον Z80 (data/gather.asm)
+# και για τους ελέγχους (tests/m6_check.py): το είδος (θέση στη μπάρα του
+# HUD), το ποσό ανά πηγή (terrain.json), και τι μένει όταν αδειάσει.
+KINDS = ('τροφή', 'ξύλο', 'χρυσό', 'πέτρα')
+SPENT = {'tree': 'stump', 'tree_pine': 'stump', 'tree_palm': 'stump',
+         'berry_bush': 'bush_empty', 'gold_rock': 'rock_small',
+         'stone_rock': 'rock_small'}
+BAR_X = [(i * 24 + 10) // 2 for i in range(6)]     # bytes: τα ψηφία της μπάρας
+BAR_Y = 6                                           # γραμμή του HUD
+
+
+def res_kind(k):
+    """Θέση στο RESOURCES -> 0..3 (τροφή, ξύλο, χρυσό, πέτρα) ή None."""
+    g = T.RESOURCES[k][3]
+    return KINDS.index(g) if g else None
+
+
+def res_spent(k):
+    return RES[SPENT.get(T.RESOURCES[k][0], 'none')]
+
+
+def digit_glyphs():
+    """11 ψηφία (0-9, κενό) x 5 γραμμές x 2 bytes: 3 pixels + κενό, στο
+    χρώμα των αριθμών του mockup πάνω στο φόντο του HUD."""
+    fg, bg = gfx.PEN['I'], gfx.PEN['K']
+    out = []
+    for d in range(11):
+        for j in range(5):
+            px = [fg if d < 10 and mockup.DIGITS[d][j * 3 + i] == '1' else bg
+                  for i in range(3)] + [bg]
+            out += [cpcimg.mode0_byte(px[0], px[1]),
+                    cpcimg.mode0_byte(px[2], px[3])]
+    return out
+
+
+def gather_asm():
+    kind = [255 if res_kind(k) is None else res_kind(k) for k in range(16)]
+    amount = [T.RESOURCES[k][4] if res_kind(k) is not None else 0
+              for k in range(16)]
+    spent = [res_spent(k) for k in range(16)]
+    g = digit_glyphs()
+    return ('; gather.asm — οι πόροι που μαζεύονται, και τα ψηφία του HUD (M6).\n'
+            '; ΠΑΡΑΓΕΤΑΙ από src/make_map.py — μην το πειράζεις με το χέρι.\n\n'
+            '; ανά θέση στο RESOURCES: είδος (0 τροφή, 1 ξύλο, 2 χρυσό, 3 πέτρα,\n'
+            '; 255 κανένα), ποσό ανά πηγή, και ο πόρος που μένει όταν αδειάσει\n'
+            'res_kind:   db %s\n'
+            'res_amount: dw %s\n'
+            'res_spent:  db %s\n\n'
+            '; η μπάρα: το byte κάθε αριθμού (4 ψηφία) και η γραμμή του HUD\n'
+            'BAR_Y       equ %d\n'
+            'bar_x:      db %s\n\n'
+            '; 11 ψηφία (0-9, κενό) x 5 γραμμές x 2 bytes\n'
+            'digits:\n%s'
+            % (','.join(map(str, kind)), ','.join(map(str, amount)),
+               ','.join(map(str, spent)), BAR_Y, ','.join(map(str, BAR_X)),
+               ''.join('            db %s\n' % ','.join('#%02X' % b
+                                                        for b in g[k:k + 10])
+                       for k in range(0, len(g), 10))))
+
+
 def hud_page(grd, res):
-    img = mockup.hud_background()
+    img = mockup.hud_background(numbers=False)
     mockup.minimap(img, grd, res, (0, 0), rect=False)
     page = bytearray(0x4000)
     for k in range(HUD_ROWS):
@@ -108,6 +168,9 @@ def main():
         f.write(nav_asm())
     print('data/nav.asm  εμπόδια: %s / %s'
           % (sorted(BLOCK_TER), sorted(BLOCK_RES)))
+    with open(os.path.join(DATA, 'gather.asm'), 'w') as f:
+        f.write(gather_asm())
+    print('data/gather.asm  πόροι που μαζεύονται και ψηφία του HUD')
     with open(os.path.join(DATA, 'map96.json'), 'w') as f:
         json.dump({'size': N, 'byte': {'bits_4_7': 'terrain index',
                                        'bits_0_3': 'resource index, 0=none'},

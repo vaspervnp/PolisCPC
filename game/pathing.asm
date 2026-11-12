@@ -45,7 +45,8 @@ PORTAL      equ #4690           ; 256, στην κύρια RAM: η σελίδα 
 QUEUE       equ BUF_A           ; 128, κυκλική: η ουρά του BFS
 FIELDS      equ 2
 
-U_FIELD     equ 24              ; ποιο flow field ακολουθεί (0 κανένα, 1-2)
+U_FIELD     equ 24              ; ποιο flow field ακολουθεί (0 κανένα, 1-2,
+                                ; FIELD_WALK: κανένα, αλλά με ακολούθηση τοίχου)
 U_TCELL     equ 25              ; το κελί του στόχου της
 U_BKT       equ 26              ; ο κάδος της (255 κανένας)
 ; Για τη στόχευση, ανά μονάδα, σε πίνακες ΣΤΟΙΧΙΣΜΕΝΟΥΣ ώστε L = ο δείκτης
@@ -973,6 +974,8 @@ way_point:
         ld a,(ix+U_FIELD)
         or a
         jp z,.tgt
+        cp FIELDS + 1           ; FIELD_WALK (gather.asm): ίσια, με
+        jp nc,.tgt              ; ακολούθηση τοίχου
         ld e,a                  ; το πεδίο δείχνει ακόμα στο ίδιο κελί;
         ld d,0
         ld hl,field_tc - 1

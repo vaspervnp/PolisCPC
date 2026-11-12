@@ -352,7 +352,13 @@ draw_column:
         call col_tile
         ld (col_t1),hl
         ld (col_r1),a
-        ld a,(col_n)
+        ld a,(col_sy)           ; τα sprites από εδώ και κάτω αρχίζουν
+        sub 16                  ; κάτω από το παράθυρο: τέλος
+        jr c,.in
+        ld hl,col_y1
+        cp (hl)
+        ret nc
+.in:    ld a,(col_n)
         cp 5
         jp c,.res               ; οι 4 τελευταίες: μόνο το sprite
         ld hl,(col_lp)          ; DE = γραμμή 4k, byte c
@@ -362,6 +368,14 @@ draw_column:
         ld bc,7
         add hl,bc
         ld (col_lp),hl
+        ld a,(col_sy)           ; 4k = col_sy - 3: έξω από το col_y0..col_y1
+        sub 3                   ; μόνο το sprite (ψαλιδισμένο)
+        ld hl,col_y0
+        cp (hl)
+        jp c,.res
+        ld hl,col_y1
+        cp (hl)
+        jp nc,.res
         ld a,(col_c)
         add a,e
         ld e,a
@@ -446,7 +460,7 @@ draw_column:
 
 ; A = πόρος (1-15): το sprite του στη στήλη col_c, από τη γραμμή col_sy - 16
 ; (3..159: χωρίς πρόσημο), τα bytes 0-1 ή 2-3 του (col_par), ψαλιδισμένο στο
-; 0..143.
+; col_y0..col_y1 (0..144 για την κύλιση· ένα κομμάτι για το gather.asm).
 col_sprite:
         dec a                   ; HL = res_gfx + (A-1)*128
         rrca
@@ -463,11 +477,16 @@ col_sprite:
         add a,a
         add a,l
         ld l,a
+        ld a,(col_y0)           ; B = y0 + 16 (το col_sy έχει +16)
+        add a,16
+        ld b,a
         ld a,(col_sy)
         ld c,16                 ; C = πόσες γραμμές
-        sub 16
+        sub b                   ; y - y0
         jr nc,.top
-        neg                     ; πάνω από την οθόνη: πετάγονται -y γραμμές
+        neg                     ; πάνω από το παράθυρο: πετάγονται y0 - y
+        cp c
+        ret nc
         ld b,a
         add a,a
         add a,a
@@ -477,11 +496,24 @@ col_sprite:
         ld a,c
         sub b
         ld c,a
-        xor a
+        ld a,(col_y1)           ; και ως το col_y1 (παράθυρο < 16 γραμμές)
+        ld b,a
+        ld a,(col_y0)
+        neg
+        add a,b
+        cp c
+        jr nc,.lim
+        ld c,a
+.lim:   ld a,(col_y0)
         jr .y0
-.top:   ld b,a                  ; κάτω: ως τη γραμμή 143
-        ld a,VIEW_H
+.top:   ld b,a                  ; η πρώτη γραμμή: y0 + (y - y0)
+        ld a,(col_y0)
+        add a,b
+        ld b,a
+        ld a,(col_y1)           ; κάτω: ως το col_y1
         sub b
+        ret c
+        ret z
         cp c
         jr nc,.full
         ld c,a

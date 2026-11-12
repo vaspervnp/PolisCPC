@@ -332,6 +332,7 @@ cmp_hl_de:
 
 ; RETURN: οι επιλεγμένες στον κέρσορα, σε σχηματισμό 4 στηλών (5 bytes)
 ; και σειρών (12 γραμμές), με τον κέρσορα στο κέντρο της πρώτης σειράς.
+; Πάνω σε πόρο, οι χωρικοί αντί γι' αυτό πάνε να μαζέψουν (gather.asm).
 do_command:
         call cur_world
         ld a,(sel_n)
@@ -342,10 +343,25 @@ do_command:
         call feet_tile
         ld (n_i),hl
         ld (n_j),de
+        call res_at             ; πόρος εκεί; (gather.asm)
+        ld (cmd_kind),a
         call tile_cell
         ld (cmd_cell),a
         call field_build
-        ld hl,SELLIST           ; όσες πήραν την εντολή: και στο MOVERS
+        ld a,(mv_n)             ; οι προηγούμενες βγαίνουν από το MOVERS
+        or a
+        jr z,.m0
+        ld b,a
+        ld hl,MOVERS
+.m:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push de
+        pop iy
+        res F_MVR,(iy+U_FL)
+        djnz .m
+.m0:    ld hl,SELLIST           ; όσες πήραν την εντολή: και στο MOVERS
         ld de,MOVERS
         ld a,(sel_n)
         ld (mv_n),a
@@ -416,7 +432,18 @@ do_command:
         ld a,(cmd_cell)
         ld (ix+U_TCELL),a
         ld (ix+U_STUCK),0
-        pop hl
+        set F_MVR,(ix+U_FL)
+        ld (ix+U_JOB),0         ; πόρος, και είναι χωρικός: δουλειά
+        ld a,(cmd_kind)
+        inc a
+        jr z,.nj
+        ld a,(ix+U_SET)
+        or a
+        jr nz,.nj
+        push bc
+        call job_start
+        pop bc
+.nj:    pop hl
         inc c
         ld a,(sel_n)
         cp c

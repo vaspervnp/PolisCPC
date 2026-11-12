@@ -401,7 +401,9 @@ def frame(world, grd, res, cam, hud_bg):
     return img
 
 
-def hud_background():
+def hud_background(numbers=True):
+    """Το HUD. Με numbers=False χωρίς τους αριθμούς της μπάρας: στο
+    παιχνίδι τους γράφει ο Z80 (M6, game/gather.asm)."""
     img = gfx.blank(W, H, gfx.PEN['K'])
     for x in range(W):
         img[MAP_H][x] = gfx.PEN['t']
@@ -411,7 +413,8 @@ def hud_background():
     for i, (k, v) in enumerate(bar):
         ox = i * 24 + 1
         gfx.stamp(img, T.hud(HUD_ART[k]), ox, MAP_H + 1)
-        number(img, v, ox + 9, MAP_H + 6, gfx.PEN['I'])
+        if numbers:
+            number(img, v, ox + 9, MAP_H + 6, gfx.PEN['I'])
     gfx.stamp(img, T.hud(HUD_ART['alert']), 148, MAP_H + 1)
 
     # κάρτα επιλεγμένης μονάδας

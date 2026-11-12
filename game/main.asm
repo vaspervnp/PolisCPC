@@ -7,7 +7,8 @@
 ; M3: οι μονάδες στα 25 Hz, με επαναφορά από τον καθρέφτη του φόντου στην
 ; τράπεζα C4 και sprites στην C5 (units.asm). M2: κύλιση με το CRTC και HUD
 ; με split-screen (scroll.asm, screen.asm). M4: 128 μονάδες, κέρσορας,
-; επιλογή και εντολή κίνησης (units.asm, input.asm). Με -DBARS=1 βγαίνει η
+; επιλογή και εντολή κίνησης (units.asm, input.asm). M5: εύρεση δρόμου
+; και κάδοι (pathing.asm). M6: πόροι και χωρικοί (gather.asm). Με -DBARS=1 βγαίνει η
 ; οθόνη ελέγχου του M0 (λωρίδες παλέτας) αντί για τον χάρτη.
 ;
 ; Τι κάνει το M0 (η υποδομή κάτω από όλα):
@@ -83,6 +84,7 @@ start:
         djnz .z
         call units_init
         call nav_init
+        call gather_init        ; οι πηγές, και οι αριθμοί του HUD
         ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
         call crtc_w
         ld a,1
@@ -268,6 +270,8 @@ pen_pair:
         include "input.asm"
         include "pathing.asm"
         include "../data/nav.asm"
+        include "../data/gather.asm"
+        include "gather.asm"
 
 linebuf:
         ds 80
@@ -334,6 +338,8 @@ col_lp:     dw 0
 col_r0:     db 0                ; ο πόρος του τρέχοντος / επόμενου πλακιδίου
 col_r1:     db 0
 col_sy:     db 0
+col_y0:     db 0                ; το κάθετο παράθυρο του draw_column (γραμμές)
+col_y1:     db VIEW_H
 sr_y0:      db 0                ; strip_resources
 sr_n:       db 0
 sr_res:     db 0
@@ -400,6 +406,24 @@ nphase:     db 0                ; 1 -> 2 γύρω από το BFS (tests/m5_chec
 bphase:     db 0                ; 1 -> 2 γύρω από τη μέτρηση στόχευσης
 bench_req:  db 0
 t_bestd:    db 0                ; στόχευση
+hud_val:    dw 200, 200, 100, 200, TOWN_UNITS, 1    ; η μπάρα: τροφή, ξύλο,
+                                ; χρυσό, πέτρα, πληθυσμός, εποχή (gather.asm)
+hud_dirty:  db 0
+u_rescan:   db 0                ; units_forget: όλες οι ενεργές, στο επόμενο καρέ
+cmd_kind:   db 255              ; το είδος του πόρου κάτω από την εντολή
+cmd_sj:     db 0                ; (ld (cmd_sj),de: j και μετά i)
+cmd_si:     db 0
+sp_ui:      db 0                ; stand_point
+sp_uj:      db 0
+sp_sj:      db 0
+sp_si:      db 0
+sp_bj:      db 0
+sp_bi:      db 0
+sp_best:    db 0
+src_spare:  dw 0
+hn_x:       db 0                ; hud_num
+hn_c:       db 0
+hn_d:       ds 4
 ticks:      db 0
 scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
 int_n:      db 0

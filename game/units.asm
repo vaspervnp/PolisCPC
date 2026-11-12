@@ -73,6 +73,7 @@ F_WANDER    equ 2               ; περιπλανιέται μόνη της
 F_REDRAW    equ 3               ; άλλαξε η επιλογή: ξαναζωγράφισε
 F_FIXED     equ 4               ; σταθερό καρέ (κέρσορας, γωνία)
 F_INBLK     equ 5               ; στέκεται μέσα σε εμπόδιο (βγαίνει ελεύθερα)
+F_MVR       equ 6               ; είναι στο MOVERS: βήματα σε κάθε καρέ
 F_ORD       equ 7               ; είναι στο ORDER
 
 SWAP_TAB    equ #A400           ; 256, στοιχισμένο — αμέσως μετά τον χάρτη
@@ -435,6 +436,9 @@ units_tick:
         or a
         call nz,field_cont
         call units_think
+        ld a,(hud_dirty)        ; άλλαξε η μπάρα (gather.asm)
+        or a
+        call nz,hud_update
         call units_move
         call units_order
         call units_mark
@@ -485,6 +489,9 @@ units_think:
         ret
 
 unit_think:
+        ld a,(ix+U_JOB)         ; χωρικός με δουλειά (gather.asm)
+        or a
+        call nz,job_tick
         bit F_MOVE,(ix+U_FL)
         jr nz,.mv
         bit F_WANDER,(ix+U_FL)
@@ -516,10 +523,12 @@ unit_think:
         jr nz,unit_think_vis
         set F_MOVE,(ix+U_FL)
         jr unit_think_vis
-.mv:    ld a,(ix+U_FIELD)       ; με εντολή: βήμα σε κάθε 2ο καρέ, πάντα
-        or a
+.mv:    ld a,(ix+U_FIELD)       ; με εντολή ΚΑΙ στο MOVERS: βήμα σε κάθε
+        or a                    ; 2ο καρέ, πάντα (units_move)
+        jr z,.far
+        bit F_MVR,(ix+U_FL)
         jr nz,unit_think_vis
-        ld a,(ix+U_SY)          ; περπατάει: αν ΔΕΝ φαίνεται, 8 βήματα
+.far:   ld a,(ix+U_SY)          ; περπατάει: αν ΔΕΝ φαίνεται, 8 βήματα
         inc a                   ; μονομιάς (όσο φαίνεται, βήμα σε κάθε
         jr nz,unit_think_vis    ; 2ο καρέ, στο units_move)
         ld de,#0810             ; ως 8 bytes, 16 γραμμές
@@ -753,7 +762,11 @@ units_move:
 .mn:    pop hl
         pop bc
         djnz .m
-.scr:   ld a,(v_shx)
+.scr:   ld hl,u_rescan          ; μετά από πλήρη σχεδίαση: σαν κύλιση
+        ld a,(hl)
+        ld (hl),0
+        ld hl,v_shx
+        or (hl)
         ld hl,v_shy
         or (hl)
         jr z,.ents
@@ -1448,7 +1461,8 @@ units_forget:
         cp UNITS
         jr nc,.n
         res F_ORD,(ix+U_FL)
-.n:     pop af
+        ld (ix+U_SY),255        ; καμία δεν φαίνεται: το επόμενο καρέ τις
+.n:     pop af                  ; ξαναβρίσκει (u_rescan)
         inc a
         cp UNITS + 2
         jr nz,.u
@@ -1459,4 +1473,6 @@ units_forget:
         ld (pcx),a
         ld a,(cam_y)
         ld (pcy),a
+        ld a,1
+        ld (u_rescan),a
         jp units_activate_all
