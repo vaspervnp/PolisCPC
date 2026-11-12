@@ -26,12 +26,18 @@
                         +#B00 (#7F00, TR1) ο πίνακας byte προς byte της
                         ομάδας 1: κάθε pixel με pen ομάδας (T, t) στο pen της
                         (gfx.TEAMS[1]) — για το blit16t.
--> data/set3.bin        το σετ 3 της C5: ο χωρικός με φορτίο (villager_carry),
-                        με τα καρέ 12-14 (επίθεση του χωρικού με φορτίο, που
-                        δεν χρησιμοποιείται: πριν χτυπήσει γίνεται σετ 0) να
-                        έχουν ΤΙΣ ΟΨΕΙΣ W ΤΗΣ ΕΠΙΘΕΣΗΣ των σετ 0, 1, 2: το
-                        καρέ 15 (E, το χτύπημα) καθρεφτισμένο. Η C5 δεν είχε
-                        άλλο χώρο (game/bank7.asm, atk_w).
+-> data/c5_set0..2.bin  οι θέσεις 0-2 της C5 (χωρικός, σπαθοφόρος, τοξότης): τα
+                        21 καρέ του σετ, με το καρέ 12 (το πρώτο της επίθεσης
+                        S, που δεν δείχνεται: μόνο το χτύπημα 13/15/17) να
+                        είναι Η ΟΨΗ W ΤΗΣ ΕΠΙΘΕΣΗΣ: το 15 (E) καθρεφτισμένο.
+-> data/c5_slot3.bin    η θέση 3 της C5 ΟΛΟΚΛΗΡΗ (25 καρέ, με τις όψεις W
+                        έτοιμες): ο ΟΠΛΙΤΗΣ (σετ 4, από την ακαδημία). Δεν
+                        φορτώνεται στην εκκίνηση: είναι το HOPL.BIN της
+                        δισκέτας, στη Χαλκού (game/disk.asm). Ο χωρικός με
+                        φορτίο (σετ 3) δεν έχει πια δικά του καρέ: ο χωρικός
+                        + το δέμα από πάνω (carry_ov, bank7.asm).
+-> data/ctop.asm        ανά καρέ του χωρικού: η γραμμή του δέματος (2 πάνω από
+                        την πρώτη γεμάτη, src/make_carry.py).
 
 Το game/occlude.asm βρίσκει τη γραμμή r του καρέ στη διεύθυνση A (C5) στο
 OCC_E + (A - #4000) / 8 + r.
@@ -43,12 +49,13 @@ import gfx
 import make_map
 
 DATA = os.path.join(gfx.OUT, 'data')
-SETS = ['villager_m', 'swordsman', 'archer', 'villager_carry']    # = U_SET
+SETS = ['villager_m', 'swordsman', 'archer']        # οι θέσεις 0-2 της C5
+SLOT3 = 'hoplite'                                   # η θέση 3: U_SET 4
 FRAMES, WEST = 21, 4
 
 
 ATK_E = 15                      # το καρέ του χτυπήματος, όψη E
-W_ATK = 12                      # στο σετ 3: τα W της επίθεσης, ένα ανά σετ 0-2
+W_ATK = 12                      # το καρέ W της επίθεσης, σε κάθε σετ
 
 
 def frames(name):
@@ -58,16 +65,17 @@ def frames(name):
             for k in range(0, len(blob), 128)]
 
 
-def set3():
-    """Τα 21 καρέ του σετ 3, όπως μπαίνουν στην C5."""
-    fs = frames('villager_carry')
-    for k, name in enumerate(SETS[:3]):
-        fs[W_ATK + k] = gfx.mirror(frames(name)[ATK_E])
+def c5_set(name):
+    """Τα 21 καρέ ενός σετ όπως μπαίνουν στην C5: το 12 = το W της επίθεσης."""
+    fs = frames(name)
+    fs[W_ATK] = gfx.mirror(fs[ATK_E])
     return fs
 
 
-def set_frames(k):
-    return set3() if k == 3 else frames(SETS[k])
+def slot(name):
+    """Τα 25 καρέ μιας θέσης της C5: τα 21 και οι 4 όψεις W (4-7 ανάποδα)."""
+    fs = c5_set(name)
+    return fs + [gfx.mirror(fs[4 + k]) for k in range(WEST)]
 
 
 def edges(spr):
@@ -86,9 +94,8 @@ def edges(spr):
 
 def table():
     out = bytearray()
-    for k in range(len(SETS)):
-        fs = set_frames(k)
-        for f in fs + [gfx.mirror(fs[4 + k]) for k in range(WEST)]:
+    for name in SETS + [SLOT3]:
+        for f in slot(name):
             out += bytes(edges(f))
     return out
 
@@ -161,15 +168,33 @@ def arrow():
 def main():
     with open(os.path.join(DATA, 'arrow.bin'), 'wb') as f:
         f.write(arrow())
-    with open(os.path.join(DATA, 'set3.bin'), 'wb') as f:
-        f.write(b''.join(gfx.encode_masked(img) for img in set3()))
+    for k, name in enumerate(SETS):
+        with open(os.path.join(DATA, 'c5_set%d.bin' % k), 'wb') as f:
+            f.write(b''.join(gfx.encode_masked(img) for img in c5_set(name)))
+    with open(os.path.join(DATA, 'c5_slot3.bin'), 'wb') as f:
+        f.write(b''.join(gfx.encode_masked(img) for img in slot(SLOT3)))
+    import make_carry
+    tops = []
+    for img in slot('villager_m'):
+        top = next(y for y, r in enumerate(img) if any(p is not None for p in r))
+        tops.append(max(0, top - len(make_carry.BUNDLE)))
+    with open(os.path.join(DATA, 'ctop.asm'), 'w') as f:
+        f.write('; ctop.asm — ΠΑΡΑΓΕΤΑΙ από src/make_edges.py: ανά καρέ της '
+                'θέσης 0 της C5,\n; η γραμμή του δέματος του χωρικού με '
+                'φορτίο (carry_ov, bank7.asm), και τα 2 bytes των γραμμών '
+                'του.\nctop:       db %s\nBUN0        equ #%02X\n'
+                'BUN1        equ #%02X\n'
+                % (', '.join(map(str, tops)),
+                   cpcimg.mode0_byte(gfx.PEN['y'], gfx.PEN['y']),
+                   cpcimg.mode0_byte(gfx.PEN['D'], gfx.PEN['D'])))
     t = table()
     t += bytes(PAGES_AT - len(t))
     t += pages()
     with open(os.path.join(DATA, 'occ_edges.bin'), 'wb') as f:
         f.write(t)
     print('data/occ_edges.bin  %d bytes (%d σετ x %d καρέ x 16 γραμμές, και '
-          'οι 5 σελίδες: περίγραμμα x 2 ομάδες, πίνακας της ομάδας 1)' % (len(t), len(SETS), FRAMES + WEST))
+          'οι 5 σελίδες: περίγραμμα x 2 ομάδες, πίνακας της ομάδας 1)'
+          % (len(t), len(SETS) + 1, FRAMES + WEST))
 
 
 if __name__ == '__main__':

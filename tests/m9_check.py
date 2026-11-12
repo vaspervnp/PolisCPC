@@ -18,9 +18,14 @@
 6. ΤΕΧΝΟΛΟΓΙΕΣ. U στη σιταποθήκη (Εξημέρωση: ο χωρικός κουβαλάει 15
    τροφή) και στην αποθήκη (Εργαλειοποιία: ζημιά σπαθοφόρου 8 -> 10, μόνο
    της ομάδας 0) — ο πίνακας stats διαβάζεται από την C7 στο τέλος.
-7. ΧΡΟΝΟΣ. Τυπώνεται ως μέτρηση (όπως στο M3 και στο M8): τα καρέ χωρίς
-   κύλιση, το καρέ του φορτώματος (~0,7 s) και τα ~17 της επανασχεδίασης της
-   εποχής.
+7. ΟΠΛΙΤΗΣ. T στην ακαδημία: μια μονάδα σετ 4, με το σχέδιο του HOPL.BIN
+   (στη θέση 3 της C5: διαβάζεται στο τέλος), στην οθόνη pixel προς pixel.
+8. ΕΠΟΧΗ ΤΟΥ ΣΙΔΗΡΟΥ. Ξανά U στο Κέντρο Πόλης (1000 τροφή, 800 χρυσό): το
+   AGE4.BIN, εποχή 4, ξαναζωγραφίζεται μόνο το Κέντρο Πόλης (όχι σπίτι,
+   χωράφι), και η οθόνη με τις εικόνες του Σιδήρου.
+9. ΧΡΟΝΟΣ. Τυπώνεται ως μέτρηση (όπως στο M3 και στο M8): τα καρέ χωρίς
+   κύλιση μαζί με την επανασχεδίαση των εποχών (μισή στήλη ανά καρέ), και
+   χωριστά τα καρέ του φορτώματος (~0,7 s).
 """
 import os
 import sys
@@ -88,13 +93,21 @@ def click_bld(g, tile):
     return g.c.peek(g.sym['SEL_BLD'])
 
 
-def c7_read(c, sym, addr, n):
-    """n bytes της C7 (στο τέλος του ελέγχου: ο Z80 μένει σε βρόχο)."""
+RECTS = 0xA780                  # 192 bytes· στο τέλος του ελέγχου, ελεύθερα
+
+
+def c_read(c, sym):
+    """Στο τέλος του ελέγχου (ο Z80 μένει σε βρόχο): τα stats της C7 (40) και
+    τα πρώτα 128 bytes της θέσης 3 της C5."""
+    st, a5 = sym['STATS'], 0x4000 + 3 * 0xC80
     code = bytes([0xF3, 0x01, 0xC7, 0x7F, 0xED, 0x49,
-                  0x21, addr & 255, addr >> 8, 0x11, (DUMP + 32) & 255,
-                  (DUMP + 32) >> 8, 0x01, n, 0, 0xED, 0xB0, 0x18, 0xFE])
+                  0x21, st & 255, st >> 8, 0x11, RECTS & 255, RECTS >> 8,
+                  0x01, 40, 0, 0xED, 0xB0,
+                  0x01, 0xC5, 0x7F, 0xED, 0x49,
+                  0x21, a5 & 255, a5 >> 8, 0x11, (RECTS + 64) & 255,
+                  (RECTS + 64) >> 8, 0x01, 128, 0, 0xED, 0xB0, 0x18, 0xFE])
     c.run_code(DUMP, code, 2)
-    return c.read_ram(DUMP + 32, n)
+    return c.read_ram(RECTS, 40), c.read_ram(RECTS + 64, 128)
 
 
 def main():
@@ -219,34 +232,96 @@ def main():
         if c.peek(sym['RES_N']) == 0:
             break
     cm = list(c.read_ram(sym['CARRY_MAX'], 4))
-    il = t0 + loaded if loaded is not None else -1
-    skip = set(redraw) | {il}
+    kt, v0t, v1t = k, v0, v1
+
+    # ------------------------------------------------- 7. οπλίτης
+    free = [k for k in range(M7.BLD_MAX)
+            if c.peek(M7.BLD_SLOTS[k]) == 255][0]   # (όχι πάνω στο χωράφι)
+    M7.fake_bld(c, sym, free, 'academy')
+    c.poke(sym['SEL_BLD'], free)
+    pop0 = M6.hud_vals(c, sym)[4]
+    M7.press(g, 't')
+    hop, comp = None, False
+    for k in range(400):
+        g.tick(1)
+        new = [u for u in S.units(c) if u['set'] == 4 and u['team'] == 0]
+        if new:
+            hop = new[0]
+            break
+    if hop:                                 # στην οθόνη, δίπλα στο σπίτι
+        cx, cy = M4.M2.cam(c, sym)
+        M8.place(c, hop['idx'], cx + 30, cy + 70, cx + 34)
+        g.tick(40)
+        g.world = M4.M.game_world(grd, res, blds=blist, age=3, found=[
+            ('farm', farm['i0'], farm['j0']),
+            ('house', house['i0'], house['j0'])])
+        comp = g.compose('hoplite')
+    g.report('οπλίτης', hop is not None and comp,
+             'T στην ακαδημία: νέα μονάδα %s (σετ 4, από το HOPL.BIN στη '
+             'θέση 3 της C5)· στην οθόνη pixel προς pixel'
+             % (hop and hop['idx']))
+
+    # ------------------------------------------------- 8. Εποχή του Σιδήρου
+    set_res(c, sym, 3000)
+    tc = click_bld(g, (32, 60))
+    v0 = M6.hud_vals(c, sym)
+    M7.press(g, 'u')
+    v1 = M6.hud_vals(c, sym)
+    t4 = len(g.times)
+    loaded4, red4, busy = None, [], 255
+    for k in range(2200):
+        g.tick(1)
+        if loaded4 is None and word(c, sym['HUD_VAL'] + 10) == 4:
+            loaded4 = k
+        if loaded4 is not None:
+            q = c.peek(sym['AGE_Q'])
+            if q != busy and q not in (0, 255):
+                red4.append(q - 1)
+            busy = q
+            if q == 255 and c.peek(sym['RQ_N']) == 255:
+                break
+    a4 = MB.age_images(4)
+    changed4 = sorted(k for k in slots if a4[k] != a3[k])
+    who4 = sorted(k for k in slots if slots[k] in red4)
+    g.tick(2)
+    g.world = M4.M.game_world(grd, res, blds=blist, age=4, found=[
+        ('farm', farm['i0'], farm['j0']), ('house', house['i0'], house['j0'])])
+    g.report('Σιδήρου', loaded4 is not None and v1[0] == v0[0] - 1000 and
+             v1[2] == v0[2] - 800 and who4 == changed4 and
+             g.compose('iron'),
+             'U στο Κέντρο Πόλης: 1000 τροφή, 800 χρυσό· σε %s καρέ το '
+             'AGE4.BIN, εποχή %d· άλλαξαν %s, ξαναζωγραφίστηκαν %s· η οθόνη '
+             'με τις εικόνες του Σιδήρου'
+             % (loaded4, M6.hud_vals(c, sym)[5], changed4, who4))
+
+    # ------------------------------------------------- 9. χρόνος
+    loads = {t0 + loaded if loaded is not None else -1,
+             t4 + loaded4 if loaded4 is not None else -1}
     times = [t for i, (t, m) in enumerate(zip(g.times, g.scrolled))
-             if not m and i not in skip]
+             if not m and i not in loads]
     rd = [g.times[i] for i in redraw]
-    load_t = g.times[il] if il >= 0 else 0
-    st = c7_read(c, sym, sym['STATS'], 32)
-    g.report('τεχνολογίες', v1[0] == v0[0] - 300 and v1[1] == v0[1] - 50 and
-             cm == [15, 10, 10, 10] and st[5] == 10 and st[16 + 5] == 8,
+    load_t = [round(g.times[i]) for i in sorted(loads) if i >= 0]
+    over = [t for t in times if t >= 40]
+    print('%-8s %-9s καρέ χωρίς κύλιση (και η επανασχεδίαση των εποχών): μέσος '
+          '%.1f ms, μέγιστος %.1f ms, %d από τα %d πάνω από 40'
+          % ('χρόνος', '<40' if not over else 'ΠΑΝΩ', sum(times) / len(times),
+             max(times), len(over), len(times)))
+    print('%-8s %-9s τα καρέ του φορτώματος %s ms· η επανασχεδίαση της '
+          'Χαλκού: %d καρέ, μέσος %.1f, μέγιστος %.1f ms'
+          % ('εποχή', 'μέτρηση', load_t, len(rd), sum(rd) / max(1, len(rd)),
+             max(rd or [0])))
+
+    # ------------------------------------------------- τέλος: C7 και C5
+    st, c5 = c_read(c, sym)
+    g.report('τεχνολογίες', v1t[0] == v0t[0] - 300 and v1t[1] == v0t[1] - 50 and
+             cm == [15, 10, 10, 10] and st[5] == 10 and st[20 + 5] == 8,
              'U στη σιταποθήκη και στην αποθήκη: τροφή %d -> %d, ξύλο %d -> %d· '
              'σε %d καρέ: φορτίο %s, ζημιά σπαθοφόρου %d (εχθρού %d)'
-             % (v0[0], v1[0], v0[1], v1[1], k + 1, cm, st[5], st[16 + 5]))
-    over = [t for t in times if t >= 40]
-    slow = [(i - il, round(t, 1)) for i, (t, m) in
-            enumerate(zip(g.times, g.scrolled)) if not m and i not in skip
-            and t >= 40]
-    print('%-8s %-9s καρέ χωρίς κύλιση: μέσος %.1f ms, μέγιστος %.1f ms, %d '
-          'από τα %d πάνω από 40%s' % ('χρόνος', '<40' if not over else
-                                       'ΠΑΝΩ', sum(times) / len(times),
-                                       max(times), len(over), len(times),
-                                       '' if not slow else ' (καρέ από το '
-                                       'φόρτωμα, ms: %s — η τοποθέτηση του '
-                                       'χωραφιού και το κλικ στο Κέντρο '
-                                       'Πόλης)' % slow))
-    print('%-8s %-9s το καρέ του φορτώματος %.0f ms· η επανασχεδίαση της '
-          'εποχής: %d καρέ, μέσος %.1f, μέγιστος %.1f ms, %d πάνω από 40'
-          % ('εποχή', 'μέτρηση', load_t, len(rd), sum(rd) / max(1, len(rd)),
-             max(rd or [0]), len([t for t in rd if t >= 40])))
+             % (v0t[0], v1t[0], v0t[1], v1t[1], kt + 1, cm, st[5], st[20 + 5]))
+    slot3 = open(os.path.join(M4.M.ROOT, 'data', 'c5_slot3.bin'), 'rb').read()
+    g.report('HOPL.BIN', c5 == slot3[:128] and st[16] == 90,
+             'η θέση 3 της C5 = ο οπλίτης του c5_slot3.bin· υγεία του %d'
+             % st[16])
     sys.exit(0 if g.ok else 1)
 
 

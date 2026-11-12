@@ -25,7 +25,7 @@
    scene.py τους βάφει, και στην οθόνη υπάρχουν τα κόκκινα pens μέσα στα
    ορθογώνιά τους και κανένα μπλε της ομάδας.
 7. ΟΨΗ W. Όποια χτύπησε κοιτώντας δυτικά έδειξε το καρέ W της επίθεσης
-   (στο σετ 3: ATK_W - 24 x σετ), όχι καρέ βαδίσματος.
+   (το καρέ 12 του σετ, το 15 καθρεφτισμένο), όχι καρέ βαδίσματος.
 
 Και μετά, σε νέο παιχνίδι:
 8. ΕΝΤΟΛΗ ΕΠΙΘΕΣΗΣ. Δύο στρατιώτες της πόλης επιλέγονται (κλικ), και RETURN
@@ -56,7 +56,7 @@ NEUTRAL = (0, 3, 6, 9, 10, 11)
 ENEMY = (116, 118, 119, 121, 122, 124)
 DEBUG = '--debug' in sys.argv
 LIMIT = 3000                                    # καρέ (25 Hz): 2 λεπτά
-ATK_W = 3 * 25 + 12                             # game/bank7.asm
+ATK_W = 12                                      # game/bank7.asm
 RED = {S.RED_HI, S.RED_LO}
 BLUE = {gfx.TEAM_HI, gfx.TEAM_LO}
 
@@ -143,7 +143,7 @@ def main():
             if team in (0, 1) and face & 0x80:
                 attacks[team].add(k)
                 if face & 3 == 3:
-                    (west if step == ATK_W - 24 * t[8] else west_bad).add(k)
+                    (west if step == ATK_W else west_bad).add(k)
             if team & 0x80 and team != TEAM_FREE:
                 die_frames.setdefault(k, set()).add(step)
                 bucket_left.setdefault(k, t[U_BKT] == 255)

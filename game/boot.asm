@@ -8,6 +8,10 @@
 ; εκκίνηση η περιοχή είναι ελεύθερη (game/bank7.asm: το AGE_BUF).
 ;
 ; ΔΕΝ αλλάζουν τράπεζα στο #4000 (θα χανόταν ο κώδικας που τρέχει).
+;
+; ΚΑΙ ΜΕΤΑ ΤΗΝ ΕΚΚΙΝΗΣΗ: κανείς δεν γράφει εδώ, άρα ρουτίνες που τρέχουν με
+; την C0 (η σελίδα του HUD στο #4000) και δεν αλλάζουν τράπεζα μπορούν να
+; ζουν εδώ και στο παιχνίδι — το HUD της μπάρας (hud_update, M6).
 
 ; ---- από το game/units.asm
 
@@ -357,3 +361,169 @@ clear_screen:
         ld (hl),0
         ldir
         ret
+
+; Τα 16 pens από το polis_hw. Το firmware είναι κλειστό, άρα κανείς δεν
+; ξαναγράφει τα INK στη διακοπή — μένουν όπως τα αφήνουμε.
+set_palette:
+        ld hl,polis_hw
+        ld b,GA
+        ld e,0
+.pen:   out (c),e               ; επιλογή pen
+        ld a,(hl)
+        out (c),a               ; το χρώμα του
+        inc hl
+        inc e
+        ld a,e
+        cp 16
+        jr nz,.pen
+        ld a,HW_BLACK
+        jp border
+
+; Η τυπική οθόνη 160x200 στο #C000, γραμμένη ρητά: να μη στηριζόμαστε σε ό,τι
+; άφησε το firmware ή ένα snapshot.
+crtc_setup:
+        ld hl,crtc_regs
+        ld d,0
+.reg:   ld bc,CRTC_SEL*256
+        out (c),d
+        ld a,(hl)
+        ld b,CRTC_DAT
+        out (c),a
+        inc hl
+        inc d
+        ld a,d
+        cp 14
+        jr nz,.reg
+        ret
+
+crtc_regs:
+        ;   R0  R1  R2  R3  R4  R5  R6  R7  R8  R9 R10 R11 R12 R13
+        db  63, 40, 46,#8E, 38,  0, 25, 30,  0,  7,  0,  0,#30,  0
+
+; ---- από το game/gather.asm (καλούνται και στο παιχνίδι, με την C0)
+
+; ------------------------------------------------------------ HUD
+
+; Οι αριθμοί της μπάρας (hud_val) που άλλαξαν (bits του hud_dirty: 0-5) στη
+; σελίδα του HUD, 4 ψηφία ο καθένας, στοιχισμένα δεξιά (~0,6 ms ο καθένας).
+; Η σελίδα είναι κύρια RAM: η C0 πρέπει να είναι μέσα.
+hud_update:
+        ld a,(hud_dirty)
+        ld c,a
+        xor a
+        ld (hud_dirty),a
+        ld hl,hud_val
+        ld de,bar_x
+        ld b,6
+.n:     srl c
+        jr nc,.skip
+        push bc
+        push de
+        ld c,(hl)
+        inc hl
+        ld b,(hl)
+        dec hl
+        push hl
+        ld a,(de)
+        call hud_num
+        pop hl
+        pop de
+        pop bc
+.skip:  inc hl
+        inc hl
+        inc de
+        djnz .n
+        ret
+
+; BC = τιμή, A = byte της πρώτης στήλης.
+hud_num:
+        ld (hn_x),a
+        ld h,b
+        ld l,c
+        ld de,10000             ; ως 9999
+        call cmp_hl_de
+        jr c,.ok
+        ld hl,9999
+.ok:    ld de,hn_d
+        ld bc,-1000
+        call .dig
+        ld bc,-100
+        call .dig
+        ld bc,-10
+        call .dig
+        ld a,l
+        ld (de),a
+        ld hl,hn_d              ; τα μηδενικά μπροστά: κενά
+        ld b,3
+.z:     ld a,(hl)
+        or a
+        jr nz,.draw
+        ld (hl),10
+        inc hl
+        djnz .z
+.draw:  ld hl,hn_d
+        ld c,0                  ; C = στήλη μέσα στον αριθμό
+        ld b,4
+.g:     push bc
+        ld a,(hl)
+        push hl
+        ld l,a                  ; DE = digits + 10 d
+        add a,a
+        add a,a
+        add a,l
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,digits
+        add hl,de
+        ex de,hl
+        ld a,(hn_x)
+        add a,c
+        ld (hn_c),a
+        ld hl,bar_rows
+        ld b,5
+.l:     push bc
+        ld c,(hl)
+        inc hl
+        ld b,(hl)
+        inc hl
+        push hl
+        ld a,(hn_c)
+        add a,c
+        ld l,a
+        ld a,b
+        adc a,0
+        ld h,a
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc hl
+        ld a,(de)
+        ld (hl),a
+        inc de
+        pop hl
+        pop bc
+        djnz .l
+        pop hl
+        inc hl
+        pop bc
+        inc c
+        inc c
+        djnz .g
+        ret
+.dig:   ld a,-1                 ; πόσες φορές χωράει το -BC
+.d1:    inc a
+        add hl,bc
+        jr c,.d1
+        sbc hl,bc               ; carry 0: πίσω το τελευταίο
+        ld (de),a
+        inc de
+        ret
+
+; Οι 5 γραμμές των ψηφίων στη σελίδα του HUD (διάταξη CRTC με αρχή 0).
+bar_rows:
+hl_ = BAR_Y
+        repeat 5
+        dw HUD_PAGE + (hl_ & 7) * #800 + (hl_ >> 3) * 80
+hl_ = hl_ + 1
+        rend

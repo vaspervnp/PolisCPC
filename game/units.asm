@@ -82,7 +82,7 @@ F_MVR       equ 6               ; είναι στο MOVERS: βήματα σε κ
 F_ORD       equ 7               ; είναι στο ORDER
 
 SWAP_TAB    equ #A400           ; 256, στοιχισμένο — αμέσως μετά τον χάρτη
-SPR_SETS    equ 4               ; + ο χωρικός που κουβαλάει (M6)
+SPR_SETS    equ 4               ; οι θέσεις: 3 στην εκκίνηση, η 4η ο οπλίτης (M9)
 SPR_BASE    equ #4000
 SPR_STRIDE  equ #C80            ; 21 καρέ x 128 + 4 όψεις W x 128
 SPR_WEST    equ #A80            ; οι όψεις W μέσα στο σετ
@@ -115,6 +115,13 @@ far7:   ld a,RAM_CMP
         pop af
         ret
 .go:    jp (hl)
+
+; Όπως το far7, αλλά γυρίζει με την C5 (units_draw).
+far7s:  ld a,RAM_CMP
+        call setram
+        call far7.go
+        ld a,RAM_SPR
+        jp setram
 
 ; Οι νεκροί του dq (bank7.asm): έξω από τους κάδους τους (M8).
 died_flush:
@@ -200,7 +207,7 @@ units_gfx:
         call make_swap
         ld ix,spr_tab
         ld de,SPR_BASE
-        ld b,SPR_SETS
+        ld b,SPR_SETS - 1
 .set:   push bc
         push de
         ld l,(ix+0)
@@ -443,10 +450,12 @@ unit_think:
         jp unit_think_vis
 .alive: bit F_WANDER,(ix+U_FL)  ; ΜΑΧΗ (όχι όσες περιπλανιούνται: ποτέ
         jr nz,.nc               ; εντολή, ποτέ στόχος). Στρατιώτες (σετ 1,
-        ld a,(ix+U_SET)         ; 2): ο κοντινότερος εχθρός, και η απόφαση
-        dec a                   ; στην C7 (που προτιμά την εντολή επίθεσης)
-        cp 2
-        jr c,.sol
+        ld a,(ix+U_SET)         ; 2, 4): ο κοντινότερος εχθρός, και η απόφαση
+        or a                    ; στην C7 (που προτιμά την εντολή επίθεσης)
+        jr z,.vil
+        cp 3
+        jr nz,.sol
+.vil:
         ld hl,ord_get           ; χωρικός: μόνο με εντολή επίθεσης (ή όταν
         call far7               ; απαντάει)
         inc a
@@ -1388,6 +1397,9 @@ units_draw:
         jp nz,.mark
         bit 7,(ix+U_FACE)       ; πόζα: τα καρέ της δεν είναι μεταγλωττισμένα
         jr nz,.data
+        ld a,(ix+U_SET)         ; ο οπλίτης: μόνο δεδομένα (M9)
+        cp 4
+        jr z,.data
         ld a,e                  ; καμία γραμμή σε όριο σελίδας: το low byte
         cp #FD                  ; των (ως 3) σειρών χαρακτήρων < #FD
         jr nc,.data
@@ -1442,7 +1454,7 @@ units_draw:
 .cj:    call 0                  ; (αυτο-τροποποιούμενο: η ρουτίνα του καρέ)
         ld a,RAM_SPR
         call setram
-        jr .mark
+        jr .ov
 .data:  push de
         call unit_frame
         pop de
@@ -1451,8 +1463,12 @@ units_draw:
         dec a
         jr nz,.d0
         call blit16t
-        jr .mark
+        jr .ov
 .d0:    call blit16
+.ov:    ld a,(ix+U_SET)         ; με φορτίο: το δέμα από πάνω (bank7.asm)
+        cp 3
+        ld hl,carry_ov
+        call z,far7s
 .mark:  bit F_SEL,(ix+U_FL)     ; επιλεγμένη: οι αγκύλες, στο ίδιο ορθογώνιο
         call nz,blit_mark
         set 0,(ix+U_DRAWN)

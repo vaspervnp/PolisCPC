@@ -601,6 +601,9 @@ bld_redraw:
         ld (rq_n),a
         ret
 
+RQ_ROWS     equ 12              ; γραμμές ανά καρέ (πολλαπλάσιο του 4)
+        assert RQ_ROWS == 12, 'rq_step: 3k x 4'
+
 ; Μία επανασχεδίαση τη φορά: αν υπάρχει άλλη στη μέση, τελειώνει τώρα.
 rq_free:
         ld a,(rq_n)
@@ -666,9 +669,33 @@ rq_step:
         cp (hl)
         pop bc                  ; B = η στήλη
         jr nc,.skip
-        ld a,b
+        ld a,(rq_half)          ; ΣΕ ΚΟΜΜΑΤΙΑ ΤΩΝ RQ_ROWS ΓΡΑΜΜΩΝ (M9), ένα
+        ld c,a                  ; ανά καρέ: μία στήλη ψηλού κτιρίου με τις
+        add a,a                 ; μονάδες γύρω ξεπερνούσε τα 40 ms.
+        add a,c                 ; y0 += RQ_ROWS x κομμάτι
+        add a,a
+        add a,a
+        ld c,a
+        ld a,(col_y0)
+        add a,c
+        ld (col_y0),a
+        cp (hl)
+        jr nc,.skip             ; (τίποτα άλλο σε αυτή τη στήλη)
+        add a,RQ_ROWS
+        cp (hl)
+        jr nc,.last
+        ld (hl),a               ; όχι το τελευταίο: ως εκεί, και η ίδια
+        ld a,b                  ; στήλη στο επόμενο καρέ
         call col_redraw
-.skip:  ld hl,(rq_x)
+        ld hl,rq_half
+        inc (hl)
+        pop bc
+        ret
+.last:  ld a,b
+        call col_redraw
+.skip:  xor a
+        ld (rq_half),a
+        ld hl,(rq_x)
         inc hl
         inc hl
         ld (rq_x),hl
@@ -676,7 +703,8 @@ rq_step:
         dec (hl)
         pop bc
         jr z,.done
-        djnz .c
+        dec b
+        jp nz,.c
         ret
 .done:  ld (hl),255
         ret
@@ -1171,17 +1199,28 @@ bld_tick:
 ; Η Εποχή του Χαλκού τελείωσε (res_end): οι εικόνες της από τη δισκέτα
 ; (disk.asm), και η εποχή στους πίνακες και στα κτίρια (age_apply).
 age_load:
-        xor a
-        ld (age_req),a
+        ld hl,age_req
+        ld a,(hl)
+        ld (hl),0
+        cp 3
+        ld hl,age4_name         ; Σιδήρου: μόνο οι εικόνες
+        jr nz,.ld
+        ld hl,hopl_name         ; Χαλκού: ο οπλίτης, στην C6 (εκεί που θα
+        call disk_load          ; έρθουν οι εικόνες), και από εκεί στη
+        ret c                   ; θέση 3 της C5
+        ld hl,IMG0
+        ld de,SPR_BASE + 3 * SPR_STRIDE
+        ld bc,SPR_STRIDE
+        rst 8                   ; (bcopy_src, bank7.asm)
         ld hl,age3_name
-        call disk_load
+.ld:    call disk_load
         ret c
         ld hl,age_apply
         jp far7
 
-; Μετά το age_apply: όσα κτίρια άλλαξαν εικόνα (έτοιμα, όχι χωράφια)
-; ξαναζωγραφίζονται ένα-ένα, με το bld_redraw (μία στήλη ανά καρέ) — τα
-; άλλα όχι.
+; Μετά το age_apply: όσα κτίρια άλλαξαν εικόνα (έτοιμα, ο τύπος τους στο
+; age_chg) ξαναζωγραφίζονται ένα-ένα, με το bld_redraw (μισή στήλη ανά
+; καρέ) — τα άλλα όχι.
 age_step:
         ld a,(age_q)
         cp 255
@@ -1199,9 +1238,16 @@ age_step:
         inc a
         ld c,a
         ld a,(iy+B_TYPE)
-        cp BTY_FARM
+        cp 255
         jr z,.n
+        ld hl,(age_chg)         ; bit B_TYPE
         inc a
+.bt:    dec a
+        jr z,.bt1
+        srl h
+        rr l
+        jr .bt
+.bt1:   bit 0,l
         jr z,.n
         ld a,(iy+B_ST)
         or a

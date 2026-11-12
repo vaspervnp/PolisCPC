@@ -44,7 +44,8 @@ START_AGE = 2
 INFO = {b['key']: b for b in json.load(open(os.path.join(
     gfx.OUT, 'buildings.json')))['buildings']}
 
-UNIT_SETS = ['villager_m', 'swordsman', 'archer']      # = U_SET
+UNIT_SETS = ['villager_m', 'swordsman', 'archer', 'villager_carry',
+             'hoplite']                                 # = U_SET
 
 # (κλειδί, πλήκτρο, προαπαιτούμενο, κόστος (τροφή, ξύλο, χρυσό, πέτρα),
 #  πόντοι ανέγερσης, μονάδα που βγάζει)
@@ -59,10 +60,11 @@ TYPES = [
     ('stable',      'L', 'barracks', (0, 150, 0, 0), 30, None),
     ('farm',        'F', 'market',  (0, 75, 0, 0),   15, None),
     ('tower',       'W', 'granary', (0, 0, 0, 150),  30, None),
-    # Εποχή του Χαλκού (M9): χωρίς μονάδες (τα σετ τους δεν χωράνε στην C5)
+    # Εποχή του Χαλκού (M9): η ακαδημία βγάζει οπλίτες (το σετ τους από τη
+    # δισκέτα, στη θέση 3 της C5)· ο ναός και το κυβερνείο τίποτα
     ('temple',      'N', None,      (0, 200, 0, 0),  40, None),
     ('gov_center',  'K', 'market',  (0, 200, 0, 0),  50, None),
-    ('academy',     'D', 'stable',  (0, 200, 0, 0),  50, None),
+    ('academy',     'D', 'stable',  (0, 200, 0, 0),  50, 'hoplite'),
 ]
 KEYS = [t[0] for t in TYPES]
 
@@ -81,7 +83,8 @@ TRAIN_KEY = 'T'
 # Οι μονάδες που βγαίνουν: κόστος και καρέ (των 25 Hz) εκπαίδευσης.
 UNITS = {'villager_m': ((50, 0, 0, 0), 200),
          'swordsman':  ((35, 0, 15, 0), 250),
-         'archer':     ((40, 20, 0, 0), 250)}
+         'archer':     ((40, 20, 0, 0), 250),
+         'hoplite':    ((60, 0, 40, 0), 300)}
 
 
 def min_age(key):
@@ -146,12 +149,17 @@ def main():
     blob += bytes(IMG0 - ORG - len(blob))
     start = age_images(START_AGE)
     bronze = age_images(3)
-    a3 = bytearray()                        # η Εποχή του Χαλκού: όλοι οι
-    a3rows = []                             # τύποι, από το IMG0
-    for key, *_ in TYPES:
-        img = bronze[key]
-        a3rows.append((len(img), IMG0 + len(a3)))
-        a3 += encode(img)
+    ages = {}                               # οι εποχές 3, 4: όλοι οι τύποι,
+    for age in (3, 4):                      # από το IMG0, και ποιοι άλλαξαν
+        now, before = age_images(age), age_images(age - 1)
+        blob_a, rows_a = bytearray(), []
+        for key, *_ in TYPES:
+            img = now[key]
+            rows_a.append((len(img), IMG0 + len(blob_a),
+                           int(before.get(key) != img)))
+            blob_a += encode(img)
+        ages[age] = (blob_a, rows_a)
+    a3, a3rows = ages[3]
     rows = []
     for k, (key, hot, pre, cost, pts, unit) in enumerate(TYPES):
         img = start.get(key) or bronze[key]     # (ναός κλπ: χωρίς εικόνα ως
@@ -176,17 +184,23 @@ def main():
     red = open(os.path.join(DATA, 'compiled_red.bin'), 'rb').read()
     free = cj['red_org'] - ORG - len(blob)
     assert free >= 0, 'η C6 δεν χωράει τους κόκκινους: %d' % free
-    assert IMG0 + len(a3) <= cj['red_org'], 'η Χαλκού δεν χωράει: %d' % len(a3)
-    with open(os.path.join(DATA, 'age3.bin'), 'wb') as f:
-        f.write(a3)
+    for age, (blob_a, rows_a) in ages.items():
+        assert IMG0 + len(blob_a) + 1024 <= cj['red_org'], \
+            'η εποχή %d δεν χωράει: %d' % (age, len(blob_a))
+        with open(os.path.join(DATA, 'age%d.bin' % age), 'wb') as f:
+            f.write(blob_a)
     with open(os.path.join(DATA, 'age3.asm'), 'w') as f:
-        f.write('; age3.asm — ΠΑΡΑΓΕΤΑΙ από src/make_bank6.py. Η Εποχή του '
-                'Χαλκού (M9):\n; ανά τύπο το ύψος και η εικόνα του (στην C6, '
-                'από το AGE3.BIN).\n\nAGE3_LEN    equ %d\nage3_tab:\n%s'
-                % (len(a3), ''.join('        db %d\n        dw #%04X'
-                                    '                 ; %s\n'
-                                    % (h, a, t[0]) for (h, a), t
-                                    in zip(a3rows, TYPES))))
+        f.write('; age3.asm — ΠΑΡΑΓΕΤΑΙ από src/make_bank6.py. Οι εποχές 3 '
+                '(Χαλκού) και 4\n; (Σιδήρου), M9: ανά τύπο το ύψος, η εικόνα '
+                '(στην C6, από το AGE3.BIN /\n; AGE4.BIN) και αν άλλαξε από '
+                'την προηγούμενη εποχή (1: ξαναζωγραφίζεται).\n\n')
+        for age, (blob_a, rows_a) in ages.items():
+            f.write('AGE%d_LEN    equ %d\nage%d_tab:\n%s'
+                    % (age, len(blob_a), age,
+                       ''.join('        db %d\n        dw #%04X\n        db %d'
+                               '                    ; %s\n'
+                               % (h, a, ch, t[0]) for (h, a, ch), t
+                               in zip(rows_a, TYPES))))
     blob += bytes(free) + red
     assert len(blob) <= 0x4000
     with open(os.path.join(DATA, 'bank6.bin'), 'wb') as f:
@@ -223,8 +237,10 @@ def main():
     print('data/bank6.bin  %d bytes (πόροι %d + %d τύποι κτιρίων, %d ελεύθερα, '
           'οι κόκκινοι στο #%04X)' % (len(blob), len(res), len(TYPES), free,
                                       cj['red_org']))
-    print('data/age3.bin   %d bytes, IMG0 #%04X ως #%04X'
-          % (len(a3), IMG0, IMG0 + len(a3)))
+    for age, (blob_a, rows_a) in ages.items():
+        print('data/age%d.bin   %d bytes, IMG0 #%04X ως #%04X· αλλάζουν %s'
+              % (age, len(blob_a), IMG0, IMG0 + len(blob_a),
+                 [t[0] for (h, a, ch), t in zip(rows_a, TYPES) if ch]))
 
 
 if __name__ == '__main__':

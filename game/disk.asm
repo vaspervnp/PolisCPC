@@ -164,8 +164,35 @@ fdc_sense:
         jr z,fdc_sense
         ret
 
-; D = τροχιά, E = τομέας: 512 bytes στο HL (και HL += 512).
+; D = τροχιά, E = τομέας: 512 bytes στο HL (και HL += 512). Ως 3 φορές
+; αν το FDC δώσει σφάλμα (ST1: MA ND OR DE, ST2: MD BC WC DD — όχι το EN,
+; που το CPC το παίρνει πάντα: δεν έχει γραμμή TC). Και μετά, προχωράει.
 fdc_read:
+        ld b,3
+.tr:    push bc
+        push de
+        push hl
+        call fdc_rd1
+        ld a,(dk_res + 1)
+        and #37
+        ld c,a
+        ld a,(dk_res + 2)
+        and #33
+        or c
+        pop bc                  ; (το HL της αρχής)
+        pop de
+        jr z,.ok
+        ld h,b
+        ld l,c
+        pop bc
+        djnz .tr
+        inc h                   ; τρεις φορές: το επόμενο, στη θέση του
+        inc h
+        ret
+.ok:    pop bc
+        ret
+
+fdc_rd1:
         ld a,#0F                ; seek
         call fdc_out
         xor a
@@ -214,3 +241,5 @@ fdc_read:
         ret
 
 age3_name:  db "AGE3    BIN"
+hopl_name:  db "HOPL    BIN"
+age4_name:  db "AGE4    BIN"

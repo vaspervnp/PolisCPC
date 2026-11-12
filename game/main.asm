@@ -185,44 +185,6 @@ border:
         out (c),a
         ret
 
-; Τα 16 pens από το polis_hw. Το firmware είναι κλειστό, άρα κανείς δεν
-; ξαναγράφει τα INK στη διακοπή — μένουν όπως τα αφήνουμε.
-set_palette:
-        ld hl,polis_hw
-        ld b,GA
-        ld e,0
-.pen:   out (c),e               ; επιλογή pen
-        ld a,(hl)
-        out (c),a               ; το χρώμα του
-        inc hl
-        inc e
-        ld a,e
-        cp 16
-        jr nz,.pen
-        ld a,HW_BLACK
-        jr border
-
-; Η τυπική οθόνη 160x200 στο #C000, γραμμένη ρητά: να μη στηριζόμαστε σε ό,τι
-; άφησε το firmware ή ένα snapshot.
-crtc_setup:
-        ld hl,crtc_regs
-        ld d,0
-.reg:   ld bc,CRTC_SEL*256
-        out (c),d
-        ld a,(hl)
-        ld b,CRTC_DAT
-        out (c),a
-        inc hl
-        inc d
-        ld a,d
-        cp 14
-        jr nz,.reg
-        ret
-
-crtc_regs:
-        ;   R0  R1  R2  R3  R4  R5  R6  R7  R8  R9 R10 R11 R12 R13
-        db  63, 40, 46,#8E, 38,  0, 25, 30,  0,  7,  0,  0,#30,  0
-
         ifdef BARS            ; μόνο στην οθόνη ελέγχου του M0
 ; Δεκάξι κάθετες λωρίδες των 5 bytes (10 pixels): pen 0 αριστερά, pen 15
 ; δεξιά. Μία γραμμή 80 bytes χτίζεται μία φορά και αντιγράφεται 200 φορές.
@@ -517,9 +479,11 @@ hn_x:       db 0                ; hud_num
 hn_c:       db 0
 hn_d:       ds 4
 ticks:      db 0
+rq_half:    db 0                ; τα κομμάτια RQ_ROWS της στήλης του rq που έγιναν
 res_n:      db 0                ; έρευνες σε εξέλιξη (bank7.asm, M9)
 age_req:    db 0                ; 1: τελείωσε η Χαλκού, φόρτωσε το AGE3.BIN
 age_q:      db 255              ; το επόμενο κτίριο να ξαναζωγραφιστεί (255 κανένα)
+age_chg:    dw 0                ; bit τύπου: άλλαξε εικόνα στη νέα εποχή
 dk_blk:     ds 16               ; τα blocks του αρχείου (disk.asm)
 dk_res:     ds 8                ; η φάση αποτελέσματος του FDC
 carry_max:  db 10, 10, 10, 10   ; πόσο κουβαλάει ο χωρικός, ανά είδος (gather.asm)
@@ -536,8 +500,9 @@ s_key:      dw 0
 s_y:        db 0
 
 set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
-            dw SPR_BASE + 3 * SPR_STRIDE
-spr_tab:    dw spr_z0, spr_z1, spr_z2, spr_z3
+            dw SPR_BASE                         ; 3: με φορτίο = ο χωρικός + δέμα
+            dw SPR_BASE + 3 * SPR_STRIDE        ; 4: ο οπλίτης (HOPL.BIN, M9)
+spr_tab:    dw spr_z0, spr_z1, spr_z2
 
 ; ------------------------------------------------------------ γραφικά
 ; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη, στην τράπεζα C6
@@ -561,7 +526,8 @@ code_end:
 ; Ο κώδικας της τράπεζας C7 (bank7.asm): συναρμολογημένος για το C7_CODE,
 ; αποθηκευμένος εδώ — πριν από τα συμπιεσμένα, που ο rasm τα μετακινεί — και
 ; στην C7 από το units_gfx (μαζί με τα sprites).
-C7_CODE     equ #7500           ; μετά τα μεταγλωττισμένα (13.524 bytes)
+C7_CODE     equ #6800           ; μετά τα μεταγλωττισμένα (CMP_LEN)
+        assert #4000 + CMP_LEN <= C7_CODE, 'compiled past C7_CODE'
 c7_phys:
         org C7_CODE,c7_phys
         include "bank7.asm"
@@ -604,15 +570,15 @@ k = k + 1
 ; Τα σετ των μονάδων, συμπιεσμένα· αποσυμπιέζονται στην τράπεζα C5.
 spr_z0:
         lzx0
-        incbin "../data/villager_m.bin"
+        incbin "../data/c5_set0.bin"    ; (το καρέ 12: το W της επίθεσης)
         lzclose
 spr_z1:
         lzx0
-        incbin "../data/swordsman.bin"
+        incbin "../data/c5_set1.bin"
         lzclose
 spr_z2:
         lzx0
-        incbin "../data/archer.bin"
+        incbin "../data/c5_set2.bin"
         lzclose
 ; Η τράπεζα C6: πόροι και κτίρια (src/make_bank6.py).
 res_z:
@@ -629,10 +595,6 @@ cursor_gfx:                     ; -> C5, SPR_CURSOR: κέρσορας, αγκύ�
 cmp_z:
         lzx0
         incbin "../data/compiled.bin"
-        lzclose
-spr_z3:
-        lzx0
-        incbin "../data/set3.bin"       ; με τα W της επίθεσης (make_edges.py)
         lzclose
 
 ; ΤΙΠΟΤΑ ΜΕ `align` ΜΕΤΑ ΑΠΟ ΜΠΛΟΚ LZX0: ο rasm στοιχίζει με τη διεύθυνση
@@ -664,4 +626,14 @@ end:
 age3_file:
         incbin "../data/age3.bin"
         save 'AGE3.BIN',age3_file,AGE3_LEN,DSK,'build/polis.dsk'
+        bank
+        org IMG0
+age4_file:
+        incbin "../data/age4.bin"
+        save 'AGE4.BIN',age4_file,AGE4_LEN,DSK,'build/polis.dsk'
+        bank
+        org #4000
+hopl_file:                      ; ο οπλίτης: η θέση 3 της C5 (make_edges.py)
+        incbin "../data/c5_slot3.bin"
+        save 'HOPL.BIN',hopl_file,SPR_STRIDE,DSK,'build/polis.dsk'
         endif

@@ -51,12 +51,22 @@ def red(img):
     return gfx.recolour(img, {gfx.TEAM_HI: hi, gfx.TEAM_LO: lo})
 
 
+ALIAS = {'villager_carry': 'villager_m'}   # ο χωρικός με φορτίο (σετ 3): ο
+                                            # ίδιος κώδικας + το δέμα (M9)
+
+
 def build(names, org, paint=lambda img: img):
     base = org + len(names) * 16 * 2
     code = bytearray()
     entries = []
     sizes = {}
+    first = {}
     for name in names:
+        if name in ALIAS:
+            k = names.index(ALIAS[name]) * 16
+            entries += entries[k:k + 16]
+            sizes[name] = 0
+            continue
         n = 0
         regs = VIL_REGS if name in VIL_SETS else None
         for img in frames(name):
@@ -147,6 +157,8 @@ def main():
     with open(os.path.join(DATA, 'compiled.asm'), 'w') as f:
         f.write('; ΠΑΡΑΓΕΤΑΙ από src/make_compiled.py: B, D, E των χωρικών '
                 'ανά ομάδα\n')
+        f.write('CMP_LEN     equ %d            ; στην C7 από το #4000\n'
+                % len(blob))
         for t in (0, 1):
             b, d, e = vil_values(t)
             f.write('VIL_B%d      equ #%02X\nVIL_DE%d     equ #%02X%02X\n'

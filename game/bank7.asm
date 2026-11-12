@@ -54,20 +54,26 @@ stats:      db 25, 3, 14, 0     ; χωρικός
             db 60, 8, 14, 0     ; σπαθοφόρος
             db 35, 6, 80, 1     ; τοξότης
             db 25, 3, 14, 0     ; χωρικός με φορτίο
+            db 90, 10, 14, 0    ; οπλίτης (M9)
             db 25, 3, 14, 0     ; (ομάδα 1)
             db 60, 8, 14, 0
             db 35, 6, 80, 1
             db 25, 3, 14, 0
-; Το καρέ του χτυπήματος: S E N = 13, 15, 17 του σετ. Το W (το 15
-; καθρεφτισμένο) των σετ 0-2 είναι στο σετ 3, στα καρέ 12 + σετ
-; (src/make_edges.py): από τη βάση του σετ, (3 - σετ) x 25 + 12 + σετ.
-ATK_W       equ 3 * 25 + 12     ; - 24 x σετ
+            db 90, 10, 14, 0
+ST_SETS     equ 5
+; Το καρέ του χτυπήματος: S E N = 13, 15, 17 του σετ· το W (το 15
+; καθρεφτισμένο) στη θέση του 12 (src/make_edges.py).
+ATK_W       equ 12
 
 ; IX -> HL = η γραμμή της στο stats (της ομάδας της)
-st_hl:  ld a,(ix+U_TEAM)
+st_hl:  push bc
+        ld a,(ix+U_TEAM)
         and 1
+        ld c,a
         add a,a
         add a,a
+        add a,c                 ; x ST_SETS
+        pop bc
         add a,(ix+U_SET)
         add a,a
         add a,a
@@ -112,6 +118,10 @@ hp_init:
 .r:     ld (hl),255
         inc hl
         djnz .r
+        ld hl,bcopy_src         ; η αντιγραφή C6 -> C5 στο #0008 (rst 8)
+        ld de,#0008
+        ld bc,BCOPY_LEN
+        ldir
         xor a
 .l:     push af
         call idx_ix
@@ -219,13 +229,6 @@ combat_think:
 
 ; Χτυπάει (IX, IY = ο στόχος, c_dx / c_dy). Όποια πέθανε: στο dq.
 attack: res F_MOVE,(ix+U_FL)
-        ld a,(ix+U_SET)         ; ο χωρικός με φορτίο χτυπάει ως σετ 0 (τα
-        cp 3                    ; καρέ επίθεσης του σετ 3 έχουν τα W)
-        jr nz,.s
-        ld (ix+U_SET),0
-        ld (ix+U_BASE),SPR_BASE & 255
-        ld (ix+U_BASE+1),SPR_BASE >> 8
-.s:
         ld hl,(c_dx)            ; όψη: οριζόντια αν 2 |dx| > |dy|
         call abs_hl
         add hl,hl
@@ -250,20 +253,12 @@ attack: res F_MOVE,(ix+U_FL)
         or #80
         ld (ix+U_FACE),a
         ld a,c                  ; το καρέ του χτυπήματος: 13 + 2 x όψη, ή
-        cp 3                    ; το W του σετ (ATK_W - 24 x σετ)
-        jr z,.w
+        cp 3                    ; το W (ATK_W)
+        ld a,ATK_W
+        jr z,.st
+        ld a,c
         add a,a
         add a,13
-        jr .st
-.w:     ld a,(ix+U_SET)
-        ld c,a
-        add a,a
-        add a,c
-        add a,a
-        add a,a
-        add a,a
-        neg
-        add a,ATK_W
 .st:    ld (ix+U_STEP),a
         ld (ix+U_LOOK),255
         call hp_hl
@@ -641,6 +636,8 @@ ord_cmd:
         ld a,(iy+U_TEAM)
         dec a
         jr nz,.n
+        bit F_WANDER,(iy+U_FL)  ; οι ουδέτερες που περιπλανιούνται: όχι
+        jr nz,.n
         ld a,(cur_x)
         sub (iy+U_SX)
         cp 4
@@ -845,7 +842,7 @@ T_SIZE      equ 15
         dw {f}, {w}, {g}, {s}
         db {t}, {k}, {a}, {b}
         mend
-techs:  TECH BTY_TOWN_CENTER, 2, 255, 800, 0, 0, 0, 150, RK_AGE, 0, 0   ; Εποχή του Χαλκού
+techs:  TECH BTY_TOWN_CENTER, 2, 255, 800, 0, 0, 0, 150, RK_AGE, 3, 0   ; Εποχή του Χαλκού
         TECH BTY_GRANARY, 2, 255, 200, 50, 0, 0, 50, RK_CARRY, 0, 5     ; Εξημέρωση: τροφή
         TECH BTY_MARKET, 2, 255, 120, 75, 0, 0, 50, RK_CARRY, 1, 5      ; Ξυλουργική: ξύλο
         TECH BTY_MARKET, 2, 255, 100, 120, 0, 0, 50, RK_CARRY, 2, 5     ; Χρυσωρυχείο: χρυσό
@@ -857,7 +854,8 @@ techs:  TECH BTY_TOWN_CENTER, 2, 255, 800, 0, 0, 0, 150, RK_AGE, 0, 0   ; Επο
         TECH BTY_ARCHERY, 2, 255, 100, 50, 0, 0, 40, RK_STAT, 9, 2      ; Τοξοβολία: τόξο +2
         TECH BTY_ARCHERY, 3, 9, 0, 180, 100, 0, 60, RK_STAT, 10, 16     ; Σύνθετο τόξο: βεληνεκές
         TECH BTY_TEMPLE, 3, 255, 120, 0, 60, 0, 50, RK_STAT, 0, 10      ; Ιατρική: χωρικός +10
-        TECH BTY_ACADEMY, 3, 255, 150, 0, 100, 0, 60, RK_STAT, 4, 20    ; Φάλαγγα: σπαθοφόρος +20
+        TECH BTY_ACADEMY, 3, 255, 150, 0, 100, 0, 60, RK_STAT, 16, 20   ; Φάλαγγα: οπλίτης +20
+        TECH BTY_TOWN_CENTER, 3, 0, 1000, 0, 800, 0, 200, RK_AGE, 4, 0  ; Εποχή του Σιδήρου
 T_N         equ ($ - techs) / T_SIZE
 res_done:   dw 0                ; bit t: έγινε
 
@@ -1079,7 +1077,7 @@ res_end:
         add a,b
         ld (hl),a
         ret
-.age:   ld a,1
+.age:   ld a,c                  ; η νέα εποχή (3, 4)
         ld (age_req),a
         ret
 .stat:  ld a,c                  ; stats[c] += b, και στο σετ 3 αν είναι σετ 0
@@ -1155,12 +1153,21 @@ res_card:
         ld a,b
         ret
 
-; Μετά το φόρτωμα του AGE3.BIN (disk.asm): η εποχή 3 — ύψος και εικόνα
-; κάθε τύπου (age3_tab) στο bld_types και σε κάθε κτίριο, η μπάρα, και τα
-; κτίρια που άλλαξαν ξαναζωγραφίζονται ένα-ένα (age_q, buildings.asm).
+; Μετά το φόρτωμα του AGE3.BIN / AGE4.BIN (disk.asm): η επόμενη εποχή —
+; ύψος και εικόνα κάθε τύπου (age3_tab, age4_tab) στο bld_types και σε
+; κάθε κτίριο, η μπάρα, ποιοι τύποι άλλαξαν εικόνα (age_chg), και αυτά
+; τα κτίρια ξαναζωγραφίζονται ένα-ένα (age_q, buildings.asm).
 age_apply:
-        ld hl,bld_types + BT_H
+        ld hl,hud_val + 10
+        inc (hl)                ; η νέα εποχή
+        ld a,(hl)
         ld de,age3_tab
+        cp 3
+        jr z,.g
+        ld de,age4_tab
+.g:     ld hl,0
+        ld (age_chg),hl
+        ld hl,bld_types + BT_H
         ld b,BT_N
 .t:     ld a,(de)               ; ύψος
         ld (hl),a
@@ -1175,10 +1182,25 @@ age_apply:
         ld a,(de)
         ld (hl),a
         inc de
+        ld a,(de)               ; άλλαξε: bit (BT_N - B) του age_chg
+        inc de
+        push hl
+        ld hl,(age_chg)
+        rra
+        rr h
+        rr l
+        ld (age_chg),hl
+        pop hl
         ld bc,BT_SIZE - BT_IMG - 1 + BT_H
         add hl,bc
         pop bc
         djnz .t
+        ld hl,(age_chg)         ; (μπήκαν από πάνω: στη θέση τους)
+        ld b,16 - BT_N
+.sh:    srl h
+        rr l
+        djnz .sh
+        ld (age_chg),hl
         xor a
 .b:     push af
         call brec_iy
@@ -1201,8 +1223,6 @@ age_apply:
         inc a
         cp BLD_MAX
         jr nz,.b
-        ld hl,hud_val + 10
-        ld (hl),3
         ld hl,hud_dirty
         set 5,(hl)
         ld a,1
@@ -1212,3 +1232,74 @@ age_apply:
         ret
 
         include "../data/age3.asm"      ; ανά τύπο ύψος, εικόνα (Χαλκού)
+
+; ============================================================ ΤΟ ΔΕΜΑ (M9)
+;
+; Ο χωρικός με φορτίο (σετ 3) δεν έχει δικά του καρέ (η θέση της C5 πήγε
+; στον οπλίτη): είναι ο χωρικός, και από πάνω, μετά τη σχεδίαση, οι 2
+; γραμμές του δέματος (`-yyyy-` / `-DDDD-`: τα bytes 1 και 2, αδιαφανή) στη
+; γραμμή ctop του καρέ (src/make_edges.py). Από το units_draw (far7s).
+        include "../data/ctop.asm"
+
+carry_ov:
+        bit 7,(ix+U_TEAM)       ; πεθαίνει: χωρίς δέμα
+        ret nz
+        ld a,(ix+U_STEP)        ; το καρέ: πόζα = U_STEP, αλλιώς όψη x 4 +
+        bit 7,(ix+U_FACE)       ; βήμα (W: 21 + βήμα)
+        jr nz,.f
+        rrca
+        and 3
+        ld c,a
+        ld a,(ix+U_FACE)
+        cp 3
+        ld a,21
+        jr z,.w
+        ld a,(ix+U_FACE)
+        add a,a
+        add a,a
+.w:     add a,c
+.f:     ld hl,ctop
+        call tab_a
+        add a,(ix+U_SY)
+        ld b,(ix+U_SX)
+        inc b
+        call line_x
+        ld a,BUN0
+        call .row
+        ld a,d                  ; η επόμενη γραμμή
+        add a,8
+        ld d,a
+        and #38
+        call z,col_wrap
+        ld a,BUN1
+.row:   push de
+        ld (de),a
+        inc e
+        call z,de_carry
+        ld (de),a
+        pop de
+        ret
+
+; Η αντιγραφή C6 -> C5 (age_load, buildings.asm): στο #0008, που φαίνεται
+; με κάθε τράπεζα (το hp_init την αντιγράφει εκεί). HL -> DE, BC bytes,
+; ένα byte τη φορά (~12 µs). Γυρίζει με την C0.
+bcopy_src:
+        push bc
+        ld bc,#7FC6
+        out (c),c
+        ld a,(hl)
+        ld c,#C5
+        out (c),c
+        ld (de),a
+        inc hl
+        inc de
+        pop bc
+        dec bc
+        ld a,b
+        or c
+        jr nz,bcopy_src
+        ld bc,#7FC0
+        out (c),c
+        ret
+BCOPY_LEN   equ $ - bcopy_src
+        assert BCOPY_LEN <= #20, 'bcopy past #0028'

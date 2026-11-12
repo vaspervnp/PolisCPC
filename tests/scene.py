@@ -32,10 +32,13 @@ def frames(name):
             for k in range(0, len(blob), 128)]
 
 
-# το σετ 3 όπως μπαίνει στην C5: με τα W της επίθεσης των σετ 0-2 στα καρέ
-# 12-14 (src/make_edges.py)
-SPRITES = [frames(n) for n in SETS[:3]] + [frames('set3')]
-STRIDE = 25                                     # καρέ ανά σετ στην C5
+# όπως στην C5 (src/make_edges.py): τα σετ 0-2 με το καρέ 12 = το W της
+# επίθεσης· το 3 (με φορτίο) = ο χωρικός με το δέμα από πάνω (carry_ov)· το
+# 4 = ο οπλίτης (HOPL.BIN, στη θέση 3)
+import make_carry as MC                         # noqa: E402
+_C5 = [frames('c5_set%d' % k) for k in range(3)]
+SPRITES = _C5 + [[MC.carry(f) for f in _C5[0]], frames('c5_slot3')]
+BASE = {3: 0}                                   # τα καρέ χωρίς το δέμα
 CURSOR, MARK, ANCHOR = frames('cursor')[:3]
 ARROWS, PR_N = 0xA5E0, 4                       # τα βέλη (game/bank7.asm)
 
@@ -56,16 +59,17 @@ def units(c):
     return [unit(c, i) for i in range(UNITS)]
 
 
-def sprite_of(u):
+def sprite_of(u, bare=False):
     if u['addr'] == CURSOR_REC:
         return CURSOR
     if u['addr'] == ANCHOR_REC:            # η γωνία του κουτιού, ή το σημάδι
         return MARK if u['frame'] == 0x7280 else ANCHOR    # του κτιρίου (M7)
-    s = SPRITES[u['set']]
+    s = SPRITES[BASE.get(u['set'], u['set']) if bare else u['set']]
+    if u['set'] == 3 and u['team'] & 0x80:  # πεθαίνει: χωρίς δέμα
+        s = SPRITES[0]
     if u['face'] & 0x80:                   # πόζα (M8): το U_STEP είναι το καρέ
-        a = u['set'] * STRIDE + u['step']  # από τη βάση του σετ, ως και σε
-        s, f = SPRITES[a // STRIDE], a % STRIDE    # επόμενο σετ (τα W της
-        return gfx.mirror(s[4 + f - 21]) if f >= 21 else s[f]  # επίθεσης)
+        f = u['step']
+        return gfx.mirror(s[4 + f - 21]) if f >= 21 else s[f]
     anim = (u['step'] >> 1) & 3
     face = FACES[u['face']]
     if face == 'W':
@@ -107,10 +111,11 @@ def painted(u, spr):
 
 
 def bank6(age=None):
-    """Η C6 όπως είναι στην εποχή: στη Χαλκού (3) με το AGE3.BIN στο IMG0."""
-    if age != 3:
+    """Η C6 όπως είναι στην εποχή: από τη Χαλκού (3) με το AGE3.BIN / AGE4.BIN
+    στο IMG0."""
+    if age not in (3, 4):
         return BANK6
-    a3 = open(os.path.join(M.ROOT, 'data', 'age3.bin'), 'rb').read()
+    a3 = open(os.path.join(M.ROOT, 'data', 'age%d.bin' % age), 'rb').read()
     k = MB.IMG0 - 0x4000
     return BANK6[:k] + a3 + BANK6[k + len(a3):]
 
@@ -170,7 +175,8 @@ def expected(c, sym, ref):
         spr = sprite_of(u)
         if not u['fl'] & F_FIXED and u['addr'] < ANCHOR_REC and blds and \
                 hidden(u, blds):
-            spr = occluded(spr, RED_HI if u['team'] & 1 else OUTLINE)
+            spr = occluded(sprite_of(u, True),
+                           RED_HI if u['team'] & 1 else OUTLINE)
         else:
             spr = painted(u, spr)
         stamp(img, spr, u['sx'], u['sy'])

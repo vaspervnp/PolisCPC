@@ -7,12 +7,12 @@
   "villager_carry"
  ],
  "frames_per_set": 16,
- "bytes": 13204,
+ "bytes": 10144,
  "per_set": {
   "villager_m": 2980,
   "swordsman": 3644,
   "archer": 3392,
-  "villager_carry": 3060
+  "villager_carry": 0
  },
  "red_org": 25600,
  "red_sets": [
