@@ -46,7 +46,7 @@ def main():
     labels = sorted((a, n) for n, a in sym.items() if a < 0x4000)
     c = CPC()
     c.run_frames(5)
-    c.quickload(os.path.join(M.BUILD, 'polis.sna'))
+    M.load_sna(c)
     M.wait_phase(c, sym, 6)
     if sys.argv[1:2] == ['scroll']:
         import m2_check as M2

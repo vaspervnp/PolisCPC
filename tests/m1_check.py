@@ -84,6 +84,17 @@ def reference(world, cam_x, cam_y):
     return out
 
 
+def load_sna(c, full=True):
+    """Το polis.sna στον CPC. full: η αρχή με 12 + 12 μονάδες της πόλης
+    (town_full = 1 μέσα στο snapshot, πριν τρέξει το units_init), όπως ως το
+    M13· οι έλεγχοι της μηχανικής (M1-M11) είναι γραμμένοι γι' αυτήν. Το
+    παιχνίδι αρχίζει με 3 χωρικούς (tests/m13_check.py, από τη δισκέτα)."""
+    data = bytearray(open(os.path.join(BUILD, 'polis.sna'), 'rb').read())
+    if full:
+        data[0x100 + symbols()['TOWN_FULL']] = 1
+    return c.quickload(bytes(data))
+
+
 def wait_menu(c):
     """Μετά το RUN"POLIS: ως το μενού (M12) ολόκληρο — τρέχει το παιχνίδι
     (ο χειριστής διακοπής του στο #0038, όχι το BASIC) και το βέλος είναι
@@ -150,7 +161,7 @@ def main():
 
     c = CPC()
     c.run_frames(5)
-    assert c.quickload(os.path.join(BUILD, 'polis.sna')), 'quickload'
+    assert load_sna(c), 'quickload'
     c.poke(sym['FOG_ON'], 0)              # χωρίς ομίχλη (M11)
     t0 = wait_phase(c, sym, 2) / 1000.0
     good = compare(c, reference(world, 98, 303), 'sna', shots)

@@ -41,7 +41,7 @@ class Game:
         self.world = M.game_world(grd, res)
         self.c = CPC()
         self.c.run_frames(5)
-        assert self.c.quickload(os.path.join(M.BUILD, 'polis.sna'))
+        assert M.load_sna(self.c)
         if not ai:                      # ο αντίπαλος (M10) δεν σκέφτεται: οι
             self.c.poke(self.sym['AI_ON'], 0)   # έλεγχοι M4-M9 μόνοι τους
         if not fog:                     # και χωρίς ομίχλη (M11): όλα

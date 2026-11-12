@@ -288,7 +288,7 @@ def disk():
     g = M4.Game.__new__(M4.Game)        # (τα βοηθητικά του M4 στο ίδιο CPC)
     g.c, g.sym, g.shots, g.times, g.scrolled, g.ok = c, sym, False, [], [], \
         True
-    M6.click_unit(g, 2)
+    M6.click_unit(g, 3)                 # ένας από τους 3 χωρικούς
     M6.command(g, (36, 52))
     for _ in range(5):
         M3.tick_time(c, sym)

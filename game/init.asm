@@ -60,6 +60,12 @@ lv_h:     ds H_TEXT
 ; Οι 128 μονάδες.
 units_init:
         call lv_init
+        ld a,(town_full)        ; ο πληθυσμός της μπάρας
+        or a
+        jr z,.n3
+        ld a,TOWN_UNITS
+        ld (hud_val + 8),a
+.n3:
         ld hl,UNIT_TAB          ; όλα μηδέν
         ld de,UNIT_TAB + 1
         ld bc,(UNITS + 2) * U_SIZE - 1
@@ -106,7 +112,23 @@ units_init:
         ld hl,(lv_h + H_AIU)
         ld de,(lv_h + H_AIU + 2)
 .town:  ld b,a                  ; οι πρώτες: στην πόλη, 4 στήλες ανά 16
-        and 3                   ; bytes
+        ld a,(town_full)        ; bytes — μόνο οι χωρικοί 0, 3, 6 (σετ 0)·
+        or a                    ; οι άλλες θέσεις ελεύθερες (town_full:
+        ld a,b                  ; όλες, για τους ελέγχους)
+        jr nz,.gw
+        cp START_VIL * 3
+        jr nc,.free
+        ld a,(ix+U_SET)
+        or a
+        jr nz,.free
+        ld a,b                  ; 0, 3, 6 -> οι θέσεις 5, 6, 7 της
+        srl a                   ; διάταξης: μαζί, στη μεσαία σειρά
+        cp 3
+        jr nz,.gv
+        dec a
+.gv:    add a,5
+        ld b,a
+.gw:    and 3
         add a,a
         add a,a
         add a,a
@@ -131,7 +153,7 @@ units_init:
         jr .pos
 .far:   cp UNITS_LIVE           ; οι τελευταίες: ελεύθερες θέσεις (M7), μακριά
         jr c,.wan               ; από τον κόσμο, για όσες θα βγουν
-        ld (ix+U_TEAM),TEAM_FREE
+.free:  ld (ix+U_TEAM),TEAM_FREE
         ld (ix+U_WY+1),2000 >> 8
         jr .pos
 .wan:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
