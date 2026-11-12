@@ -193,6 +193,8 @@ def main():
         for v in us:
             if tab[v['idx']][U_TEAM] in (tab[k][U_TEAM], 255):
                 continue
+            if v['fl'] & S.F_WANDER:            # ουδέτερες στη μάχη (M8: NT)
+                continue
             if bucket_of(v) - b in (-15, -14, -13, -1, 0, 1, 13, 14, 15):
                 d = dist8(u, v)
                 if d is not None and d < 255:

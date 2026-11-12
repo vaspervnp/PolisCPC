@@ -179,7 +179,9 @@ bld_new:
         cp (hl)
         jr c,.top
         ld (hl),a
-.top:   ld (iy+B_ST),c
+.top:   ld a,1                  ; occlude.asm: η λίστα ξανά
+        ld (occ_dirty),a
+        ld (iy+B_ST),c
         ld (iy+B_OWN),0
         ld (iy+B_I),d
         ld (iy+B_J),e
@@ -1117,6 +1119,8 @@ bld_job:
         ret c
         ld (iy+B_ST),1          ; έτοιμο: η εικόνα του
         ld (iy+B_PROG),0
+        ld a,1                  ; και μπορεί να κρύβει μονάδες (occlude.asm)
+        ld (occ_dirty),a
         call bld_redraw
         jp job_idle
 
@@ -1222,6 +1226,8 @@ bld_spawn:
         add hl,de
         ld a,(hl)
         call set_look
+        ld hl,hp_set            ; η υγεία της (bank7.asm)
+        call far7
         call unit_pxy
         call unit_tile
         call bucket_update

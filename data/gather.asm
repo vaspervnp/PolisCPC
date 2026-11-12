@@ -19,16 +19,11 @@ CARD_FULL   equ #F3
 CARD_HALF   equ #E2
 CARD_EMPTY  equ #C0
 
-; 11 ψηφία (0-9, κενό) x 5 γραμμές x 2 bytes
-digits:
-            db #C3,#C2,#C2,#C2,#C2,#C2,#C2,#C2,#C3,#C2
-            db #C1,#C0,#C3,#C0,#C1,#C0,#C1,#C0,#C3,#C2
-            db #C3,#C2,#C0,#C2,#C3,#C2,#C2,#C0,#C3,#C2
-            db #C3,#C2,#C0,#C2,#C3,#C2,#C0,#C2,#C3,#C2
-            db #C2,#C2,#C2,#C2,#C3,#C2,#C0,#C2,#C0,#C2
-            db #C3,#C2,#C2,#C0,#C3,#C2,#C0,#C2,#C3,#C2
-            db #C3,#C2,#C2,#C0,#C3,#C2,#C2,#C2,#C3,#C2
-            db #C3,#C2,#C0,#C2,#C0,#C2,#C0,#C2,#C0,#C2
-            db #C3,#C2,#C2,#C2,#C3,#C2,#C2,#C2,#C3,#C2
-            db #C3,#C2,#C2,#C2,#C3,#C2,#C0,#C2,#C3,#C2
-            db #C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0,#C0
+; μονάδα πίσω από κτίριο: το περίγραμμα, στο pen της ομάδας
+OUTLINE     equ #0C
+
+; 11 ψηφία (0-9, κενό) x 5 γραμμές x 2 bytes: στην κύρια RAM,
+; στις γραμμές του HUD που δεν φαίνονται (από το data/digits.bin,
+; στο τέλος του hud_z — screen.asm, hud_init)
+digits      equ #4790
+DIGITS_LEN  equ 110

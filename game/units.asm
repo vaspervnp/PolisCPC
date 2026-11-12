@@ -104,6 +104,56 @@ setram: ld b,GA                 ; A = RAM_xx
         out (c),a
         ret
 
+; HL = ρουτίνα της C7 (bank7.asm): με την C7 στο #4000, και μετά την C0.
+; Κρατάει AF (το αποτέλεσμα), C.
+far7:   ld a,RAM_CMP
+        call setram
+        call .go
+        push af
+        ld a,RAM_BASE
+        call setram
+        pop af
+        ret
+.go:    jp (hl)
+
+; Οι νεκροί του dq (bank7.asm): έξω από τους κάδους τους (M8).
+died_flush:
+        ld a,(dq_n)
+        or a
+        ret z
+        ld b,a
+        ld hl,dq
+.l:     ld a,(hl)
+        inc hl
+        push hl
+        push bc
+        call died_a
+        pop bc
+        pop hl
+        djnz .l
+        xor a
+        ld (dq_n),a
+        ret
+
+; A = μονάδα που μόλις πέθανε: έξω από τον κάδο της.
+died_a: push ix
+        call idx_ix
+        ld a,(ix+U_BKT)
+        cp 255
+        call nz,bucket_out
+        ld (ix+U_BKT),255
+        pop ix
+        ret
+
+; A = 0 / 1: η IX στόχος ή όχι (NT, pathing.asm).
+nt_put: push hl
+        ld l,(ix+U_IDX)
+        set 7,l
+        ld h,NT >> 8
+        ld (hl),a
+        pop hl
+        ret
+
 ; Αντιγράφει το παράθυρο χάρτη στον καθρέφτη. Μετά από κάθε πλήρη σχεδίαση.
 ; Οι 144 γραμμές είναι οι 18 πρώτες σειρές χαρακτήρων: σε καθεμία από τις
 ; 8 «οκτάδες» της μνήμης οθόνης, τα πρώτα 18 x 80 = 1.440 bytes. 11.520
@@ -191,14 +241,14 @@ units_gfx:
         pop bc
         djnz .set
         ld hl,cursor_gfx        ; ο κέρσορας: μέσω της οθόνης (η πηγή είναι
-        ld de,SCREEN            ; πέρα από το #4000, κάτω από την C5)
-        ld bc,3 * 128
+        ld de,SCREEN            ; πέρα από το #4000, κάτω από την C5) — και
+        ld bc,C5_TAIL           ; τα περιγράμματα (occlude.asm)
         ldir
         ld a,RAM_SPR
         call setram
         ld hl,SCREEN
         ld de,SPR_CURSOR
-        ld bc,3 * 128
+        ld bc,C5_TAIL
         ldir
         ld a,RAM_BASE           ; οι πόροι -> C6
         call setram
@@ -216,6 +266,10 @@ units_gfx:
         ld hl,cmp_z
         ld de,SCREEN
         call dzx0
+        ld hl,c7_phys           ; και ο κώδικας της C7 (bank7.asm) μετά τα
+        ld de,SCREEN + C7_CODE - #4000  ; sprites
+        ld bc,C7_LEN
+        ldir
         ld a,RAM_CMP
         call setram
         ld hl,SCREEN
@@ -291,8 +345,10 @@ units_init:
         ld (ix+U_WY+1),2000 >> 8
         jr .pos
 .wan:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
-        set F_WANDER,(ix+U_FL)  ; — η άλλη ομάδα
+        set F_WANDER,(ix+U_FL)  ; — η άλλη ομάδα· ουδέτερες στη μάχη (NT)
         ld (ix+U_TEAM),1
+        ld a,1
+        call nt_put
 .pos:   ld l,(ix+U_WX)          ; ο στόχος = εκεί που είναι
         ld h,(ix+U_WX+1)
         ld (ix+U_TX),l
@@ -457,6 +513,8 @@ make_swap:
 units_tick:
         ld a,(int_t)            ; η αρχή του καρέ, σε 1/300 s
         ld (t0),a
+        ld hl,proj_off          ; τα βέλη (bank7.asm) σβήνουν πρώτα
+        call far7
         ld a,(bench_req)
         or a
         call nz,bench_targets
@@ -488,7 +546,10 @@ units_tick:
         call units_order
         call units_mark
         call units_restore_list
-        jp units_draw
+        call units_draw
+        ld hl,proj_on           ; και τα βέλη, τελευταία, από πάνω
+        call far7
+        jp died_flush
 
 ; ΜΟΝΟ Ο,ΤΙ ΑΛΛΑΞΕ — ΚΑΙ ΟΤΑΝ Η ΟΘΟΝΗ ΚΥΛΑΕΙ
 ;
@@ -536,7 +597,25 @@ units_think:
         ret
 
 unit_think:
-        ld a,(ix+U_JOB)         ; χωρικός με δουλειά (gather.asm)
+        ld a,(ix+U_TEAM)        ; νεκρή ή βέλος (M8): bank7.asm
+        cp 2
+        jr c,.alive
+        inc a
+        jr z,.alive             ; (ελεύθερη θέση: όπως πριν)
+        ld hl,dead_think
+        call far7
+        jp unit_think_vis
+.alive: bit F_WANDER,(ix+U_FL)  ; ΜΑΧΗ: στρατιώτες (σετ 1, 2) που δεν
+        jr nz,.nc               ; περιπλανιούνται — ο κοντινότερος εχθρός,
+        ld a,(ix+U_SET)         ; και η απόφαση στην C7
+        dec a
+        cp 2
+        jr nc,.nc
+        call find_nearest
+        ld hl,combat_think
+        call far7
+        call died_flush
+.nc:    ld a,(ix+U_JOB)         ; χωρικός με δουλειά (gather.asm)
         or a
         call nz,job_tick
         bit F_MOVE,(ix+U_FL)
@@ -896,7 +975,15 @@ unit_update:
         ld (g_x),a
         ld (g_y),a
         ld c,a                  ; C = άλλαξε
-        bit F_MOVE,(ix+U_FL)
+        bit 7,(ix+U_FACE)       ; ΠΟΖΑ (επίθεση, θάνατος, βέλος — M8): κανένα
+        jr z,.np                ; βήμα· το καρέ της, στην C7
+        ld hl,pose_tick
+        call far7
+        ld a,c
+        cp 2
+        jp z,unit_hide          ; η θέση ελευθερώθηκε
+        jr .nostep
+.np:    bit F_MOVE,(ix+U_FL)
         jr z,.nostep
         ld a,(ix+U_FIELD)       ; με εντολή: βήματα πάντα εδώ
         or a
@@ -1426,6 +1513,8 @@ units_restore_list:
         jp setram
 
 units_draw:
+        ld hl,occ_list          ; τα κτίρια που μπορεί να κρύβουν (bank7.asm)
+        call far7
         ld a,(ord_tot)
         or a
         ret z
@@ -1451,6 +1540,12 @@ units_draw:
         ld (ix+U_OADDR),e
         ld (ix+U_OADDR+1),d
         bit F_FIXED,(ix+U_FL)   ; κέρσορας, γωνία: δεδομένα
+        jr nz,.data
+        push de                 ; πίσω από κτίριο: ζωγραφίστηκε, με το
+        call occ_draw           ; περίγραμμα (occlude.asm)
+        pop de
+        jr nz,.mark
+        bit 7,(ix+U_FACE)       ; πόζα: τα καρέ της δεν είναι μεταγλωττισμένα
         jr nz,.data
         ld a,e                  ; καμία γραμμή σε όριο σελίδας: το low byte
         cp #FD                  ; των (ως 3) σειρών χαρακτήρων < #FD
@@ -1496,7 +1591,8 @@ units_draw:
         set 0,(ix+U_DRAWN)
 .skip:  pop hl
         pop bc
-        djnz .u
+        dec b
+        jp nz,.u
         ld a,RAM_BASE
         jp setram
 
@@ -1571,7 +1667,17 @@ unit_frame:
         ld l,(ix+U_FRAME)
         ld h,(ix+U_FRAME+1)
         ret
-.calc:  ld a,(ix+U_FACE)
+.calc:  bit 7,(ix+U_FACE)       ; πόζα (M8): το καρέ U_STEP του σετ
+        jr z,.walk
+        ld h,(ix+U_STEP)
+        ld l,0
+        srl h
+        rr l
+        ld e,(ix+U_BASE)
+        ld d,(ix+U_BASE+1)
+        add hl,de
+        ret
+.walk:  ld a,(ix+U_FACE)
         add a,a
         ld e,a
         ld d,0
@@ -1627,6 +1733,12 @@ cwrap:  ld a,c
 ; Μετά από πλήρη σχεδίαση: καμία δεν έχει ίχνος να σβήσει, το ORDER
 ; ξαναχτίζεται, και η κάμερα μπορεί να πήδηξε: ενεργές από την αρχή.
 units_forget:
+        ld hl,ARROWS + 7        ; ούτε βέλη (ARROWS: bank7.asm)
+        ld de,8
+        ld b,PR_N
+.a:     ld (hl),255
+        add hl,de
+        djnz .a
         xor a
 .u:     push af
         call idx_ix

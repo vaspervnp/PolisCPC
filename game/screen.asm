@@ -191,4 +191,7 @@ hud_init:
         ex de,hl
         dec a
         jr nz,.k
+        ld de,digits            ; και τα ψηφία, στις γραμμές που δεν φαίνονται
+        ld bc,DIGITS_LEN
+        ldir
         ret

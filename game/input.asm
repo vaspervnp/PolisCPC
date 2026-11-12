@@ -292,6 +292,8 @@ do_select:
 
 ; IX -> επιλεγμένη, στη λίστα (ως SEL_MAX).
 unit_select:
+        bit 7,(ix+U_TEAM)       ; νεκρή, βέλος, ελεύθερη (M8): όχι
+        ret nz
         ld hl,sel_n
         ld a,(hl)
         cp SEL_MAX
@@ -436,6 +438,8 @@ do_command:
         pop bc
         set F_MOVE,(ix+U_FL)
         res F_WANDER,(ix+U_FL)
+        xor a                   ; και στόχος πια (NT)
+        call nt_put
         ld a,(field_f)
         ld (ix+U_FIELD),a
         ld a,(cmd_cell)

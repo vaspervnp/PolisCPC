@@ -110,6 +110,24 @@ def fake_bld(c, sym, slot, typ, st=1):
     c.poke(top, max(c.peek(top), slot + 1))
 
 
+def cmd_cursor(g, i, j):
+    """Ο κέρσορας για να πάει ΜΙΑ μονάδα στο πλακίδιο (i, j): ο στόχος της
+    πρώτης του σχηματισμού είναι τα πόδια στο (cw_x - 7, cw_y) — do_command."""
+    c, sym = g.c, g.sym
+    cx, cy = M4.M2.cam(c, sym)
+    x0, y0 = g.cursor()
+    fx, fy = 2 * (i - j) + 192, 4 * (i + j) + 4
+    best = None
+    for x in range(x0 % 2, 77, 2):
+        for y in range(y0 % 6, 129, 6):
+            if M5.feet_tile(cx + x - 7, cy + y) == (i, j):
+                d = abs(cx + x - 7 - fx) * 2 + abs(cy + y - fy)
+                if best is None or d < best[0]:
+                    best = (d, x, y)
+    assert best, 'το πλακίδιο %s δεν φαίνεται' % ((i, j),)
+    return best[1], best[2]
+
+
 def press(g, key, n=2):
     g.c.key_down(key)
     g.tick(n)
@@ -303,7 +321,32 @@ def main():
     g.report('κάρτα', cd == (None, 0) and not marked(c),
              'καμία επιλογή κτιρίου: η κάρτα κενή, κανένα σημάδι')
 
-    # ------------------------------------------------- 7. αποθήκη
+    # ------------------------------------------------- 7. πίσω από κτίριο
+    behind = (29, 59)                       # αριστερά, πίσω από το Κέντρο Πόλης
+    near = min((abs(M5.unit_tile(x)[0] - behind[0]) +   # η πιο κοντινή της
+                abs(M5.unit_tile(x)[1] - behind[1]), x['idx'])   # πόλης, από
+               for x in S.units(c)[:12] if x['idx'] not in M6.VILLAGERS)[1]
+    sel = M6.click_unit(g, near)            # τα δυτικά: χωρίς εμπόδιο
+    v = min(sel)
+    g.move_cursor(*cmd_cursor(g, *behind))
+    press(g, CPCMOD.KEY_RETURN, 1)
+    for k in range(600):
+        g.tick(1)
+        if not S.unit(c, v)['fl'] & S.F_MOVE:
+            break
+    g.tick(2)
+    u = S.unit(c, v)
+    hid = S.hidden(u, S.buildings(c))
+    g.report('πίσω', len(sel) == 1 and M5.unit_tile(u) == behind and hid,
+             'η μονάδα %d στο %s, πίσω από το Κέντρο Πόλης: κρύβεται %s%s'
+             % (v, M5.unit_tile(u), hid, '' if hid else
+                ' (επιλογή %s, στόχος %s, %d καρέ)'
+                % (sorted(sel), M5.feet_tile(u['tx'] + 2, u['ty'] + 14),
+                   k + 1)))
+    g.report('σύνθεση', g.compose('behind'), 'μόνο το περίγραμμά του, στο pen '
+             'της ομάδας, πάνω στο κτίριο')
+
+    # ------------------------------------------------- 8. αποθήκη
     for k, v in ((0, 9999), (1, 9999), (2, 9999)):
         c.poke(sym['HUD_VAL'] + 2 * k, v & 255)
         c.poke(sym['HUD_VAL'] + 2 * k + 1, v >> 8)
@@ -345,7 +388,7 @@ def main():
              'Κέντρο Πόλης): στα %s, ξύλο %d -> %d'
              % (M6.TREE, drops, w0, w1))
 
-    # ------------------------------------------------- 8. πληθυσμός
+    # ------------------------------------------------- 9. πληθυσμός
     for t in [(i0 + a, j0 + b) for a in (2, 1, 0) for b in (2, 1, 0)]:
         g.move_cursor(*M6.tile_cursor(g, *t))  # ένα πλακίδιο χωρίς μονάδα
         c.key_down(' ')
@@ -369,7 +412,7 @@ def main():
              'T x 3 -> ουρά %d (επιλογή %d)' % (pop, q1, q2,
                                                 c.peek(sym['SEL_BLD'])))
 
-    # ------------------------------------------------- 9. 28 κτίρια
+    # ------------------------------------------------- 10. 28 κτίρια
     free = [k for k in range(BLD_MAX) if c.peek(BLD_SLOTS[k]) == 255]
     for k in free[:-1]:
         fake_bld(c, sym, k, 'house')
@@ -391,7 +434,7 @@ def main():
              'και το επόμενο δεν χωράει: %d κτίρια' % (BLD_MAX - 1, last and
                                                        last[0]['slot'], n2))
 
-    # ------------------------------------------------- 10. χρόνος
+    # ------------------------------------------------- 11. χρόνος
     still = [t for t, m in zip(g.times, g.scrolled) if not m]
     g.report('χρόνος', max(still) < 40, 'καρέ χωρίς κύλιση: μέσος %.1f ms, '
              'μέγιστος %.1f ms (όριο 40), %d καρέ'

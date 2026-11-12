@@ -54,6 +54,7 @@ U_BKT       equ 26              ; ο κάδος της (255 κανένας)
 PX          equ #5F00           ; 128: το low byte του WX
 PY          equ #5F80           ; 128: το low byte του WY
 PN          equ #6700           ; 128: η επόμενη στον κάδο (255 τέλος)
+NT          equ PN + 128        ; 128: 1 = όχι στόχος (M8: όσες περιπλανιούνται)
 U_TEAM      equ 28
 U_STUCK     equ 29              ; βήματα με ολίσθηση στη σειρά
 U_TGT       equ 30              ; ο κοντινότερος εχθρός (255 κανένας)
@@ -1272,6 +1273,11 @@ scan_enemy:
         cp (hl)
         ex de,hl
         jr nc,.next
+        ld h,NT >> 8            ; όχι στόχος (περιπλανιέται, M8)
+        set 7,l
+        bit 0,(hl)
+        res 7,l
+        jr nz,.next
         ld (de),a
         ld (ix+U_TGT),l
 .next:  ld h,PN >> 8

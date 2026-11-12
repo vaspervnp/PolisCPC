@@ -60,6 +60,10 @@ def setup(c, sym):
         fl = c.peek(a + 11)               # περπατάει, όχι περιπλάνηση
         c.poke(a + 11, (fl & ~S.F_WANDER) | S.F_MOVE)  # (τα άλλα bits μένουν)
         c.poke(S.ACT_TAB + i, 1)
+        c.poke(NT + i, 1)                   # καμία μάχη (M8): μέτρηση βαδίσματος
+
+NT = 0x6780                                     # όχι στόχος (game/pathing.asm)
+
 
 def wait_uphase(c, sym, want, limit_ms=500):
     t = 0

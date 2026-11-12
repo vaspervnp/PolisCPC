@@ -89,6 +89,8 @@ start:
         inc hl
         djnz .z
         call units_init
+        ld hl,hp_init           ; η υγεία όλων (bank7.asm)
+        call far7
         call bld_init           ; το Κέντρο Πόλης στον χάρτη, πριν την εύρεση
         call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
         call gather_init        ; οι πηγές, και οι αριθμοί του HUD
@@ -293,6 +295,7 @@ pen_pair:
         include "gather.asm"
         include "../data/bld.asm"
         include "buildings.asm"
+        include "occlude.asm"
 
         ifdef BARS
 linebuf:
@@ -472,6 +475,20 @@ rq_h:       db 0
 rq_n:       db 255
 bq_tot:     db 0                ; μονάδες σε όλες τις ουρές
 bld_top:    db 1                ; οι βρόχοι των κτιρίων: ως εδώ (bld_new, >= 1)
+DQ_MAX      equ 4
+dq_n:       db 0                ; bank7.asm: οι νεκροί για το died_flush
+dq:         ds DQ_MAX
+c_dx:       dw 0
+c_dy:       dw 0
+occ_c:      db 0                ; occlude.asm: πόσα στο OCC_L
+occ_dirty:  db 1                ; η λίστα ξανά (και η κάμερα: occ_cx, occ_cy)
+occ_cx:     dw 0
+occ_cy:     dw 0
+occ_w:      dw 0
+occ_q:      ds 8
+occ_u:      dw 0
+occ_v:      dw 0
+occ_uvd:    db 0                ; τα occ_u, occ_v ισχύουν
 card_on:    db 0                ; η κάρτα του HUD δείχνει κτίριο
 anc_force:  db 0                ; η γωνία / το σημάδι άλλαξε
 dr_kind:    db 0                ; job_go_drop
@@ -482,7 +499,7 @@ t0:         db 0                ; η αρχή του καρέ μονάδων
 cmd_kind:   db 255              ; το είδος του πόρου κάτω από την εντολή
 cmd_sj:     db 0                ; (ld (cmd_sj),de: j και μετά i)
 cmd_si:     db 0
-sp_ui:      db 0                ; stand_point
+sp_ui:      db 0                ; stand_point (και occlude.asm: μαζί)
 sp_uj:      db 0
 sp_sj:      db 0
 sp_si:      db 0
@@ -530,9 +547,24 @@ res_gfx     equ #4000
 
 ; Ως εδώ ό,τι χρειάζεται το παιχνίδι ΟΣΟ ΤΡΕΧΕΙ: πριν το παράθυρο τράπεζας.
 code_end:
-        assert code_end <= #4000, 'code past #4000'
+        ifndef BARS             ; (η οθόνη ελέγχου του M0 δεν γράφει ποτέ στο
+        assert code_end <= #4000, 'code past #4000'   ; #4000: ούτε HUD ούτε
+        endif                   ; τράπεζες — ο κώδικας της μπορεί να το περάσει)
 
 ; Από εδώ μόνο για την εκκίνηση: μπορούν να περάσουν το #4000.
+; ------------------------------------------------------------ η C7 (M8)
+; Ο κώδικας της τράπεζας C7 (bank7.asm): συναρμολογημένος για το C7_CODE,
+; αποθηκευμένος εδώ — πριν από τα συμπιεσμένα, που ο rasm τα μετακινεί — και
+; στην C7 από το units_gfx (μαζί με τα sprites).
+C7_CODE     equ #7500           ; μετά τα μεταγλωττισμένα (13.524 bytes)
+c7_phys:
+        org C7_CODE,c7_phys
+        include "bank7.asm"
+c7_end:
+        org c7_phys + c7_end - C7_CODE
+C7_LEN      equ c7_end - C7_CODE
+        assert C7_CODE + C7_LEN <= C7_HP, 'C7 code past tables'
+
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB).
 map_z:
         lzx0
@@ -548,7 +580,9 @@ k = 0
         incbin "../data/hud_page.bin",k * #800,HUD_ROWS * 80
 k = k + 1
         rend
+        incbin "../data/digits.bin"     ; -> digits (hud_init)
         lzclose
+        assert digits >= PORTAL + 256 && digits + DIGITS_LEN <= HUD_PAGE + #800, 'digits'
 
 ; Τα σετ των μονάδων, συμπιεσμένα· αποσυμπιέζονται στην τράπεζα C5.
 spr_z0:
@@ -569,8 +603,11 @@ res_z:
         incbin "../data/bank6.bin"
         lzclose
 ; Κέρσορας, σημάδι επιλογής, γωνία -> C5 (μέσω της οθόνης).
-cursor_gfx:
-        incbin "../data/cursor.bin"
+cursor_gfx:                     ; -> C5, SPR_CURSOR: κέρσορας, αγκύλες, γωνία,
+        incbin "../data/cursor.bin"     ; το βέλος, και τα περιγράμματα των
+        incbin "../data/arrow.bin"      ; καρέ (src/make_edges.py)
+        incbin "../data/occ_edges.bin"
+        assert $ - cursor_gfx == C5_TAIL, 'C5_TAIL'
 ; Τα μεταγλωττισμένα sprites (src/make_compiled.py) -> τράπεζα C7.
 cmp_z:
         lzx0
