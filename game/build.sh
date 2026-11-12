@@ -55,6 +55,7 @@ python3 src/dsk.py build/polis.dsk \
     $(for c in E G B A R P F K; do echo --zx0 AGE3$c.BIN data/age3$c.bin --zx0 AGE4$c.BIN data/age4$c.bin; done) \
     --zx0 HOPL.BIN data/c5_slot3.bin \
     $(for c in G E; do for n in 1 2 3 4; do echo --zx0 L$c$n.BIN data/l$(echo $c | tr GE ge)$n.bin; done; done) \
+    --zx0 TITLE.BIN data/title.bin \
     --empty PROG.BIN 1024 \
     --empty SAVE.BIN 43008
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

@@ -11,9 +11,9 @@
    ειδοποίηση επίθεσης στον παίκτη, το πολύ μία στα 10 s.
 
 ΑΠΟ ΤΗ ΔΙΣΚΕΤΑ (RUN"POLIS):
-4. ΜΕΝΟΥ. Η οθόνη του μενού pixel προς pixel = η γραμματοσειρά του
-   src/make_menu.py, με το βέλος στους Έλληνες.
-5. ΠΟΛΙΤΙΣΜΟΣ. Κάτω x3, RETURN: οι Ρωμαίοι — τα ονόματα AGE3R / AGE4R.
+4. ΜΕΝΟΥ. Η οθόνη του μενού pixel προς pixel = η εικόνα του
+   src/make_title.py με τις επιλογές του src/make_menu.py από πάνω.
+5. ΠΟΛΙΤΙΣΜΟΣ. PLAY AS, δεξιά x3, RETURN: οι Ρωμαίοι — τα ονόματα AGE3R / AGE4R.
 6. ΕΠΟΧΗ. Η Εποχή του Χαλκού (age_req, όπως στο τέλος της έρευνας): οι
    εικόνες των Ρωμαίων από τη δισκέτα, η οθόνη = ο κόσμος των Ρωμαίων pixel
    προς pixel, και η ομίχλη ΙΔΙΑ (το φόρτωμα σβήνει την αρχή της· το
@@ -44,6 +44,7 @@ import m8_check as M8                           # noqa: E402
 import scene as S                               # noqa: E402
 import dsk as DK                                # noqa: E402
 import make_menu as MN                          # noqa: E402
+import make_title as MT                         # noqa: E402
 import make_bank6 as MB                         # noqa: E402
 import cpc as CP                                # noqa: E402
 from cpc import CPC                             # noqa: E402
@@ -126,28 +127,24 @@ def boot(disc, keys):
     return c
 
 
-def menu_image():
-    """Το μενού όπως το ζωγραφίζει το menu.asm: [y][x] pens."""
-    img = [[0] * 160 for _ in range(200)]
-    order = list(MN.GLYPHS)
-
-    def put(ch, xb, y, pen):
-        for r, row in enumerate(MN.GLYPHS[ch]):
-            for i, b in enumerate(row):
-                if b == '#':
-                    for dy in (0, 1):
-                        img[y + 2 * r + dy][2 * xb + i] = pen
-    items = MN.items()                  # (M13: και οι εκστρατείες)
-    title_x = (80 - MN.CELL * len(MN.TITLE)) // 2
-    for k, ch in enumerate(MN.TITLE):
-        put(ch, title_x + MN.CELL * k, MN.TITLE_Y, MN.PEN_HI)
-    for n, text in enumerate(items):
-        pen = MN.PEN_TEXT if n < len(MB.CULTURES) else MN.PEN_HI
+def menu_image(cult=None):
+    """Το μενού όπως το ζωγραφίζει το menu.asm: η εικόνα του TITLE.BIN
+    (src/make_title.py) και από πάνω οι επιλογές, [y][x] pens."""
+    img = MT.image()
+    for y, xb, pen, text in MN.lines(MN.DEFAULT if cult is None else cult):
         for k, ch in enumerate(text):
-            put(ch, MN.ITEM_X + MN.CELL * k, MN.ITEM_Y0 + n * MN.ITEM_DY, pen)
-    put('>', MN.ITEM_X - 2 * MN.CELL, MN.ITEM_Y0 + MN.DEFAULT * MN.ITEM_DY,
-        MN.PEN_HI)
-    assert order                                # (μόνο οι γλύφοι του)
+            x0 = 2 * (xb + MN.CELL * k)
+            for r, row in enumerate(MN.GLYPHS[ch]):
+                bits = row + '.'                # 6 pixels: 3 bytes
+                for dy in (0, 1):
+                    for i, b in enumerate(bits):
+                        img[y + 2 * r + dy][x0 + i] = pen if b == '#' else 0
+    y = MN.ITEM_Y0 + MN.SEL0 * MN.ITEM_DY
+    for r, row in enumerate(MN.GLYPHS['>']):
+        for dy in (0, 1):
+            for i, b in enumerate(row + '.'):
+                img[y + 2 * r + dy][2 * (MN.ITEM_X - 2 * MN.CELL) + i] = \
+                    MN.PEN_HI if b == '#' else 0
     return img
 
 
@@ -250,7 +247,7 @@ def disk():
     report('ΜΕΝΟΥ', bad == 0, 'η οθόνη του μενού: %d pixels διαφέρουν' % bad)
 
     # ------------------------------------------------------ 5. πολιτισμός
-    for k in (CP.KEY_DOWN,) * 3:
+    for k in (CP.KEY_RIGHT,) * 3:
         c.key_down(k)
         c.run_frames(4)
         c.key_up(k)
@@ -259,7 +256,7 @@ def disk():
     M.wait_phase(c, sym, 6, limit_ms=10000)
     nm = c.read_ram(sym['AGE3_NAME'], 33)
     report('ΠΟΛΙΤΙΣΜΟΣ', nm[:5] == b'AGE3R' and nm[22:27] == b'AGE4R',
-           'κάτω x3, RETURN: %s, %s' % (nm[:11], nm[22:33]))
+           'PLAY AS, δεξιά x3, RETURN: %s, %s' % (nm[:11], nm[22:33]))
 
     # ---------------------------------------------------------- 6. εποχή
     seen0 = S.fog_seen(c)
@@ -310,7 +307,7 @@ def disk():
                                 names(sym, v) for k, v in diffs.items()}))
 
     # ------------------------------------------------------- 8. φόρτωμα
-    b = boot(saved_dsk, [CP.KEY_UP, CP.KEY_UP])
+    b = boot(saved_dsk, [CP.KEY_UP])
     b.key_down(CP.KEY_RETURN)
     b.run_frames(4)
     b.key_up(CP.KEY_RETURN)
@@ -348,7 +345,7 @@ def disk():
            % (same_n, len(pa)))
 
     # ------------------------------------------------ 10. καμία παρτίδα
-    n = boot(dsk_path, [CP.KEY_UP, CP.KEY_UP, CP.KEY_RETURN])
+    n = boot(dsk_path, [CP.KEY_UP, CP.KEY_RETURN])
     M.wait_phase(n, sym, 6, limit_ms=60000)
     vals = M6.hud_vals(n, sym)
     report('ΚΑΜΙΑ', vals[:4] == [200, 200, 100, 200] and

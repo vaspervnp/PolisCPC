@@ -89,7 +89,7 @@ def wait_menu(c):
     (ο χειριστής διακοπής του στο #0038, όχι το BASIC) και το βέλος είναι
     στη θέση του."""
     import make_menu as MN
-    y = MN.ITEM_Y0 + MN.DEFAULT * MN.ITEM_DY
+    y = MN.ITEM_Y0 + MN.SEL0 * MN.ITEM_DY
     a = 0xC000 + (y & 7) * 0x800 + (y >> 3) * 80 + MN.ITEM_X - 2 * MN.CELL
     jp = bytes([0xC3]) + symbols()['INT_HANDLER'].to_bytes(2, 'little')
     arrow = MN.left_byte(MN.PEN_HI) >> 1        # «.#...»: το δεξί pixel

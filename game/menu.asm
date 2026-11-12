@@ -6,8 +6,9 @@
 ; εκκίνησης (main.asm), μετά το units_gfx — η οθόνη είναι ελεύθερη — και
 ; πριν το INIT (#F000) και το HUD γράψουν από πάνω.
 ;
-; Βελάκια πάνω/κάτω, και SPACE, RETURN, COPY ή ENTER. Ένας πολιτισμός: το
-; γράμμα του στα ονόματα των αρχείων των εποχών (age3_name, age4_name). Το
+; Πάνω στην εικόνα του TITLE.BIN (mn_title). Βελάκια πάνω/κάτω, και SPACE,
+; RETURN, COPY ή ENTER. PLAY AS: αριστερά / δεξιά ο πολιτισμός· το γράμμα
+; του στα ονόματα των αρχείων των εποχών (age3_name, age4_name). Το
 ; φόρτωμα: load_req = 1 (fog_init, init.asm).
 ;
 ; ΕΚΣΤΡΑΤΕΙΑ (M13): η πρόοδος από το PROG.BIN (ένα byte ανά εκστρατεία: η
@@ -19,6 +20,7 @@
 ; πίστα κατευθείαν, χωρίς μενού.
 
         include "../data/menu.asm"
+        include "../data/title.asm"     ; TITLE_Z
 
 LV_FLAG     equ UNIT_TAB        ; #A5, #5A, εκστρατεία, πίστα (το units_init
                                 ; το σβήνει)
@@ -44,10 +46,13 @@ menu:
         jp lv_go
 .ui:    xor a                   ; καμία κεφαλίδα: η παρτίδα του χάρτη της
         ld (LV_HDR),a           ; εκκίνησης (lv_init)
-        call mn_cls
+        call mn_title
         ld hl,menu_lines
         call mn_text
         ld a,MENU_DEF
+        ld (mn_cul),a
+        call mn_cult
+        ld a,MENU_SEL0
         ld (mn_sel),a
         ld a,255
         ld (mn_held),a          ; ό,τι είναι πατημένο από πριν: όχι
@@ -59,15 +64,19 @@ menu:
         rra
         jr c,.up
         rra
+        jr c,.right
         rra
         jr c,.down
+        ld a,(keyrows + 1)
+        rra
+        jr c,.left
         call mn_rel
         ld a,(mn_sel)           ; επιλογή
         cp MENU_N - 1
         jr z,.load
-        sub MENU_CULT
-        jr nc,.camp
-        add a,MENU_CULT
+        or a
+        jr nz,.camp
+        ld a,(mn_cul)           ; παιχνίδι: ο πολιτισμός
         ld hl,cult_let
         add a,l
         ld l,a
@@ -77,13 +86,26 @@ menu:
         ld (age3_name + 4),a
         ld (age4_name + 4),a
         ret
-.camp:  inc a                   ; 1, 2
-        ld (mn_camp),a
+.camp:  ld (mn_camp),a          ; 1, 2
         xor a                   ; η πίστα από την πρόοδο
         jp lv_go
 .load:  ld a,1
         ld (load_req),a
         ret
+.right: ld c,1                  ; ο πολιτισμός (μόνο στο PLAY AS)
+        jr .cul
+.left:  ld c,MENU_CULT - 1
+.cul:   ld a,(mn_sel)
+        or a
+        jr nz,.k
+        ld a,(mn_cul)
+        add a,c
+        cp MENU_CULT
+        jr c,.c
+        sub MENU_CULT
+.c:     ld (mn_cul),a
+        call mn_cult
+        jr .k
 .up:    ld a,MG_BLANK
         call mn_mark
         ld a,(mn_sel)
@@ -92,7 +114,7 @@ menu:
         ld a,MENU_N
 .u:     dec a
         ld (mn_sel),a
-        jr .mark
+        jp .mark
 .down:  ld a,MG_BLANK
         call mn_mark
         ld a,(mn_sel)
@@ -101,7 +123,54 @@ menu:
         jr c,.d
         xor a
 .d:     ld (mn_sel),a
-        jr .mark
+        jp .mark
+
+; Η εικόνα του μενού (TITLE.BIN, src/make_title.py): συμπιεσμένη στην οθόνη
+; (με τα χρώματα σβηστά όσο φορτώνει), από εκεί στο TITLE_AT και
+; αποσυμπιεσμένη στην οθόνη. Χωρίς το αρχείο: μαύρη.
+TITLE_AT    equ #B000           ; (το UGFX: το units_gfx έτρεξε· οι μονάδες
+                                ; μετά. Ως το #BF00: make_title.py)
+mn_title:
+        ld bc,GA * 256          ; όλα τα pens μαύρα
+        ld e,16
+.p:     dec e
+        out (c),e
+        ld a,HW_BLACK
+        out (c),a
+        ld a,e
+        or a
+        jr nz,.p
+        ld hl,title_name
+        call disk_load
+        di                      ; (το disk_load τις ανοίγει)
+        jr c,.none
+        ld hl,LOAD_AT
+        ld de,TITLE_AT
+        ld bc,TITLE_Z
+        ldir
+        ld hl,TITLE_AT
+        ld de,SCREEN
+        call dzx0
+        jp set_palette
+.none:  call mn_cls
+        jp set_palette
+
+; Το πεδίο του πολιτισμού mn_cul (cult_txt).
+mn_cult:
+        ld a,(mn_cul)
+        ld l,a
+        ld h,0
+        add hl,hl
+        ld e,l
+        ld d,h
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,de               ; 18 x
+        assert CULT_LEN == 18, 'CULT_LEN'
+        ld de,cult_txt
+        add hl,de
+        jp mn_text
 
 ; A = η πίστα (0: η επόμενη της προόδου), mn_camp = η εκστρατεία (1, 2):
 ; η πίστα στον χάρτη, η κεφαλίδα της στο LV_HDR, η οθόνη της. Χωρίς το
@@ -205,15 +274,15 @@ mn_text:
         jr .ln
 
 ; -> NZ και τα πλήκτρα στο keyrows όταν πατήθηκε κάποιο του μενού που δεν
-; κρατιόταν ήδη (πάνω, κάτω, ENTER, COPY, RETURN, SPACE).
+; κρατιόταν ήδη (βελάκια, ENTER, COPY, RETURN, SPACE).
 mn_keys:
         call wait_vsync
         call read_matrix
-        ld a,(keyrows + 0)      ; πάνω (0), κάτω (2), ENTER (6)
-        and #45
+        ld a,(keyrows + 0)      ; πάνω (0), δεξιά (1), κάτω (2), ENTER (6)
+        and #47
         ld c,a
-        ld a,(keyrows + 1)      ; COPY (1)
-        and #02
+        ld a,(keyrows + 1)      ; αριστερά (0), COPY (1)
+        and #03
         or c
         ld c,a
         ld a,(keyrows + 2)      ; RETURN (2)
@@ -339,6 +408,8 @@ mn_pl:      db 0
 mn_sel:     db 0
 mn_held:    db 0
 mn_camp:    db 0
+mn_cul:     db 0                ; ο πολιτισμός του PLAY AS
+title_name: db "TITLE   BIN"
 mn_num:     db 0
 mn_prog:    dw 0
 prog_name:  db "PROG    BIN"
