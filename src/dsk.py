@@ -2,6 +2,7 @@
 
     python3 src/dsk.py build/polis.dsk ΟΝΟΜΑ.ΕΧΤ αρχείο [ΟΝΟΜΑ.ΕΧΤ αρχείο ...]
     python3 src/dsk.py build/polis.dsk --empty SAVE.BIN 41984
+    python3 src/dsk.py build/polis.dsk --zx0 ΟΝΟΜΑ.ΕΧΤ αρχείο   (συμπιεσμένο ZX0)
 
 Ο rasm γράφει τα αρχεία του με κεφαλίδα AMSDOS (128 bytes). Ο δικός μας
 οδηγός (game/disk.asm) διαβάζει blocks κατευθείαν, άρα η κεφαλίδα θα έπεφτε
@@ -13,6 +14,7 @@ KB χρειάζονται, με τις εγγραφές του καταλόγο�
 block b οι λογικοί 2b, 2b + 1· ο κατάλογος τα blocks 0-1 (64 εγγραφές των 32
 bytes, #E5 = ελεύθερη).
 """
+import os
 import sys
 
 DIR_N = 64
@@ -127,6 +129,23 @@ class Dsk:
         open(self.path, 'wb').write(self.d)
 
 
+def zx0(data):
+    """Τα bytes συμπιεσμένα ZX0 από τον ίδιο τον rasm (όπως τα μπλοκ LZX0 του
+    POLIS.BIN): για το dzx0 του game/zx0.asm."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        raw = os.path.join(d, 'raw.bin')
+        open(raw, 'wb').write(data)
+        open(os.path.join(d, 'z.asm'), 'w').write(
+            '        org 0\n        lzx0\n        incbin "%s"\n'
+            '        lzclose\n' % raw)
+        r = subprocess.run(['rasm', 'z.asm', '-o', 'z'], cwd=d,
+                           capture_output=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        return open(os.path.join(d, 'z.bin'), 'rb').read()
+
+
 def main():
     args = sys.argv[1:]
     dsk = Dsk(args.pop(0))
@@ -135,6 +154,10 @@ def main():
             name, size = args[1], int(args[2])
             args = args[3:]
             dsk.add(name, bytes(size))
+        elif args[0] == '--zx0':
+            name, path = args[1], args[2]
+            args = args[3:]
+            dsk.add(name, zx0(open(path, 'rb').read()))
         else:
             name, path = args[0], args[1]
             args = args[2:]

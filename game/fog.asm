@@ -23,12 +23,6 @@ FD_N        equ 26              ; επανασχεδίαση (μετά το buff
 FOG_T       equ 5               ; 1/300 s από την αρχή του καρέ: ως εκεί
         assert FOG + FOG_LEN <= CMP_RED, 'FOG over CMP_RED'
         assert AGE_AT + AGE_MAX <= FOG, 'age file over FOG'
-; Το φόρτωμα ενός αρχείου (ολόκληρα blocks, disk.asm) γράφει ως το LOAD_AT
-; + 6 KB: η αρχή της ομίχλης φυλάγεται στις κρυφές σειρές 7-20 της πρώτης
-; οκτάδας της σελίδας του HUD (age_load, M12).
-FOG_KEEP    equ LOAD_AT + 6 * 1024 - FOG
-FOG_STASH   equ HUD_PAGE + 7 * 80
-        assert FOG_KEEP <= FOG_LEN && FOG_STASH + FOG_KEEP <= PORTAL, 'FOG_STASH'
 
 ; HL = δείκτης χάρτη -> NZ αν το πλακίδιο είναι εξερευνημένο (με την C6
 ; μέσα). Κρατάει BC, DE, HL.

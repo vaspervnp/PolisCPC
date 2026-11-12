@@ -255,7 +255,7 @@ sv_open:
         ld a,(hl)
         or a
         jr nz,.no
-        ld de,sv_name
+.nm:    ld de,sv_name           ; (το mod_camp: άλλο αρχείο)
         ld b,11
 .c:     inc hl
         ld a,(de)
@@ -288,7 +288,7 @@ sv_open:
         pop bc
         inc c
         ld a,c
-        cp SV_EXT
+.ne:    cp SV_EXT               ; (το mod_camp: άλλο πλήθος)
         jr c,.ext
         or a
         ret
@@ -363,6 +363,75 @@ fdc_write:
         ei
         ret
 
+; Το τέλος μιας πίστας της εκστρατείας (M13, lv_after στο bank7.asm): η
+; πρόοδος στο PROG.BIN, στο LV_FLAG η πίστα που ακολουθεί (menu.asm), και
+; το παιχνίδι από την αρχή: το POLIS.BIN ξανά από τη δισκέτα στο #0040 —
+; ό,τι κάνει το RUN"POLIS — και jp start. Το διάβασμα περνάει πάνω από τον
+; κύριο κώδικα όπου ζουν το fdc_read, το l_ts· τα bytes τους είναι ίδια
+; (δεν αλλάζουν ποτέ), και οι διακοπές στο ei/ret ως τότε.
+mod_camp:
+        ld a,RAM_CMP
+        call setram
+        ld hl,lv_prog
+        ld de,SVM_BUF + 2048    ; ο τομέας: η πρόοδος στην αρχή του
+        ld bc,2
+        ldir
+        ld hl,LV_FLAG
+        ld a,(lv_next)
+        or a
+        jr z,.menu
+        ld (hl),#A5
+        inc hl
+        ld (hl),#5A
+        inc hl
+        ld a,(lv_camp)
+        ld (hl),a
+        inc hl
+        ld a,(lv_next)
+.menu:  ld (hl),a
+        ld a,RAM_BASE
+        call setram
+        ld hl,sv_prog
+        ld a,1
+        call .open
+        jr c,.boot              ; (χωρίς το αρχείο: χωρίς πρόοδο)
+        call sv_put
+.boot:  ld hl,#FB + #C9 * 256   ; ei / ret στο #0038
+        ld (#0038),hl
+        ld hl,sv_polis
+        ld a,2
+        call .open
+        jr c,$                  ; (η δισκέτα χωρίς το παιχνίδι)
+        call sv_get             ; ο πρώτος: η κεφαλίδα AMSDOS (128 bytes)
+        ld hl,(SVM_BUF + 2048 + 24)     ; το μήκος -> πόσοι τομείς ακόμα
+        ld de,128 - 1
+        add hl,de
+        ld a,h
+        srl a
+        ld (sv_n),a
+        ld hl,SVM_BUF + 2048 + 128
+        ld de,#0040
+        ld bc,512 - 128
+.cp:    ldir
+        ld a,(sv_n)
+        or a
+        jr z,.go
+        dec a
+        ld (sv_n),a
+        push de
+        call sv_get
+        pop de
+        ld hl,SVM_BUF + 2048
+        ld bc,512
+        jr .cp
+.go:    di
+        ld bc,MOTOR
+        out (c),a               ; (A = 0)
+        jp start
+.open:  ld (sv_open.nm + 1),hl  ; HL = όνομα, A = extents
+        ld (sv_open.ne + 1),a
+        jp sv_open
+
 ; Τα κομμάτια του ρεύματος: τράπεζα, από, πόσα (0: τέλος).
 sv_seg: db RAM_BASE
         dw sv_sig, SIG_LEN
@@ -380,6 +449,9 @@ sv_seg: db RAM_BASE
 sv_sig:     db "POLIS-M12"      ; η υπογραφή: πρώτη στο αρχείο
 SIG_LEN     equ $ - sv_sig
 sv_name:    db "SAVE    BIN"
+sv_prog:    db "PROG    BIN"
+sv_polis:   db "POLIS   BIN"
+sv_n:       db 0
 sv_p:       dw 0                ; η θέση στον buffer του τομέα
 sv_k:       db 0                ; ο επόμενος τομέας του αρχείου
 sv_blk:     ds 48               ; τα blocks του αρχείου, 3 extents

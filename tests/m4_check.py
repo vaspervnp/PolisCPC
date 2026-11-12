@@ -46,7 +46,7 @@ class Game:
             self.c.poke(self.sym['AI_ON'], 0)   # έλεγχοι M4-M9 μόνοι τους
         if not fog:                     # και χωρίς ομίχλη (M11): όλα
             self.c.poke(self.sym['FOG_ON'], 0)  # εξερευνημένα
-        M.wait_phase(self.c, self.sym, 6)
+        M.wait_phase(self.c, self.sym, 6, limit_ms=8000)   # (M13: ~4 s)
         self.times = []
         self.scrolled = []              # κύλησε η κάμερα σε εκείνο το καρέ;
         self.ok = True

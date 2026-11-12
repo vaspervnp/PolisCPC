@@ -491,7 +491,9 @@ pr_xor: ld a,(ix+7)
         ret
 
 ; Στην αρχή του καρέ μονάδων: τα βέλη που ζωγραφίστηκαν, σβήνουν (XOR ξανά).
+; (Και το τέλος της πίστας μιας εκστρατείας, lv_after.)
 proj_off:
+        call lv_after
         push ix
         ld ix,ARROWS
         ld b,PR_N
@@ -506,6 +508,48 @@ proj_off:
         add ix,de
         djnz .l
         pop ix
+        ret
+
+; Το τέλος μιας πίστας της εκστρατείας (M13), στο κάθε καρέ μονάδων (και
+; σταματημένο το παιχνίδι): LV_PAUSE καρέ με το περιθώριο πράσινο ή κόκκινο,
+; και μετά — νίκη: η πρόοδος στην επόμενη, και η επόμενη (μετά την 4η, το
+; μενού· η εκστρατεία ξανά από την αρχή)· ήττα: η ίδια πίστα ξανά. Το
+; save_req = 2: ο κύριος βρόχος καλεί το mod_camp (savegame.asm), που γράφει
+; την πρόοδο και ξαναφορτώνει το παιχνίδι.
+LV_PAUSE     equ 75              ; 3 s
+lv_after:
+        ld a,(game_end)
+        or a
+        ret z
+        ld a,(lv_camp)
+        or a
+        ret z
+        ld hl,lv_wait
+        inc (hl)
+        ld a,(hl)
+        cp LV_PAUSE
+        ret nz
+        ld a,(lv_num)
+        ld c,a
+        ld a,(game_end)
+        dec a
+        jr nz,.go               ; ήττα: η ίδια
+        inc c                   ; νίκη: η επόμενη
+        ld a,c
+        cp 5
+        jr c,.p
+        ld c,0                  ; τέλος: το μενού, και η πρόοδος στην 1
+        ld a,1
+.p:     ld hl,lv_prog - 1
+        ld de,(lv_camp - 1)     ; (D = lv_camp)
+        ld e,d
+        ld d,0
+        add hl,de
+        ld (hl),a
+.go:    ld a,c
+        ld (lv_next),a
+        ld a,2
+        ld (save_req),a
         ret
 
 ; A = όποια πέθανε (255: καμία) -> στο dq, για το died_flush.
@@ -1484,8 +1528,8 @@ bld_fight:
 ; ανοιχτή), δυτικά ως το i = 44, νότια ως το j = 56, και από εκεί ίσια στο
 ; κτίριο. (Με flow field έμπαιναν σε κοιλώματα του δάσους όπου η ακολούθηση
 ; τοίχου έκανε κύκλους· και θα έπαιρναν τα πεδία των εντολών του παίκτη.)
-ai_route:   db 57, 44,  44, 44,  44, 56
-AI_ROUTE_N  equ ($ - ai_route) / 2
+; (ai_route: στο lv_c7, από την κεφαλίδα της πίστας — M13)
+AI_ROUTE_N  equ 3
 
 ; IX -> A = το flow field (1, 2) που πάει στο U_TCELL της (NZ), ή Z.
 fld_of: ld a,(field_tc)
@@ -1651,15 +1695,31 @@ AI_PER      equ 25              ; καρέ μονάδων ανά σκέψη
 AI_VIL      equ 10
 AI_VIL0     equ 5
 AI_HOUSES   equ 8
-AI_FIRST    equ 180             ; s ώς το πρώτο κύμα
 AI_GAP      equ 60
 AI_WMAX     equ 16
-HOME_I      equ AI_TC_I + 2
-HOME_J      equ AI_TC_J + 2
 HOME_R      equ 18
 
+; Η ΠΙΣΤΑ (M13): ό,τι ως το M12 ήταν σταθερές — από την κεφαλίδα της, ένα
+; κομμάτι, με τη σειρά της (data/level.asm, από το H_ROUTE ως το H_TEXT·
+; το γράφει το lv_init του init.asm).
+lv_c7:
+ai_route:   ds 6                ; τα 3 σημεία των κυμάτων (i, j)
+ai_spots:   ds 24               ; οι θέσεις των κτιρίων του (i0, j0)
+AI_NSP      equ 12
+lv_home:    ds 2                ; το «σπίτι» του (i, j): δίπλα στο Κέντρο του
+ai_cool:    dw 0                ; s ώς το (πρώτο) κύμα
+lv_cult:    db 0
+lv_camp:    db 0                ; η εκστρατεία (1, 2), ή 0
+lv_num:     db 0                ; η πίστα της (1-4)
+lv_prog:    dw 0                ; η πρόοδος (PROG.BIN): η επόμενη ανά εκστρατεία
+lv_obj:     db 0                ; ο στόχος (OBJ_*), και το όριό του
+lv_arg:     dw 0
+        assert $ - lv_c7 == H_TEXT - H_ROUTE, 'lv_c7'
+lv_sec:     dw 0                ; τα δευτερόλεπτα της πίστας (OBJ_SURVIVE)
+lv_wait:    db 0                ; καρέ μετά το τέλος (lv_after)
+lv_next:    db 0                ; η πίστα που ακολουθεί (0: το μενού)
+
 ai_t:       db 0
-ai_cool:    dw AI_FIRST
 ai_wave:    db 6
 ai_att:     db 0                ; κύμα σε εξέλιξη
 ai_rr:      db 0
@@ -1693,11 +1753,8 @@ ai_fdt:     db 0                ; δευτερόλεπτα χωρίς πρόοδ
 
 ; τροφή, ξύλο, χρυσός: η σειρά των χωρικών
 ai_mix:     db 0, 2, 0, 1, 0, 2, 0, 1   ; (ξύλο μόνο για σπίτια, στρατώνα)
-; οι θέσεις των κτιρίων (i0, j0), γύρω από το Κέντρο (58, 27)
-; (με 2 πλακίδια περιθώριο: κανένα στενό πέρασμα ανάμεσά τους)
-ai_spots:   db 64, 23,  64, 28,  53, 22,  58, 22,  65, 33,  63, 18
-            db 68, 18,  69, 23,  69, 28,  56, 17,  70, 33,  73, 14
-AI_NSP      equ ($ - ai_spots) / 2
+; (ai_spots: οι θέσεις των κτιρίων, γύρω από το Κέντρο, με 2 πλακίδια
+; περιθώριο — στο lv_c7)
 
 ; Από το bld_tick, σε κάθε καρέ μονάδων.
 ai_tick:
@@ -1729,7 +1786,10 @@ ai_tick:
         cp AI_PER
         ret c
         ld (hl),0
-        ld hl,(ai_cool)         ; ένα δευτερόλεπτο
+        ld hl,(lv_sec)          ; ένα δευτερόλεπτο
+        inc hl
+        ld (lv_sec),hl
+        ld hl,(ai_cool)
         ld a,h
         or l
         ret z
@@ -1830,12 +1890,18 @@ ai_cls: call ord_get
         ld a,2
         ret nz
         call unit_sp
+        ld a,(lv_home)
+        ld c,a
         ld a,(sp_ui)
-        sub HOME_I
+        sub c
         call abs_a
         ld c,a
+        ld a,(lv_home + 1)
+        push bc
+        ld b,a
         ld a,(sp_uj)
-        sub HOME_J
+        sub b
+        pop bc
         call abs_a
         cp c
         jr nc,.m
@@ -1919,13 +1985,27 @@ ai_end: ld a,(rq_n)
         jr nz,.ai
         ld a,2                  ; ήττα
         jr .end
-.ai:    ld a,(an_pop)
+.ai:    ld a,(lv_obj)           ; ο στόχος της πίστας (M13): η τιμή του ≥
+        or a                    ; lv_arg
+        jr z,.kill
+        ld hl,(lv_sec)          ; OBJ_SURVIVE: τα δευτερόλεπτα
+        dec a
+        jr z,.cmp
+        ld hl,(hud_val + 4)     ; OBJ_GOLD: ο χρυσός
+        dec a
+        jr z,.cmp
+        ld hl,(hud_val + 10)    ; OBJ_AGE: η εποχή
+.cmp:   ld de,(lv_arg)
         or a
+        sbc hl,de
+        jr nc,.win
+.kill:  ld a,(an_pop)           ; και πάντα: ο αντίπαλος χωρίς μονάδες και
+        or a                    ; χωρίς Κέντρο
         ret nz
         ld a,(ab_tc)
         inc a
         ret nz
-        ld a,1                  ; νίκη
+.win:   ld a,1                  ; νίκη
 .end:   ld (game_end),a
         ld a,1
         ld (paused),a

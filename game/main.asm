@@ -172,12 +172,13 @@ frame_work:
 ; Η αποθήκευση (savegame.asm): από τις κρυφές σειρές της σελίδας του HUD
 ; στην οθόνη, εκεί τρέχει, και μετά η οθόνη από την αρχή.
 save_go:
-        xor a
-        ld (save_req),a
         ld hl,SVM_STORE
         ld de,SVM
         ld bc,SVM_LEN
         ldir
+        ld hl,save_req          ; 2: το τέλος μιας πίστας της εκστρατείας
+        dec (hl)                ; (M13: δεν γυρίζει)
+        jp nz,mod_camp
         call mod_save
         ld a,1
         ld (redraw),a
@@ -310,7 +311,8 @@ cam_x:      dw 98               ; bytes κόσμου, ζυγό — η πόλη �
 cam_y:      dw 303              ; γραμμές κόσμου, ≡ 3 (mod 4)
 cam_h:      dw 0                ; (cam_x - XOFF) / 2
 redraw:     db 0
-save_req:   db 0                ; 1: σώσε την παρτίδα (V, M12)
+save_req:   db 0                ; 1: σώσε την παρτίδα (V, M12)· 2: η
+                                ; επόμενη πίστα (lv_after, M13)
 load_req:   db 0                ; 1: το μενού διάλεξε φόρτωμα (M12)
 phase:      db 0
 scr:        dw 0
@@ -576,19 +578,8 @@ code_end:
         endif                   ; τράπεζες — ο κώδικας της μπορεί να το περάσει)
 
 ; Από εδώ μόνο για την εκκίνηση: μπορούν να περάσουν το #4000.
-; ------------------------------------------------------------ η C7 (M8)
-; Ο κώδικας της τράπεζας C7 (bank7.asm): συναρμολογημένος για το C7_CODE,
-; αποθηκευμένος εδώ — πριν από τα συμπιεσμένα, που ο rasm τα μετακινεί — και
-; στην C7 από το units_gfx (μαζί με τα sprites).
-C7_CODE     equ #6800           ; μετά τα μεταγλωττισμένα (CMP_LEN)
+C7_CODE     equ #6800           ; ο κώδικας της C7: μετά τα μεταγλωττισμένα
         assert #4000 + CMP_LEN <= C7_CODE, 'compiled past C7_CODE'
-c7_phys:
-        org C7_CODE,c7_phys
-        include "bank7.asm"
-c7_end:
-        org c7_phys + c7_end - C7_CODE
-C7_LEN      equ c7_end - C7_CODE
-        assert C7_CODE + C7_LEN <= C7_HP, 'C7 code past tables'
 
 ; Η εκκίνηση (boot.asm): συναρμολογημένη για το BOOT, αντιγράφεται εκεί από
 ; το start. Πριν από τα συμπιεσμένα (ο rasm μετράει τις ετικέτες μετά από
@@ -691,6 +682,19 @@ cmp_z:
         incbin "../data/compiled.bin"
         lzclose
 
+; Ο κώδικας της C7 (bank7.asm, M13: συμπιεσμένος). Τον συμπιέζει ο rasm από
+; το build/c7.bin, που το γράφει ένα πρώτο πέρασμα (-DC7RAW, build.sh): ο
+; ίδιος κώδικας συναρμολογείται και πιο κάτω (για τις ετικέτες), έξω από
+; το POLIS.BIN. Το units_gfx τον αποσυμπιέζει στην οθόνη και από εκεί στην C7.
+        ifndef C7RAW
+c7_z:
+        lzx0
+        incbin "../build/c7.bin"
+        lzclose
+        else
+c7_z        equ 0
+        endif
+
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB). ΤΕΛΕΥΤΑΙΟΣ:
 ; αποσυμπιέζεται πριν από οτιδήποτε, άρα μπορεί να περνάει πάνω από το BOOT
 ; (#7A30) ως το #8000 — όλα τα άλλα όχι (build.sh).
@@ -705,6 +709,7 @@ map_z:
 
 end:
 
+
 ; Το «end < #4000» ΔΕΝ ελέγχεται εδώ: ο rasm αποτιμά τις ετικέτες μετά από
 ; μπλοκ LZX0 με το ασυμπίεστο μέγεθος. Το ελέγχει το build.sh στο πραγματικό
 ; POLIS.BIN.
@@ -716,8 +721,34 @@ end:
         ifdef SNA
         run start
         else
+        ifndef C7RAW
         save 'POLIS.BIN',start,end-start,DSK,'build/polis.dsk'
+        endif
         endif
 
 ; Τα αρχεία των εποχών (ένα ανά πολιτισμό) και του οπλίτη μπαίνουν στη
 ; δισκέτα από το game/build.sh (src/dsk.py), χωρίς κεφαλίδα AMSDOS (M12).
+
+; ------------------------------------------------------------ η C7 (M8)
+; Ο κώδικας της τράπεζας C7 (bank7.asm), συναρμολογημένος για το C7_CODE, σε
+; ΔΙΚΟ ΤΟΥ χώρο μνήμης του rasm (M13): στο POLIS.BIN μπαίνει συμπιεσμένος
+; (c7_z, από το build/c7.bin του πρώτου περάσματος). Στο snapshot πέφτει
+; στην C7, που την ξαναγράφει έτσι κι αλλιώς το units_gfx. ΤΕΛΕΥΤΑΙΟΣ: μετά
+; από εδώ ο rasm γράφει στον χώρο του.
+        ifdef SNA
+        bank 7
+        else
+        bank
+        endif
+        org C7_CODE
+        include "bank7.asm"
+c7_end:
+C7_LEN      equ c7_end - C7_CODE
+        assert C7_CODE + C7_LEN <= C7_HP, 'C7 code past tables'
+        ifndef SNA
+        ifdef C7RAW
+        save 'build/c7.bin',C7_CODE,C7_LEN      ; -> c7_z (το δεύτερο πέρασμα)
+        else
+        save 'build/c7chk.bin',C7_CODE,C7_LEN   ; (build.sh: ίδιο με το c7.bin)
+        endif
+        endif

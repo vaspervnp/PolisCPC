@@ -76,10 +76,9 @@ units_gfx:
         ld hl,cmp_z
         ld de,SCREEN
         call dzx0
-        ld hl,c7_phys           ; και ο κώδικας της C7 (bank7.asm) μετά τα
-        ld de,SCREEN + C7_CODE - #4000  ; sprites
-        ld bc,C7_LEN
-        ldir
+        ld hl,c7_z              ; και ο κώδικας της C7 (bank7.asm) μετά τα
+        ld de,SCREEN + C7_CODE - #4000  ; sprites (συμπιεσμένος, M13)
+        call dzx0
         ld a,RAM_CMP
         call setram
         ld hl,SCREEN

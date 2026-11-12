@@ -84,6 +84,22 @@ def reference(world, cam_x, cam_y):
     return out
 
 
+def wait_menu(c):
+    """Μετά το RUN"POLIS: ως το μενού (M12) ολόκληρο — τρέχει το παιχνίδι
+    (ο χειριστής διακοπής του στο #0038, όχι το BASIC) και το βέλος είναι
+    στη θέση του."""
+    import make_menu as MN
+    y = MN.ITEM_Y0 + MN.DEFAULT * MN.ITEM_DY
+    a = 0xC000 + (y & 7) * 0x800 + (y >> 3) * 80 + MN.ITEM_X - 2 * MN.CELL
+    jp = bytes([0xC3]) + symbols()['INT_HANDLER'].to_bytes(2, 'little')
+    arrow = MN.left_byte(MN.PEN_HI) >> 1        # «.#...»: το δεξί pixel
+    for f in range(2000):
+        c.run_frames(5)
+        if c.read_ram(0x38, 3) == jp and c.peek(a) == arrow:
+            break
+    c.run_frames(2)
+
+
 def wait_phase(c, sym, want, limit_ms=4000):
     t = 0
     while c.peek(sym['PHASE']) != want:
@@ -153,7 +169,7 @@ def main():
     c.run_frames(150)
     c.insert_disc(os.path.join(BUILD, 'polis.dsk'))
     c.type_text('RUN"POLIS\n')
-    c.run_frames(250)                   # το μενού (M12): οι Έλληνες
+    wait_menu(c)                        # το μενού (M12): οι Έλληνες
     c.tap_key(KEY_RETURN)
     wait_phase(c, sym, 2, limit_ms=8000)
     import scene                        # από τη δισκέτα: με την ομίχλη (M11)

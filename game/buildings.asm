@@ -64,12 +64,8 @@ CAND_MAX    equ 8
 UNITS_LIVE  equ 80              ; οι υπόλοιπες ως 128: ελεύθερες θέσεις (M10: 48, για τις δύο ομάδες)
 TEAM_FREE   equ 255
 FOUND_BYTE  equ (4 << 4) | BLD_RES ; θεμέλιο: χώμα τραχύ + πλακίδιο κτιρίου
-TC_I        equ 30              ; το Κέντρο Πόλης του παίκτη
-TC_J        equ 58
-AI_TC_I     equ 58              ; του αντιπάλου (M10)
-AI_TC_J     equ 27
-AI_X        equ 242             ; οι μονάδες του: πάνω-αριστερά (boot.asm)
-AI_Y        equ 350
+; (τα δύο Κέντρα Πόλης και οι μονάδες τους: από την κεφαλίδα της πίστας,
+; lv_hdr — M13)
 
 ; ------------------------------------------------------------ εκκίνηση
 
@@ -794,51 +790,41 @@ bld_tick:
         ret
 
 ; Η Εποχή του Χαλκού τελείωσε (res_end): οι εικόνες της από τη δισκέτα
-; (disk.asm), και η εποχή στους πίνακες και στα κτίρια (age_apply).
+; (disk.asm, στην οθόνη, και αποσυμπιεσμένες στην C6), και η εποχή στους
+; πίνακες και στα κτίρια (age_apply).
 age_load:
         ld hl,age_req
         ld a,(hl)
         ld (hl),0
-        push af
-        ld hl,FOG               ; η αρχή της ομίχλης, που θα τη σβήσουν τα
-        ld de,FOG_STASH         ; blocks του αρχείου: στη σελίδα του HUD
-        ld bc,FOG_KEEP          ; (M12)
-        ld a,RAM_BASE
-        call bcopy_to
-        pop af
         cp 3
         ld hl,age4_name         ; Σιδήρου: μόνο οι εικόνες
         jr nz,.ld
-        ld hl,hopl_name         ; Χαλκού: ο οπλίτης, στην C6 (εκεί που θα
-        call disk_load          ; έρθουν οι εικόνες), και από εκεί στη
-        jr c,.back              ; θέση 3 της C5
-        ld hl,LOAD_AT
-        ld de,SPR_BASE + 3 * SPR_STRIDE
-        ld bc,SPR_STRIDE
+        ld hl,hopl_name         ; Χαλκού: ο οπλίτης, στη θέση 3 της C5
+        call disk_load
+        ret c
         ld a,RAM_SPR
-        call bcopy_to
+        ld de,SPR_BASE + 3 * SPR_STRIDE
+        call .unz
         ld hl,age3_name
 .ld:    call disk_load
-        jr c,.back
+        ret c
+        ld a,RAM_RES            ; οι εικόνες και ο πίνακας στην C6
+        ld de,AGE_AT
+        call .unz
         ld hl,AGE_AT            ; ο πίνακας του πολιτισμού -> C7 (age_apply)
         ld de,age_tab
         ld bc,AGE_TAB_LEN
         ld a,RAM_CMP
-        call bcopy_to           ; (NC)
-.back:  push af
-        ld a,RAM_BASE           ; η ομίχλη πίσω: C0 -> C6
-        ld (BC_SRC),a
-        ld hl,FOG_STASH
-        ld de,FOG
-        ld bc,FOG_KEEP
-        ld a,RAM_RES
         call bcopy_to
-        ld a,RAM_RES
-        ld (BC_SRC),a
-        pop af
-        ret c
+        ld a,1                  ; η οθόνη ήταν ο ενδιάμεσος χώρος (M13)
+        ld (redraw),a
         ld hl,age_apply
         jp far7
+.unz:   call setram             ; A = τράπεζα, DE = προορισμός: από την
+        ld hl,LOAD_AT           ; οθόνη (συμπιεσμένο)
+        call dzx0
+        ld a,RAM_BASE
+        jp setram
 
 ; HL -> DE, BC bytes, από την τράπεζα BC_SRC στην A (rst 8). Γυρίζει με την
 ; C0 και NC.

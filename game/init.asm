@@ -10,8 +10,56 @@
 
 ; ---- από το game/units.asm
 
+; Η πίστα (M13): η κεφαλίδα της από το LV_HDR (το μενού), αλλιώς η
+; παρτίδα του χάρτη της εκκίνησης (lv_def), στο lv_h — για το
+; units_init, το bld_init, το fog_init, το rnd_pos. Και από εκεί: η κάμερα,
+; οι πόροι, ο πολιτισμός, και ό,τι κρατάει η C7 (lv_c7: ο αντίπαλος, ο
+; στόχος, η εκστρατεία).
+lv_init:
+        ld hl,LV_HDR
+        ld a,(hl)
+        cp #A5
+        jr nz,.def
+        inc hl
+        ld a,(hl)
+        dec hl
+        cp #5A
+        jr z,.cp
+.def:   ld hl,lv_def
+.cp:    ld de,lv_h
+        ld bc,H_TEXT
+        ldir
+        xor a
+        ld (LV_HDR),a
+        ld a,RAM_CMP
+        call setram
+        ld hl,lv_h + H_ROUTE
+        ld de,lv_c7
+        ld bc,H_TEXT - H_ROUTE
+        ldir
+        ld a,RAM_BASE
+        call setram
+        ld hl,(lv_h + H_CAM)
+        ld (cam_x),hl
+        ld hl,(lv_h + H_CAM + 2)
+        ld (cam_y),hl
+        ld hl,lv_h + H_RES
+        ld de,hud_val
+        ld bc,8
+        ldir
+        ld a,(lv_h + H_CULT)
+        or a
+        ret z
+        ld (age3_name + 4),a
+        ld (age4_name + 4),a
+        ret
+
+        include "../data/lvdef.asm"
+lv_h:     ds H_TEXT
+
 ; Οι 128 μονάδες.
 units_init:
+        call lv_init
         ld hl,UNIT_TAB          ; όλα μηδέν
         ld de,UNIT_TAB + 1
         ld bc,(UNITS + 2) * U_SIZE - 1
@@ -45,8 +93,8 @@ units_init:
         ld a,(hl)
         ld (ix+U_BASE+1),a
         ld a,c
-        ld hl,TOWN_X
-        ld de,TOWN_Y
+        ld hl,(lv_h + H_TOWN)
+        ld de,(lv_h + H_TOWN + 2)
         cp TOWN_UNITS
         jr c,.town
         sub TOWN_UNITS          ; οι επόμενες TOWN_UNITS: η πόλη του
@@ -55,8 +103,8 @@ units_init:
         jr nc,.far
         sub TOWN_UNITS
         ld (ix+U_TEAM),1
-        ld hl,AI_X
-        ld de,AI_Y
+        ld hl,(lv_h + H_AIU)
+        ld de,(lv_h + H_AIU + 2)
 .town:  ld b,a                  ; οι πρώτες: στην πόλη, 4 στήλες ανά 16
         and 3                   ; bytes
         add a,a
@@ -148,20 +196,26 @@ rnd_pos:
         call min_hl_de
         ld (ix+U_WY),l
         ld (ix+U_WY+1),h
-        ld de,280               ; μέσα στο [80,200) x [280,470): ξανά
-        or a
+        ld de,(lv_h + H_TOWN + 2)     ; μέσα στο [x - 26, x + 94) x
+        or a                    ; [y - 50, y + 140) γύρω από την πόλη: ξανά
         sbc hl,de
-        ret c
+        ld de,50
+        add hl,de
+        bit 7,h
+        ret nz
         ld de,190
         or a
         sbc hl,de
         ret nc
         ld l,(ix+U_WX)
         ld h,(ix+U_WX+1)
-        ld de,80
+        ld de,(lv_h + H_TOWN)
         or a
         sbc hl,de
-        ret c
+        ld de,26
+        add hl,de
+        bit 7,h
+        ret nz
         ld de,120
         or a
         sbc hl,de
@@ -283,13 +337,11 @@ bld_init:
         ld (bk_prev),a
         ld (rq_n),a
         xor a                   ; το Κέντρο Πόλης, έτοιμο
-        ld d,TC_I
-        ld e,TC_J
+        ld de,(lv_h + H_TC)   ; (D = i, E = j)
         ld c,1
         call bld_new
         xor a                   ; και του αντιπάλου (M10)
-        ld d,AI_TC_I
-        ld e,AI_TC_J
+        ld de,(lv_h + H_AITC)
         ld c,1
         call bld_new
         ld (iy+B_OWN),1
@@ -376,21 +428,29 @@ fog_init:
         ldir
         ld a,RAM_BASE
         jp setram
-.on:    ld d,TC_I - 2
-.i:     ld e,TC_J - 2
-.j:     push de
+.on:    ld de,(lv_h + H_TC)   ; 3 x 3 σημεία ανά 4 από το (i - 2, j - 2)
+        dec d
+        dec d
+        ld b,3
+.i:     push bc
+        ld a,(lv_h + H_TC)
+        sub 2
+        ld e,a
+        ld b,3
+.j:     push bc
+        push de
         call fog_reveal
         pop de
+        pop bc
         ld a,e
         add a,4
         ld e,a
-        cp TC_J + 7
-        jr c,.j
+        djnz .j
+        pop bc
         ld a,d
         add a,4
         ld d,a
-        cp TC_I + 7
-        jr c,.i
+        djnz .i
         xor a
 .u:     push af
         call idx_ix

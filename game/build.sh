@@ -14,9 +14,13 @@ set -e
 cd "$(dirname "$0")/.."
 mkdir -p build
 rm -f build/polis.dsk
+# Πρώτο πέρασμα (M13): μόνο ο κώδικας της C7 στο build/c7.bin, για να μπει
+# συμπιεσμένος στο POLIS.BIN από τα κανονικά περάσματα.
+rasm game/main.asm -DC7RAW=1 -o build/c7raw -sz > /dev/null
 rasm game/main.asm -o build/polis -s -sz
 rasm game/main.asm -DSNA=1 -o build/polis -sz -v2 -ss
 rasm game/main.asm -DSNA=1 -DBARS=1 -o build/m0_bars -sz -v2
+cmp -s build/c7.bin build/c7chk.bin || { echo 'ο κώδικας της C7 άλλαξε ανάμεσα στα περάσματα (build/c7.bin)'; exit 1; }
 # Το POLIS.BIN φορτώνεται στο #0040. Ό,τι χρειάζεται το παιχνίδι όσο τρέχει
 # (ως το code_end) πρέπει να τελειώνει πριν το παράθυρο τράπεζας #4000· τα
 # συμπιεσμένα της εκκίνησης ακολουθούν και μπορούν να το περάσουν (κύρια RAM,
@@ -45,9 +49,12 @@ assert map_z <= 0x7A30, 'το POLIS.BIN φτάνει στο BOOT (#7A30, main.as
 print('ως τον χάρτη: #%04X (ελεύθερα ώς το BOOT: %d· ως το #8000: %d)' % (map_z - 1, 0x7A30 - map_z, 0x8000 - end))
 PY
 # Τα αρχεία χωρίς κεφαλίδα AMSDOS (M12, src/dsk.py): οι εποχές ανά
-# πολιτισμό και ο οπλίτης.
+# πολιτισμό και ο οπλίτης, συμπιεσμένα ZX0 (M13: τα φορτώνει το disk_load
+# στην οθόνη, και το dzx0 στη θέση τους).
 python3 src/dsk.py build/polis.dsk \
-    $(for c in E G B A R P F K; do echo AGE3$c.BIN data/age3$c.bin AGE4$c.BIN data/age4$c.bin; done) \
-    HOPL.BIN data/c5_slot3.bin \
+    $(for c in E G B A R P F K; do echo --zx0 AGE3$c.BIN data/age3$c.bin --zx0 AGE4$c.BIN data/age4$c.bin; done) \
+    --zx0 HOPL.BIN data/c5_slot3.bin \
+    $(for c in G E; do for n in 1 2 3 4; do echo --zx0 L$c$n.BIN data/l$(echo $c | tr GE ge)$n.bin; done; done) \
+    --empty PROG.BIN 1024 \
     --empty SAVE.BIN 43008
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

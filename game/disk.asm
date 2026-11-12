@@ -7,28 +7,24 @@
 ; τομείς 2b, 2b + 1· λογικός τομέας L = τροχιά L / 9, τομέας #C1 + L mod 9).
 ; Ένα extent (ως 16 KB).
 ;
-; Στη ζώνη LOAD_AT της C6 (#4A00): τα αρχεία των εποχών και του οπλίτη
-; είναι ΧΩΡΙΣ κεφαλίδα AMSDOS (src/dsk.py, M12). Κάθε block ολόκληρο: το
-; αρχείο πρέπει να χωράει ως το CMP_RED μαζί με την ουρά — και η ουρά
-; σβήνει την αρχή της ομίχλης (FOG), που το age_load κρατάει στην άκρη.
-;
-; Χωρίς διακοπές όσο διαβάζεται ένας τομέας (~16 ms, 32 µs ανά byte): το
-; split του HUD χάνει κάποια καρέ — είναι το φόρτωμα της νέας εποχής.
+; Στην ΟΘΟΝΗ (LOAD_AT, M13): τα αρχεία (src/dsk.py) είναι χωρίς κεφαλίδα
+; AMSDOS και συμπιεσμένα ZX0· όποιος τα φορτώνει τα αποσυμπιέζει από εκεί
+; στη θέση τους (age_load), και η οθόνη ξαναζωγραφίζεται. Κάθε block
+; ολόκληρο, ως 16 (ένα extent).
 
         include "../data/age3.asm"      ; AGE_AT, AGE_TAB_LEN, cult_let
+        include "../data/level.asm"     ; η κεφαλίδα της πίστας (M13): H_*
+LV_HDR      equ BLD_TAB         ; εκεί την αφήνει το μενού (menu.asm)
 
 FDC_MSR     equ #FB7E           ; κατάσταση (με το B = #FB)
 MOTOR       equ #FA7E
-LOAD_AT     equ AGE_AT          ; (M12: τα αρχεία χωρίς κεφαλίδα, src/dsk.py)
+LOAD_AT     equ SCREEN          ; (M13: συμπιεσμένα, χωρίς κεφαλίδα — src/dsk.py)
 
-        assert LOAD_AT + 6 * 1024 <= CMP_RED, 'AGE3.BIN: 6 blocks'
 
 ; HL = όνομα (11 χαρακτήρες) -> το αρχείο στη C6 στο LOAD_AT. Carry αν δεν
 ; βρέθηκε. Επιστρέφει με την C0 και τις διακοπές ανοιχτές.
 disk_load:
         push hl
-        ld a,RAM_RES
-        call setram
         ld bc,MOTOR
         ld a,1
         out (c),a

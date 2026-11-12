@@ -117,7 +117,7 @@ def boot(disc, keys):
     c.run_frames(150)
     c.insert_disc(disc)
     c.type_text('RUN"POLIS\n')
-    c.run_frames(250)
+    M.wait_menu(c)
     for k in keys:
         c.key_down(k)
         c.run_frames(4)
@@ -137,12 +137,12 @@ def menu_image():
                 if b == '#':
                     for dy in (0, 1):
                         img[y + 2 * r + dy][2 * xb + i] = pen
-    items = [MN.NAMES[cl] for cl, _ in MB.CULTURES] + [MN.LOAD]
+    items = MN.items()                  # (M13: και οι εκστρατείες)
     title_x = (80 - MN.CELL * len(MN.TITLE)) // 2
     for k, ch in enumerate(MN.TITLE):
         put(ch, title_x + MN.CELL * k, MN.TITLE_Y, MN.PEN_HI)
     for n, text in enumerate(items):
-        pen = MN.PEN_HI if text == MN.LOAD else MN.PEN_TEXT
+        pen = MN.PEN_TEXT if n < len(MB.CULTURES) else MN.PEN_HI
         for k, ch in enumerate(text):
             put(ch, MN.ITEM_X + MN.CELL * k, MN.ITEM_Y0 + n * MN.ITEM_DY, pen)
     put('>', MN.ITEM_X - 2 * MN.CELL, MN.ITEM_Y0 + MN.DEFAULT * MN.ITEM_DY,
