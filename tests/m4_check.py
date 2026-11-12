@@ -9,7 +9,7 @@
    πρέπει να είναι ΑΚΡΙΒΩΣ αυτές οι 6.
 2. ΕΝΤΟΛΗ. Ο κέρσορας αλλού, RETURN: οι 6 περπατάνε, φτάνουν και
    ΣΤΑΜΑΤΑΝΕ ακριβώς στις θέσεις του σχηματισμού, με την όψη του τελευταίου
-   τους βήματος (υπολογισμένη εδώ, με τον ίδιο κανόνα βήματος).
+   τους βήματος (όπως το παρατηρεί ο έλεγχος καρέ προς καρέ).
 3. ΟΙ ΑΛΛΕΣ. Στο ίδιο διάστημα, ≥ 100 από τις υπόλοιπες έχουν κινηθεί
    εκτός οθόνης (περιπλάνηση, τεμαχισμένη απόφαση).
 4. ΧΡΟΝΟΣ. Κάθε καρέ μονάδων όσο γίνονται όλα αυτά < 40 ms.
@@ -44,11 +44,14 @@ class Game:
         assert self.c.quickload(os.path.join(M.BUILD, 'polis.sna'))
         M.wait_phase(self.c, self.sym, 6)
         self.times = []
+        self.scrolled = []              # κύλησε η κάμερα σε εκείνο το καρέ;
         self.ok = True
 
     def tick(self, n=1):
         for _ in range(n):
+            cam = M2.cam(self.c, self.sym)
             self.times.append(M3.tick_time(self.c, self.sym))
+            self.scrolled.append(M2.cam(self.c, self.sym) != cam)
 
     def hold(self, keys, n):
         for k in keys:
@@ -89,27 +92,19 @@ class Game:
                        self.c, self.shots)
 
 
-def walk(u, tx, ty):
-    """Τα βήματα του unit_go (1 byte, 2 γραμμές) -> η όψη του τελευταίου."""
-    x, y, face = u['wx'], u['wy'], u['face']
-    while (x, y) != (tx, ty):
-        gx = max(-1, min(1, tx - x))
-        gy = max(-2, min(2, ty - y))
-        x, y = x + gx, y + gy
-        sx = (gx > 0) - (gx < 0)
-        if gy > 0:
-            face = 1 if sx == 1 else 0
-        elif gy < 0:
-            face = 3 if sx == -1 else 2
-        else:
-            face = 1 if sx == 1 else 3
-    return face
+def face_of(gx, gy):
+    """Ο κανόνας της όψης του Z80 (set_face) για ένα βήμα (gx, gy)."""
+    sx = (gx > 0) - (gx < 0)
+    if gy > 0:
+        return 1 if sx == 1 else 0
+    if gy < 0:
+        return 3 if sx == -1 else 2
+    return 1 if sx == 1 else 3
 
 
 def main():
     g = Game('--shots' in sys.argv)
     c, sym = g.c, g.sym
-    town = S.units(c)[:12]
     g.report('αρχή', g.compose('start'), 'οι 12 της πόλης και ο κέρσορας')
 
     # ------------------------------------------------------ 1. κουτί
@@ -140,9 +135,18 @@ def main():
     moving = [i for i in want if us[i]['fl'] & S.F_MOVE]
     g.report('εντολή', len(moving) == 6,
              '%d περπατάνε προς %s' % (len(moving), sorted(targets.values())))
-    faces = {i: walk(town[i], *targets[i]) for i in want}
+    # Από M5 ο δρόμος περνάει από τα περάσματα των κελιών: η όψη που
+    # περιμένουμε είναι αυτή του ΤΕΛΕΥΤΑΙΟΥ βήματος που παρατηρήθηκε.
+    pos = {i: (us[i]['wx'], us[i]['wy']) for i in want}
+    faces = {i: us[i]['face'] for i in want}
     for k in range(200):
         g.tick(1)
+        for i in want:
+            u = S.unit(c, i)
+            p = (u['wx'], u['wy'])
+            if p != pos[i]:
+                faces[i] = face_of(p[0] - pos[i][0], p[1] - pos[i][1])
+                pos[i] = p
         if k == 10:
             g.report('σύνθεση', g.compose('walking'), 'ενώ περπατάνε')
         if not any(S.unit(c, i)['fl'] & S.F_MOVE for i in want):
@@ -154,8 +158,8 @@ def main():
              'σε %d καρέ, στις θέσεις του σχηματισμού' % (k + 1))
     got = {i: S.FACES[us[i]['face']] for i in want}
     exp = {i: S.FACES[faces[i]] for i in want}
-    g.report('όψη', got == exp, 'στάθηκαν με όψη %s' % ''.join(
-        got[i] for i in sorted(want)))
+    g.report('όψη', got == exp, 'στάθηκαν με όψη %s, του τελευταίου βήματος'
+             % ''.join(got[i] for i in sorted(want)))
     g.report('στάση', all(us[i]['step'] == 0 for i in want),
              'καρέ στάσης (βήμα 0)')
     others = [i for i in range(12, S.UNITS)

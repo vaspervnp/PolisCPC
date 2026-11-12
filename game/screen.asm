@@ -161,8 +161,28 @@ build_lines:
         jr nz,.row
         ret
 
-; Το HUD στην κύρια RAM #4000 (με τις τράπεζες στη θέση τους).
+; Το HUD στην κύρια RAM #4000 (με τις τράπεζες στη θέση τους): οι 7 σειρές
+; κάθε οκτάδας αποσυμπιέζονται στην οθόνη και πάνε στη θέση τους· τα
+; υπόλοιπα μηδέν (οι σειρές 7-20 του καρέ Β φαίνονται: μαύρο).
+HUD_ROWS    equ 7
 hud_init:
         ld hl,hud_z
+        ld de,SCREEN
+        call dzx0
+        ld hl,HUD_PAGE
+        ld de,HUD_PAGE + 1
+        ld bc,#3FFF
+        ld (hl),0
+        ldir
+        ld hl,SCREEN
         ld de,HUD_PAGE
-        jp dzx0
+        ld a,8
+.k:     ld bc,HUD_ROWS * 80
+        ldir
+        ex de,hl                ; DE += #800 - 560
+        ld bc,#800 - HUD_ROWS * 80
+        add hl,bc
+        ex de,hl
+        dec a
+        jr nz,.k
+        ret

@@ -52,6 +52,31 @@ def encode(grd, res):
 
 HUD_Y0, HUD_ROWS = mockup.MAP_H, 7
 
+# Από πού ΔΕΝ περνάει μονάδα (M5). Ένας ορισμός για τον Z80 (data/nav.asm)
+# και για τους ελέγχους (tests/m5_check.py).
+BLOCK_TER = {'water_deep', 'water_shallow', 'cliff'}
+BLOCK_RES = {'tree', 'tree_pine', 'tree_palm', 'berry_bush', 'bush_empty',
+             'gold_rock', 'stone_rock', 'fish', 'whale', 'ruins'}
+
+
+def blocked_byte(b):
+    """Το byte του χάρτη -> 1 αν το πλακίδιο δεν περνιέται."""
+    ter = T.TERRAIN[b >> 4][0]
+    res = T.RESOURCES[b & 15][0]
+    return int(ter in BLOCK_TER or res in BLOCK_RES)
+
+
+def nav_asm():
+    ter = [int(k[0] in BLOCK_TER) for k in T.TERRAIN]
+    res = [int(k[0] in BLOCK_RES) for k in T.RESOURCES]
+    assert len(ter) == 16 and len(res) == 16
+    return ('; nav.asm — ποια εδάφη και πόροι ΔΕΝ περνιούνται (M5).\n'
+            '; ΠΑΡΑΓΕΤΑΙ από src/make_map.py — μην το πειράζεις με το χέρι.\n'
+            '; 1 = εμπόδιο, με τη θέση στο TERRAIN / RESOURCES.\n\n'
+            'ter_block:  db %s\n'
+            'res_block:  db %s\n'
+            % (','.join(map(str, ter)), ','.join(map(str, res))))
+
 
 def hud_page(grd, res):
     img = mockup.hud_background()
@@ -79,6 +104,10 @@ def main():
     used = sum(1 for b in blob if b & 15)
     print('data/map96.bin  %dx%d = %d bytes, %d πλακίδια με πόρο'
           % (N, N, len(blob), used))
+    with open(os.path.join(DATA, 'nav.asm'), 'w') as f:
+        f.write(nav_asm())
+    print('data/nav.asm  εμπόδια: %s / %s'
+          % (sorted(BLOCK_TER), sorted(BLOCK_RES)))
     with open(os.path.join(DATA, 'map96.json'), 'w') as f:
         json.dump({'size': N, 'byte': {'bits_4_7': 'terrain index',
                                        'bits_0_3': 'resource index, 0=none'},

@@ -337,6 +337,22 @@ do_command:
         ld a,(sel_n)
         or a
         ret z
+        ld hl,(cw_x)            ; το κελί του στόχου, και το flow field του
+        ld de,(cw_y)
+        call feet_tile
+        ld (n_i),hl
+        ld (n_j),de
+        call tile_cell
+        ld (cmd_cell),a
+        call field_build
+        ld hl,SELLIST           ; όσες πήραν την εντολή: και στο MOVERS
+        ld de,MOVERS
+        ld a,(sel_n)
+        ld (mv_n),a
+        add a,a
+        ld c,a
+        ld b,0
+        ldir
         ld hl,SELLIST
         ld c,0                  ; C = πόσες έχουν πάρει θέση
 .u:     ld e,(hl)
@@ -375,11 +391,34 @@ do_command:
         call clamp_world
         ld (ix+U_TY),l
         ld (ix+U_TY+1),h
+        push bc                 ; το κελί του δικού της στόχου
+        ld l,(ix+U_TX)
+        ld h,(ix+U_TX+1)
+        inc hl
+        inc hl
+        push hl
+        ld l,(ix+U_TY)
+        ld h,(ix+U_TY+1)
+        ld de,14
+        add hl,de
+        ex de,hl
+        pop hl
+        call feet_tile
+        ld (n_i),hl
+        ld (n_j),de
+        call tile_cell
+        ld (ix+U_OCELL),a
+        pop bc
         set F_MOVE,(ix+U_FL)
         res F_WANDER,(ix+U_FL)
+        ld a,(field_f)
+        ld (ix+U_FIELD),a
+        ld a,(cmd_cell)
+        ld (ix+U_TCELL),a
+        ld (ix+U_STUCK),0
         pop hl
         inc c
         ld a,(sel_n)
         cp c
-        jr nz,.u
+        jp nz,.u
         ret

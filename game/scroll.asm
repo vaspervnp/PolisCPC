@@ -28,8 +28,9 @@ MAX_CAM_Y   equ 623
 
 ; ---------------------------------------------------------- πληκτρολόγιο
 
-; A = γραμμή του πίνακα πλήκτρων -> A = τα bits της, 1 = πατημένο.
-read_row:
+; Όλος ο πίνακας πλήκτρων (γραμμές 0-9) στο keyrows, ΜΙΑ φορά ανά καρέ:
+; η ρύθμιση του PSG/PPI γίνεται μία φορά, όχι ανά γραμμή.
+read_matrix:
         ld bc,#F40E             ; PSG: καταχωρητής 14 (θύρα A)
         out (c),c
         ld bc,#F6C0
@@ -38,20 +39,41 @@ read_row:
         out (c),c
         ld bc,#F792             ; PPI θύρα A: είσοδος
         out (c),c
-        or #40                  ; PSG: ανάγνωση, γραμμή A
-        ld b,#F6
-        out (c),a
+        ld hl,keyrows
+        ld e,#40                ; PSG: ανάγνωση, γραμμή 0
+.r:     ld b,#F6
+        out (c),e
         ld b,#F4
         in a,(c)
+        cpl                     ; 1 = πατημένο
+        ld (hl),a
+        inc hl
+        inc e
+        ld a,e
+        cp #4A
+        jr nz,.r
         ld bc,#F782             ; PPI θύρα A: έξοδος
         out (c),c
         ld bc,#F600
         out (c),c
-        cpl
+        ret
+
+; A = γραμμή του πίνακα πλήκτρων -> A = τα bits της, 1 = πατημένο (από το
+; read_matrix αυτού του καρέ). Κρατάει BC, DE, HL.
+read_row:
+        push hl
+        ld hl,keyrows
+        add a,l
+        ld l,a
+        jr nc,.n
+        inc h
+.n:     ld a,(hl)
+        pop hl
         ret
 
 ; Τα βελάκια -> sdx, sdy (-1, 0, +1).
 read_keys:
+        call read_matrix
         xor a
         call read_row           ; γραμμή 0: πάνω=0, δεξιά=1, κάτω=2
         ld e,a

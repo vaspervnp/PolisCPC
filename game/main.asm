@@ -67,17 +67,22 @@ start:
         ifdef BARS
         call draw_bars
         else
-        call clear_screen
-        ld hl,map_z             ; ο χάρτης στη θέση του (#8000), από ZX0
+        ; ΤΑ ΣΥΜΠΙΕΣΜΕΝΑ ΖΟΥΝ ΜΕΤΑ ΤΟΝ ΚΩΔΙΚΑ, ακόμα και πέρα από το #4000
+        ; (κύρια RAM): διαβάζονται ΜΟΝΟ εδώ, με την C0, και πριν το HUD
+        ; γράψει πάνω τους. Η οθόνη (#C000) είναι ο ενδιάμεσος χώρος.
+        ld hl,map_z             ; ο χάρτης στη θέση του (#8000)
         ld de,MAP
         call dzx0
+        call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
+        call hud_init           ; το HUD -> #4000, μέσω της οθόνης
+        call clear_screen
         ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
         ld b,16
 .z:     ld (hl),0
         inc hl
         djnz .z
         call units_init
-        call hud_init
+        call nav_init
         ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
         call crtc_w
         ld a,1
@@ -261,6 +266,8 @@ pen_pair:
         include "scroll.asm"
         include "units.asm"
         include "input.asm"
+        include "pathing.asm"
+        include "../data/nav.asm"
 
 linebuf:
         ds 80
@@ -349,6 +356,7 @@ ord_tot:    db 0                ; + γωνία + κέρσορας
 cur_x:      db 40               ; ο κέρσορας στην οθόνη (input.asm)
 cur_y:      db 64
 cin:        db 0
+keyrows:    ds 10               ; ο πίνακας πλήκτρων αυτού του καρέ
 cin_prev:   db 0
 box_on:     db 0
 sel_n:      db 0
@@ -358,6 +366,40 @@ bx0:        dw 0
 bx1:        dw 0
 by0:        dw 0
 by1:        dw 0
+mv_n:       db 0                ; πόσες στο MOVERS
+cmd_cell:   db 0                ; pathing.asm
+n_cell:     db 0
+n_t:        db 0
+n_i:        dw 0
+n_j:        dw 0
+n_lim:      dw 0
+n_ti:       dw 0                ; το πλακίδιο του σημείου που δοκίμασε το try_step
+n_tj:       dw 0
+n_a:        dw 0                ; nav_step: 2 fx + fy - 383, fy - 2 fx + 383
+n_b:        dw 0
+n_na:       dw 0
+n_nb:       dw 0
+n_same:     db 0
+n_gd:       db 0                ; ακολούθηση τοίχου
+n_try:      db 0
+n_dist:     db 0
+n_rd:       db 0                ; BFS: ανάγνωση και γράψιμο στην ουρά
+n_wr:       db 0
+n_cnt:      db 0
+n_busy:     db 0                ; 1 = το BFS συνεχίζει στο επόμενο καρέ
+n_wx:       dw 0
+n_wy:       dw 0
+n_way:      db 0
+n_in:       db 0
+n_dir:      db 0
+n_page:     db 0
+field_rr:   db 0
+field_f:    db 0
+field_tc:   db 255, 255
+nphase:     db 0                ; 1 -> 2 γύρω από το BFS (tests/m5_check.py)
+bphase:     db 0                ; 1 -> 2 γύρω από τη μέτρηση στόχευσης
+bench_req:  db 0
+t_bestd:    db 0                ; στόχευση
 ticks:      db 0
 scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
 int_n:      db 0
@@ -386,16 +428,27 @@ cursor_gfx:                     ; κέρσορας, σημάδι επιλογή�
 res_gfx:                        ; στοιχισμένο στα 128 (το blit το χρειάζεται)
         assert (res_gfx & 127) == 0, 'res_gfx must be 128-aligned'
         incbin "../data/resources.bin"
+
+; Ως εδώ ό,τι χρειάζεται το παιχνίδι ΟΣΟ ΤΡΕΧΕΙ: πριν το παράθυρο τράπεζας.
+code_end:
+        assert code_end <= #4000, 'code past #4000'
+
+; Από εδώ μόνο για την εκκίνηση: μπορούν να περάσουν το #4000.
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB).
 map_z:
         lzx0
         incbin "../data/map96.bin"
         lzclose
 
-; Το HUD: ολόκληρη η σελίδα #4000 στη διάταξη του CRTC, σχεδόν μηδενικά.
+; Το HUD: οι 7 σειρές του (560 bytes) από καθεμία από τις 8 οκτάδες της
+; σελίδας #4000 — τα υπόλοιπα είναι μηδενικά.
 hud_z:
         lzx0
-        incbin "../data/hud_page.bin"
+k = 0
+        repeat 8
+        incbin "../data/hud_page.bin",k * #800,HUD_ROWS * 80
+k = k + 1
+        rend
         lzclose
 
 ; Τα σετ των μονάδων, συμπιεσμένα· αποσυμπιέζονται στην τράπεζα C5.

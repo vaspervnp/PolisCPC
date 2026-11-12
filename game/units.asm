@@ -12,15 +12,15 @@
 ;
 ; ΤΡΙΑ ΡΟΛΟΓΙΑ (milestones.md, Μέρος Β)
 ;
-;   ΑΠΟΦΑΣΗ, τεμαχισμένη: 16 μονάδες ανά καρέ με κυκλικό δείκτη, άρα κάθε
-;   μονάδα μία φορά στα 8 καρέ (units_think). Μια ελεύθερη μονάδα διαλέγει
-;   νέο στόχο· μια μακρινή που περπατάει κάνει μονομιάς τα 4 βήματα που της
+;   ΑΠΟΦΑΣΗ, τεμαχισμένη: 6 μονάδες ανά καρέ με κυκλικό δείκτη, άρα κάθε
+;   μονάδα μία φορά στα ~22 καρέ (units_think). Μια ελεύθερη μονάδα διαλέγει
+;   νέο στόχο· μια μακρινή που περπατάει κάνει μονομιάς τα 8 βήματα που της
 ;   αναλογούν· και κρίνεται αν είναι ΕΝΕΡΓΗ: κοντά στην κάμερα.
 ;
 ;   ΚΙΝΗΣΗ, σε κάθε καρέ, ΜΟΝΟ οι ενεργές (units_move): βήμα κάθε 2ο καρέ
 ;   (οι μισές στα μονά, οι μισές στα ζυγά), καρέ βαδίσματος, όψη, θέση στην
 ;   οθόνη. Το περιθώριο της «ενεργής» ζώνης είναι όσο μπορούν να κινηθούν
-;   κάμερα + μονάδα σε 8 καρέ: καμία ανενεργή δεν προλαβαίνει να φανεί.
+;   κάμερα + μονάδα σε 22 καρέ: καμία ανενεργή δεν προλαβαίνει να φανεί.
 ;
 ;   ΣΧΕΔΙΑΣΗ: μόνο ό,τι άλλαξε (units_mark), με τη σειρά του ζωγράφου.
 ;
@@ -44,6 +44,7 @@ ORDER       equ #A680           ; 40 x δείκτης εγγραφής: η σε�
 NEWLIST     equ #A6D0           ; 40: όσες φάνηκαν αυτό το καρέ
 RLIST       equ #A720           ; 40: όσες σβήνονται αυτό το καρέ
 RECTS       equ #A780           ; 96 x (x, y)
+MOVERS      equ #A880           ; 32: όσες πήραν την τελευταία εντολή
 MAX_ORD     equ 38
 
 U_WX        equ 0               ; dw: θέση στον κόσμο, bytes
@@ -59,18 +60,20 @@ U_SY        equ 13              ; (255 = εκτός· και κλειδί ταξ
 U_DRAWN     equ 14              ; bit 0: είναι στην οθόνη (το OADDR ισχύει)
                                 ; bit 1: σβήνεται αυτό το καρέ
                                 ; bit 2: ζωγραφίζεται αυτό το καρέ
-U_PAR       equ 15              ; σε ποια καρέ κάνει βήμα (0/1)
+U_WF        equ 15              ; ακολουθεί τοίχο: bit 7 + η κατεύθυνση 0..7
 U_FRAME     equ 16              ; dw: το καρέ, μόνο με το F_FIXED
 U_OADDR     equ 18              ; dw: το byte οθόνης όπου ζωγραφίστηκε
 U_BASE      equ 20              ; dw: το σετ της στην τράπεζα C5
 U_IDX       equ 22              ; ο δείκτης της (για το ACT_TAB)
-U_ORD       equ 23              ; 1 = είναι στο ORDER
+U_WD        equ 23              ; η απόσταση (/4) όταν άρχισε να ακολουθεί
 
 F_MOVE      equ 0               ; περπατάει προς τον στόχο
 F_SEL       equ 1               ; επιλεγμένη
 F_WANDER    equ 2               ; περιπλανιέται μόνη της
 F_REDRAW    equ 3               ; άλλαξε η επιλογή: ξαναζωγράφισε
 F_FIXED     equ 4               ; σταθερό καρέ (κέρσορας, γωνία)
+F_INBLK     equ 5               ; στέκεται μέσα σε εμπόδιο (βγαίνει ελεύθερα)
+F_ORD       equ 7               ; είναι στο ORDER
 
 SWAP_TAB    equ #A400           ; 256, στοιχισμένο — αμέσως μετά τον χάρτη
 SPR_SETS    equ 3
@@ -134,12 +137,11 @@ idx_ix: rrca
         ld ixl,a
         ret
 
-; Στην εκκίνηση: τα σετ στην C5, οι όψεις W από τις E με καθρέφτισμα, τα
-; sprites του κέρσορα, και οι 128 μονάδες.
-units_init:
+; Στην εκκίνηση: τα σετ στην C5 (αποσυμπίεση στην οθόνη, με την C0, και
+; αντιγραφή από εκεί: η πηγή μπορεί να είναι στο #4000), οι όψεις W από τις
+; E με καθρέφτισμα, και τα sprites του κέρσορα.
+units_gfx:
         call make_swap
-        ld a,RAM_SPR
-        call setram
         ld ix,spr_tab
         ld de,SPR_BASE
         ld b,SPR_SETS
@@ -149,7 +151,15 @@ units_init:
         ld h,(ix+1)
         inc ix
         inc ix
+        ld de,SCREEN
         call dzx0
+        ld a,RAM_SPR
+        call setram
+        pop de
+        push de
+        ld hl,SCREEN
+        ld bc,SPR_WEST          ; 21 καρέ x 128
+        ldir
         pop de
         push hl
         ; W: τα 4 καρέ βαδίσματος E (4..7) καθρεφτισμένα στο SPR_WEST
@@ -169,16 +179,22 @@ units_init:
         ld hl,SPR_STRIDE
         add hl,de
         ex de,hl
+        ld a,RAM_BASE
+        call setram
         pop hl
         pop bc
         djnz .set
+        ld a,RAM_SPR
+        call setram
         ld hl,cursor_gfx
         ld de,SPR_CURSOR
         ld bc,3 * 128
         ldir
         ld a,RAM_BASE
-        call setram
+        jp setram
 
+; Οι 128 μονάδες.
+units_init:
         ld hl,UNIT_TAB          ; όλα μηδέν
         ld de,UNIT_TAB + 1
         ld bc,(UNITS + 2) * U_SIZE - 1
@@ -196,10 +212,7 @@ units_init:
         push af
         ld (ix+U_IDX),a
         ld (ix+U_SY),255
-        ld c,a
-        and 1
-        ld (ix+U_PAR),a
-        ld a,c                  ; σετ = i mod 3
+        ld c,a                  ; σετ = i mod 3
 .mod:   sub 3
         jr nc,.mod
         add a,3
@@ -241,7 +254,8 @@ units_init:
         ld (ix+U_WY+1),h
         jr .pos
 .far:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
-        set F_WANDER,(ix+U_FL)
+        set F_WANDER,(ix+U_FL)  ; — η άλλη ομάδα
+        ld (ix+U_TEAM),1
 .pos:   ld l,(ix+U_WX)          ; ο στόχος = εκεί που είναι
         ld h,(ix+U_WX+1)
         ld (ix+U_TX),l
@@ -253,7 +267,7 @@ units_init:
         pop af
         inc a
         cp UNITS
-        jr nz,.u
+        jp nz,.u
         ld ix,ANCHOR_REC        ; η γωνία και ο κέρσορας: σταθερό καρέ, ποτέ
         ld hl,SPR_ANCHOR        ; στο ORDER των μονάδων
         call .fixed
@@ -262,7 +276,7 @@ units_init:
 .fixed: set F_FIXED,(ix+U_FL)
         ld (ix+U_FRAME),l
         ld (ix+U_FRAME+1),h
-        ld (ix+U_ORD),1
+        set F_ORD,(ix+U_FL)
         ld (ix+U_SY),255
         ret
 
@@ -404,6 +418,9 @@ make_swap:
 ; ---------------------------------------------------------- το καρέ
 
 units_tick:
+        ld a,(bench_req)
+        or a
+        call nz,bench_targets
         ld a,(erase_req)
         or a
         jp nz,units_erase
@@ -414,6 +431,9 @@ units_tick:
         or a
         ret nz
         call units_prep
+        ld a,(n_busy)           ; το BFS μιας εντολής, σε κομμάτια
+        or a
+        call nz,field_cont
         call units_think
         call units_move
         call units_order
@@ -445,10 +465,13 @@ units_tick:
 
 ; ---------------------------------------------------------- απόφαση
 
-; 16 μονάδες ανά καρέ, κυκλικά.
+; THINK_N μονάδες ανά καρέ, κυκλικά. (Ήταν 16 στο M4· με την εύρεση δρόμου
+; του M5 το βήμα ακρίβυνε, και τα αθροιστικά βήματα των μακρινών έτρωγαν
+; το καρέ. Με 6, κάθε μονάδα μία φορά στα ~22 καρέ.)
+THINK_N     equ 6
 units_think:
         ld a,(think_i)
-        ld b,16
+        ld b,THINK_N
 .l:     push bc
         push af
         call idx_ix
@@ -466,8 +489,8 @@ unit_think:
         jr nz,.mv
         bit F_WANDER,(ix+U_FL)
         jr z,unit_think_vis
-        call rnd                ; ελεύθερη: 1 στις 4 φορές, νέος στόχος
-        and 3
+        call rnd                ; ελεύθερη: 1 στις 2 φορές, νέος στόχος
+        and 1
         jr nz,unit_think_vis
         call rnd                ; TX = WX - 32 + (0..63)
         and 63
@@ -485,23 +508,33 @@ unit_think:
         call clamp_world
         ld (ix+U_TY),l
         ld (ix+U_TY+1),h
+        ex de,hl                ; ο στόχος σε εμπόδιο: όχι αυτή τη φορά
+        ld l,(ix+U_TX)
+        ld h,(ix+U_TX+1)
+        call spot_blk
+        or a
+        jr nz,unit_think_vis
         set F_MOVE,(ix+U_FL)
         jr unit_think_vis
-.mv:    ld a,(ix+U_SY)          ; περπατάει: αν ΔΕΝ φαίνεται, τα 4 βήματα
-        inc a                   ; των 8 καρέ μονομιάς (όσο φαίνεται, βήμα
-        jr nz,unit_think_vis     ; σε κάθε 2ο καρέ, στο units_move)
-        ld de,#0408             ; ως 4 bytes, 8 γραμμές
-        call unit_go
+.mv:    ld a,(ix+U_FIELD)       ; με εντολή: βήμα σε κάθε 2ο καρέ, πάντα
+        or a
+        jr nz,unit_think_vis
+        ld a,(ix+U_SY)          ; περπατάει: αν ΔΕΝ φαίνεται, 8 βήματα
+        inc a                   ; μονομιάς (όσο φαίνεται, βήμα σε κάθε
+        jr nz,unit_think_vis    ; 2ο καρέ, στο units_move)
+        ld de,#0810             ; ως 8 bytes, 16 γραμμές
+        call nav_step
         jr nz,.went
         res F_MOVE,(ix+U_FL)
         ld (ix+U_STEP),0
         jr unit_think_vis
 .went:  ld a,(ix+U_STEP)
-        add a,4
+        add a,8
         ld (ix+U_STEP),a
         ; συνεχίζει στο unit_think_vis
 
-; Ενεργή αν -24 ≤ SX < 104 και -96 ≤ SY < 240. Ποτέ ανενεργή όσο είναι
+; Ενεργή αν -56 ≤ SX < 136 και -200 ≤ SY < 344 (κάμερα 22 x 2 bytes / 22 x 8
+; γραμμές, + 8 βήματα της μονάδας). Ποτέ ανενεργή όσο είναι
 ; ζωγραφισμένη. Μια ενεργή που δεν φαίνεται: μήπως φάνηκε τώρα;
 unit_think_vis:
         call unit_activity
@@ -518,22 +551,22 @@ unit_activity:
         ld de,(cam_x)
         or a
         sbc hl,de
-        ld de,24
+        ld de,56
         add hl,de
         ld a,h
         or a
         jr nz,.out
         ld a,l
-        cp 128
+        cp 192
         jr nc,.out
         ld l,(ix+U_WY)
         ld h,(ix+U_WY+1)
         ld de,(cam_y)
         or a
         sbc hl,de
-        ld de,96
+        ld de,200
         add hl,de
-        ld de,336
+        ld de,544
         or a
         sbc hl,de
         jr nc,.out
@@ -578,39 +611,18 @@ clamp_world:
         ld hl,0
         ret
 
-; Ένα βήμα προς τον στόχο: ως D bytes και E γραμμές. Ορίζει την όψη.
-; Z αν είναι ήδη εκεί (δεν κινήθηκε).
-unit_go:
-        push de
-        ld l,(ix+U_TX)
-        ld h,(ix+U_TX+1)
-        ld c,(ix+U_WX)
-        ld b,(ix+U_WX+1)
-        or a
-        sbc hl,bc
-        call clamp_step         ; D = όριο
-        ld (g_x),a
-        call add_wx
-        ld (ix+U_WX),l
-        ld (ix+U_WX+1),h
-        pop de
-        ld d,e
-        ld l,(ix+U_TY)
-        ld h,(ix+U_TY+1)
-        ld c,(ix+U_WY)
-        ld b,(ix+U_WY+1)
-        or a
-        sbc hl,bc
-        call clamp_step
-        ld (g_y),a
-        call add_wy
-        ld (ix+U_WY),l
-        ld (ix+U_WY+1),h
-        ld a,(g_y)              ; η όψη από τα πρόσημα:
-        ld c,a                  ;   κάτω: E αν δεξιά, αλλιώς S
-        ld a,(g_x)              ;   πάνω: W αν αριστερά, αλλιώς N
-        or c                    ;   οριζόντια: E ή W
-        ret z
+; Η όψη από το τελευταίο βήμα (g_x, g_y). NZ πάντα.
+;   κάτω: E αν δεξιά, αλλιώς S      πάνω: W αν αριστερά, αλλιώς N
+;   οριζόντια: E ή W                κανένα βήμα: μένει
+set_face:
+        ld a,(g_y)
+        ld c,a
+        ld a,(g_x)
+        or c
+        jr nz,.f
+        or 1
+        ret
+.f:
         ld a,(g_x)
         ld b,0                  ; B = πρόσημο του g_x
         or a
@@ -698,8 +710,8 @@ units_prep:
         ret
 
 ; ΣΕ ΚΑΘΕ ΚΑΡΕ μόνο όσες φαίνονταν (το ORDER). Όσες δεν φαίνονται τις
-; ελέγχει η απόφαση, μία φορά στα 8 καρέ — μια μονάδα που μπαίνει από την
-; άκρη αργεί το πολύ 4 bytes. ΑΝ ΚΥΛΗΣΕ Η ΚΑΜΕΡΑ, όλες οι ενεργές (με
+; ελέγχει η απόφαση, μία φορά στα ~22 καρέ — μια μονάδα που μπαίνει από την
+; άκρη αργεί το πολύ 8 bytes. ΑΝ ΚΥΛΗΣΕ Η ΚΑΜΕΡΑ, όλες οι ενεργές (με
 ; CPIR στο ACT_TAB): αλλιώς η λωρίδα θα αποκάλυπτε μονάδες με καθυστέρηση.
 ; Τέλος η γωνία και ο κέρσορας.
 units_move:
@@ -720,6 +732,27 @@ units_move:
         pop hl
         pop bc
         djnz .o
+        ld a,(mv_n)             ; όσες έχουν εντολή και δεν φαίνονται
+        or a
+        jr z,.scr
+        ld b,a
+        ld hl,MOVERS
+.m:     push bc
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push hl
+        push de
+        pop ix
+        ld a,(ix+U_SY)
+        inc a
+        jr nz,.mn
+        bit F_MOVE,(ix+U_FL)
+        call nz,unit_update
+.mn:    pop hl
+        pop bc
+        djnz .m
 .scr:   ld a,(v_shx)
         ld hl,v_shy
         or (hl)
@@ -734,8 +767,9 @@ units_move:
         ld a,l
         dec a
         call idx_ix
-        ld a,(ix+U_SY)
-        inc a
+        ld a,(ix+U_SY)          ; δεν φαινόταν: φαίνεται τώρα; (πρώτα ο
+        inc a                   ; φθηνός έλεγχος — οι περισσότερες όχι)
+        call z,vis_test
         call z,unit_update
         pop bc
         pop hl
@@ -756,18 +790,25 @@ units_move:
 ; IX = ενεργή μονάδα (ή η γωνία).
 unit_update:
         call unit_still
-        ld c,0                  ; C = άλλαξε
+        xor a                   ; το βήμα αυτού του καρέ (το γράφει το nav_step)
+        ld (g_x),a
+        ld (g_y),a
+        ld c,a                  ; C = άλλαξε
         bit F_MOVE,(ix+U_FL)
         jr z,.nostep
-        ld a,(ix+U_SY)          ; όσο δεν φαίνεται, τα βήματα τα κάνει το
-        inc a                   ; units_think
+        ld a,(ix+U_FIELD)       ; με εντολή: βήματα πάντα εδώ
+        or a
+        jr nz,.stepok
+        ld a,(ix+U_SY)          ; αλλιώς, όσο δεν φαίνεται, τα βήματα τα
+        inc a                   ; κάνει το units_think
         jr z,.nostep
+.stepok:
         ld a,(utick)
-        xor (ix+U_PAR)
+        xor (ix+U_IDX)          ; οι μισές στα μονά, οι μισές στα ζυγά
         rra
         jr c,.nostep
         ld de,#0102             ; 1 byte, 2 γραμμές: η ισομετρική διαγώνιος
-        call unit_go
+        call nav_step
         jr nz,.went
         res F_MOVE,(ix+U_FL)    ; έφτασε: στέκεται, με την τελευταία όψη
         ld (ix+U_STEP),0
@@ -792,12 +833,35 @@ unit_update:
         jr nz,.chg
         ld a,(ix+U_DRAWN)
         or a
-        jr nz,.pos              ; στην οθόνη και ίδια: το αποφασίζει το mark
-        jr .new
+        jr z,.new
+        ld a,(v_shx)            ; στην οθόνη και ίδια: το αποφασίζει το mark
+        ld hl,v_shy             ; — και χωρίς κύλιση, τίποτα δεν άλλαξε
+        or (hl)
+        ret z
+        jr .pos
 .chg:   bit 0,(ix+U_DRAWN)
         call nz,old_rect
 .new:   set 2,(ix+U_DRAWN)      ; ζωγραφίζεται (αν φαίνεται)
-.pos:   ld l,(ix+U_WX)          ; SX = WX - cam_x, 0..76
+.pos:   ld a,(v_shx)            ; χωρίς κύλιση, και φαινόταν: SX, SY + το
+        ld hl,v_shy             ; βήμα, σε 8 bits
+        or (hl)
+        jr nz,.full
+        ld a,(ix+U_SY)
+        inc a
+        jr z,.full
+        ld a,(g_x)
+        add a,(ix+U_SX)
+        cp 77
+        jp nc,unit_hide
+        ld c,a
+        ld a,(g_y)
+        add a,(ix+U_SY)
+        cp VIEW_H - 16 + 1
+        jp nc,unit_hide
+        ld (ix+U_SX),c
+        ld (ix+U_SY),a
+        ret
+.full:  ld l,(ix+U_WX)          ; SX = WX - cam_x, 0..76
         ld h,(ix+U_WX+1)
         ld de,(cam_x)
         or a
@@ -822,10 +886,9 @@ unit_update:
         jr nc,unit_hide
         ld (ix+U_SX),c
         ld (ix+U_SY),a
-        ld a,(ix+U_ORD)         ; μόλις φάνηκε: στη λίστα των νέων
-        or a
+        bit F_ORD,(ix+U_FL)     ; μόλις φάνηκε: στη λίστα των νέων
         ret nz
-        ld (ix+U_ORD),1
+        set F_ORD,(ix+U_FL)
         ld hl,nl_n
         ld a,(hl)
         inc (hl)
@@ -839,6 +902,35 @@ unit_update:
         ld (hl),e
         inc hl
         ld (hl),d
+        ret
+
+; IX -> Z αν χωράει ολόκληρη στην οθόνη (0 ≤ SX ≤ 76, 0 ≤ SY ≤ 128).
+vis_test:
+        ld l,(ix+U_WX)
+        ld h,(ix+U_WX+1)
+        ld de,(cam_x)
+        or a
+        sbc hl,de
+        ld a,h
+        or a
+        ret nz
+        ld a,l
+        cp 77
+        jr nc,.no
+        ld l,(ix+U_WY)
+        ld h,(ix+U_WY+1)
+        ld de,(cam_y)
+        or a
+        sbc hl,de
+        ld a,h
+        or a
+        ret nz
+        ld a,l
+        cp VIEW_H - 16 + 1
+        jr nc,.no
+        xor a
+        ret
+.no:    or 1
         ret
 
 ; Μένει μόνο το «είναι στην οθόνη» -> A.
@@ -953,7 +1045,7 @@ units_order:
         inc de
         inc c
         jr .nx
-.drop:  ld (ix+U_ORD),0
+.drop:  res F_ORD,(ix+U_FL)
 .nx:    djnz .f
 .app:   ld a,(nl_n)             ; + οι νέες
         or a
@@ -1001,7 +1093,30 @@ order_sort:
         ld a,(ord_n)
         cp 2
         ret c
-        ld c,1                  ; C = θέση προς εισαγωγή
+        ld b,a                  ; ΗΔΗ ταξινομημένο; (το συνηθισμένο: ένα
+        dec b                   ; πέρασμα, και τέλος)
+        ld hl,ORDER
+        call .sy
+        ld c,a
+.chk:   call .sy
+        cp c
+        jr c,.sort
+        ld c,a
+        djnz .chk
+        ret
+.sy:    ld e,(hl)               ; HL = &ORDER[k] -> A = το SY του, HL += 2
+        inc hl
+        ld d,(hl)
+        inc hl
+        ex de,hl
+        push bc
+        ld bc,U_SY
+        add hl,bc
+        pop bc
+        ld a,(hl)
+        ex de,hl
+        ret
+.sort:        ld c,1                  ; C = θέση προς εισαγωγή
 .outer: ld a,c
         add a,a
         ld l,a
@@ -1262,16 +1377,18 @@ unmark: ld a,RAM_BG
 ; Οι αγκύλες της επιλογής: μόνο οι γραμμές 13-14 του SPR_MARK, όχι 16.
 MARK_L0     equ 13
 blit_mark:
-        ld hl,SPR_MARK + MARK_L0 * 8
         ld a,(ix+U_SY)
         add a,MARK_L0
-        call .line
-        ld a,(ix+U_SY)
-        add a,MARK_L0 + 1
-.line:  push hl
         ld b,(ix+U_SX)
         call line_x
-        pop hl
+        ld hl,SPR_MARK + MARK_L0 * 8
+        call .line
+        ld a,d                  ; η γραμμή 14: D + 8, ή η επόμενη σειρά
+        add a,8
+        ld d,a
+        and #38
+        call z,col_wrap
+.line:  push de
         ld b,4
 .b:     ld a,(de)
         and (hl)
@@ -1282,6 +1399,7 @@ blit_mark:
         inc e
         call z,de_carry
         djnz .b
+        pop de
         ret
 
 ; IX -> HL = το καρέ: σετ + όψη + καρέ βαδίσματος x 128.
@@ -1329,7 +1447,7 @@ units_forget:
         push af
         cp UNITS
         jr nc,.n
-        ld (ix+U_ORD),0
+        res F_ORD,(ix+U_FL)
 .n:     pop af
         inc a
         cp UNITS + 2

@@ -36,7 +36,7 @@ def sample(c, sym, labels, hits, until):
 
 def report(hits, n, runs=1):
     print('%.1f ms ανά εκτέλεση, %d δείγματα' % (n * STEP / 1000.0 / runs, n))
-    for name, k in hits.most_common(25):
+    for name, k in hits.most_common(int(os.environ.get("TOP", 25))):
         print('%6.2f ms  %5.1f%%  %s'
               % (k * STEP / 1000.0 / runs, 100.0 * k / n, name))
 
