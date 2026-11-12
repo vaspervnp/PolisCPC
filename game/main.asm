@@ -294,6 +294,7 @@ pen_pair:
         include "../data/gather.asm"
         include "gather.asm"
         include "../data/bld.asm"
+        include "../data/compiled.asm"
         include "buildings.asm"
         include "occlude.asm"
 
@@ -615,7 +616,7 @@ cmp_z:
         lzclose
 spr_z3:
         lzx0
-        incbin "../data/villager_carry.bin"
+        incbin "../data/set3.bin"       ; με τα W της επίθεσης (make_edges.py)
         lzclose
 
 ; ΤΙΠΟΤΑ ΜΕ `align` ΜΕΤΑ ΑΠΟ ΜΠΛΟΚ LZX0: ο rasm στοιχίζει με τη διεύθυνση

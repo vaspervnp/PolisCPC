@@ -522,6 +522,45 @@ blit16:
         call z,bwrap
         jr .l
 
+; Το blit16 για την ομάδα 1 (units_draw): το byte δεδομένων περνάει από τον
+; πίνακα TR1 της C5 (τα pens της ομάδας -> τα δικά της, src/make_edges.py).
+; HL = καρέ (στοιχισμένο), DE = οθόνη, όποια θέση: κάθε byte με de_carry.
+; ~1,3 ms (το blit16 0,8).
+        macro BT1
+        inc l
+        ld c,(hl)
+        ld a,(bc)
+        ld c,a
+        dec l
+        ld a,(de)
+        and (hl)
+        or c
+        ld (de),a
+        inc l
+        inc l
+        inc e
+        call z,de_carry
+        mend
+blit16t:
+        ld b,TR1 >> 8
+        ld a,16
+.r:     push af
+        push de
+        BT1
+        BT1
+        BT1
+        BT1
+        pop de
+        ld a,d
+        add a,8
+        ld d,a
+        and #38
+        call z,col_wrap
+        pop af
+        dec a
+        jr nz,.r
+        ret
+
 ; Αλλαγή σειράς στο blit16: +80 τυλιγμένο στα 2 KB. Αν η νέα σειρά περνάει
 ; όριο σελίδας, οι γραμμές που μένουν (από το L: 8 bytes ανά γραμμή) πάνε
 ; στην αργή διαδρομή, και ο βρόχος εγκαταλείπεται.

@@ -25,12 +25,19 @@
 ;   (proj_off), πριν αγγίξει οτιδήποτε την οθόνη. Χτυπάνε όταν φτάσουν.
 ;   Οι νεκροί κάθε κλήσης μπαίνουν στο dq: ο κύριος κώδικας (died_flush) τους
 ;   βγάζει από τους κάδους.
+;
+; ΕΝΤΟΛΗ ΕΠΙΘΕΣΗΣ (τα ανοιχτά του M8)
+;   RETURN πάνω σε εχθρό: όσες είναι επιλεγμένες (και οι χωρικοί) τον έχουν
+;   στόχο (C7_ORD), χωρίς όριο οπτικού πεδίου, ως να πέσει (ord_cmd). Κάθε
+;   άλλη εντολή το σβήνει. Ο ΧΩΡΙΚΟΣ ΠΟΥ ΧΤΥΠΙΕΤΑΙ, χωρίς τέτοιο στόχο, τον
+;   παίρνει: αφήνει τη δουλειά του και απαντάει (hit).
 
 C7_HP       equ #7E00           ; 128: η υγεία ανά μονάδα
 C7_ANIM     equ #7E80           ; 128: ο μετρητής της πόζας
+C7_ORD      equ #7F00           ; 128: ο στόχος της εντολής (255 κανένας)
 
 ARROWS      equ #A5E0           ; PR_N x (x dw, y dw, στόχος (255 κανείς),
-PR_N        equ 4               ; ζημιά, sx, sy (255: δεν ζωγραφίστηκε))
+PR_N        equ 4               ; ο τοξότης, sx, sy (255: δεν ζωγραφίστηκε))
 SIGHT       equ 120             ; 2 |dx| + |dy|
 ATK_T       equ 8               ; καρέ της πόζας επίθεσης (ένα καρέ)
 DIE_T       equ 100             ; καρέ από τον θάνατο ώς την ελεύθερη θέση
@@ -46,9 +53,10 @@ stats:      db 25, 3, 14, 0     ; χωρικός
             db 60, 8, 14, 0     ; σπαθοφόρος
             db 35, 6, 80, 1     ; τοξότης
             db 25, 3, 14, 0     ; χωρικός με φορτίο
-; ανά όψη (S E N W): τα 2 καρέ της επίθεσης (W: δεν υπάρχουν, του βαδίσματος)
-atk_fr:     db 12, 14, 16, 21
-            db 13, 15, 17, 23
+; Το καρέ του χτυπήματος: S E N = 13, 15, 17 του σετ. Το W (το 15
+; καθρεφτισμένο) των σετ 0-2 είναι στο σετ 3, στα καρέ 12 + σετ
+; (src/make_edges.py): από τη βάση του σετ, (3 - σετ) x 25 + 12 + σετ.
+ATK_W       equ 3 * 25 + 12     ; - 24 x σετ
 
 ; IX -> HL = η γραμμή της στο stats
 st_hl:  ld a,(ix+U_SET)
@@ -58,8 +66,6 @@ st_hl:  ld a,(ix+U_SET)
         ld hl,stats
         jr tab_a
 
-; A = όψη + 0/4 -> A = καρέ επίθεσης
-atk_a:  ld hl,atk_fr
 tab_a:  add a,l
         ld l,a
         adc a,h
@@ -81,13 +87,18 @@ idx_iy: push ix
         pop ix
         ret
 
-; Στην εκκίνηση: η υγεία όλων, από το σετ τους.
+; Στην εκκίνηση: η υγεία όλων, από το σετ τους· καμία εντολή επίθεσης.
 hp_init:
         ld hl,ARROWS            ; κανένα βέλος
         ld b,PR_N * 8
 .a:     ld (hl),255
         inc hl
         djnz .a
+        ld hl,C7_ORD
+        ld b,UNITS
+.o:     ld (hl),255
+        inc hl
+        djnz .o
         xor a
 .l:     push af
         call idx_ix
@@ -105,15 +116,36 @@ hp_set: call st_hl
         ld (hl),a
         ret
 
-; IX = στρατιώτης, U_TGT = ο κοντινότερος εχθρός (find_nearest). Όποια
-; πέθανε: στο dq.
+; IX -> HL = &C7_ORD[idx], A = ο στόχος της εντολής (255 κανένας).
+ord_get:
+        ld l,(ix+U_IDX)
+        ld h,C7_ORD >> 8
+        ld a,(hl)
+        ret
+
+; IX = στρατιώτης, U_TGT = ο κοντινότερος εχθρός (find_nearest) — ή
+; οποιαδήποτε με εντολή επίθεσης (C7_ORD). Όποια πέθανε: στο dq.
 combat_think:
         bit 7,(ix+U_FACE)       ; πόζα εκτός οθόνης: τελειώνει (δεν την
         jr z,.p0                ; προχωράει κανείς)
         ld a,(ix+U_SY)
         inc a
         call z,pose_end
-.p0:    ld a,(ix+U_TGT)
+.p0:    call ord_get            ; ΕΝΤΟΛΗ: αυτός, όπου κι αν είναι, ώσπου
+        cp 255                  ; να πέσει
+        jr z,.auto
+        ld (ix+U_TGT),a
+        call idx_iy
+        ld a,(iy+U_TEAM)
+        cp 2
+        jr nc,.end
+        cp (ix+U_TEAM)          ; (ποτέ της ίδιας ομάδας)
+        jr nz,.ord
+.end:   ld (hl),255             ; έπεσε: η εντολή τελείωσε
+        ret
+.ord:   call c_dist
+        jr .in
+.auto:  ld a,(ix+U_TGT)
         cp 255
         jr z,.none
         call idx_iy
@@ -133,7 +165,7 @@ combat_think:
         sbc hl,de
         jr nc,.none
         add hl,de
-        push hl
+.in:    push hl
         call st_hl
         inc hl
         inc hl
@@ -144,7 +176,16 @@ combat_think:
         sbc hl,de
         jr c,attack
         jr z,attack
-        ld l,(iy+U_WX)          ; κυνήγι: ως 4 bytes από τον στόχο, από την
+        bit F_MOVE,(ix+U_FL)    ; με εντολή του παίκτη ακόμα στον δρόμο της
+        jr z,.ch                ; (flow field ως τον στόχο) και μακριά (πέρα
+        ld a,(ix+U_FIELD)       ; από το SIGHT): τον ακολουθεί
+        or a
+        jr z,.ch
+        add hl,de
+        ld de,SIGHT + 1
+        sbc hl,de               ; (carry 0: το add δεν ξεχείλισε)
+        ret nc
+.ch:    ld l,(iy+U_WX)          ; κυνήγι: ως 4 bytes από τον στόχο, από την
         ld h,(iy+U_WX+1)        ; πλευρά της
         ld de,4
         ld a,(c_dx + 1)
@@ -165,6 +206,13 @@ combat_think:
 
 ; Χτυπάει (IX, IY = ο στόχος, c_dx / c_dy). Όποια πέθανε: στο dq.
 attack: res F_MOVE,(ix+U_FL)
+        ld a,(ix+U_SET)         ; ο χωρικός με φορτίο χτυπάει ως σετ 0 (τα
+        cp 3                    ; καρέ επίθεσης του σετ 3 έχουν τα W)
+        jr nz,.s
+        ld (ix+U_SET),0
+        ld (ix+U_BASE),SPR_BASE & 255
+        ld (ix+U_BASE+1),SPR_BASE >> 8
+.s:
         ld hl,(c_dx)            ; όψη: οριζόντια αν 2 |dx| > |dy|
         call abs_hl
         add hl,hl
@@ -188,10 +236,22 @@ attack: res F_MOVE,(ix+U_FL)
 .face:  ld c,a
         or #80
         ld (ix+U_FACE),a
-        ld a,c
-        add a,4                 ; το καρέ του χτυπήματος
-        call atk_a
-        ld (ix+U_STEP),a
+        ld a,c                  ; το καρέ του χτυπήματος: 13 + 2 x όψη, ή
+        cp 3                    ; το W του σετ (ATK_W - 24 x σετ)
+        jr z,.w
+        add a,a
+        add a,13
+        jr .st
+.w:     ld a,(ix+U_SET)
+        ld c,a
+        add a,a
+        add a,c
+        add a,a
+        add a,a
+        add a,a
+        neg
+        add a,ATK_W
+.st:    ld (ix+U_STEP),a
         ld (ix+U_LOOK),255
         call hp_hl
         set 7,l
@@ -202,6 +262,7 @@ attack: res F_MOVE,(ix+U_FL)
         inc hl
         inc hl
         ld a,(hl)
+        ld c,(ix+U_IDX)         ; ποιος χτυπάει
         or a
         jr z,.hit
         call proj_new           ; τοξότης: βέλος — ή, χωρίς θέση, αμέσως
@@ -209,7 +270,8 @@ attack: res F_MOVE,(ix+U_FL)
 .hit:   call hit
         jp dq_add
 
-; IY = ο στόχος, B = ζημιά -> A = ο δείκτης του αν πέθανε, αλλιώς 255.
+; IY = ο στόχος, B = ζημιά, C = ποιος χτυπάει -> A = ο δείκτης του στόχου
+; αν πέθανε, αλλιώς 255. Χωρικός χωρίς εντολή επίθεσης: απαντάει (C7_ORD).
 hit:    ld l,(iy+U_IDX)
         ld h,C7_HP >> 8
         ld a,(hl)
@@ -217,7 +279,18 @@ hit:    ld l,(iy+U_IDX)
         jr c,.dead
         jr z,.dead
         ld (hl),a
-        ld a,255
+        ld a,(iy+U_SET)         ; χωρικός: σετ 0 ή 3
+        or a
+        jr z,.v
+        cp 3
+        jr nz,.n
+.v:     ld h,C7_ORD >> 8
+        ld a,(hl)
+        inc a
+        jr nz,.n
+        ld (hl),c
+        ld (iy+U_JOB),0         ; αφήνει τη δουλειά
+.n:     ld a,255
         ret
 .dead:  ld (hl),0
         set 7,l
@@ -241,8 +314,7 @@ hit:    ld l,(iy+U_IDX)
 .r:     ld a,(iy+U_IDX)
         ret
 
-; IX = τοξότης, B = ζημιά: ένα βέλος από το στήθος της. Carry αν δεν
-; χωράει άλλο.
+; IX = τοξότης: ένα βέλος από το στήθος της. Carry αν δεν χωράει άλλο.
 proj_new:
         ld hl,ARROWS + 4
         ld de,8
@@ -258,7 +330,8 @@ proj_new:
 .got:   ld a,(ix+U_TGT)
         ld (hl),a
         inc hl
-        ld (hl),b
+        ld a,(ix+U_IDX)         ; ο τοξότης (το C είναι ο μετρητής)
+        ld (hl),a
         ld de,-5
         add hl,de
         ld a,(ix+U_WX)
@@ -329,7 +402,14 @@ pr_one: call idx_iy
         or b
         jr nz,.move
         pop af
-        ld b,(ix+5)
+        ld c,(ix+5)             ; ο τοξότης, και η ζημιά του σετ του
+        push ix
+        ld a,c
+        call idx_ix
+        call st_hl
+        inc hl
+        ld b,(hl)
+        pop ix
         call hit
         call dq_add
 .free:  ld (ix+4),255
@@ -475,6 +555,8 @@ pose_end:
 
 ; IX: η θέση ελεύθερη, μακριά από τον κόσμο (όπως οι ελεύθερες του M7).
 unit_free:
+        call ord_get
+        ld (hl),255
         ld (ix+U_TEAM),TEAM_FREE
         ld a,(ix+U_FL)
         and 1 << F_ORD
@@ -517,6 +599,62 @@ c_dist: ld l,(iy+U_WX)
         call abs_hl
         pop de
         add hl,de
+        ret
+
+; RETURN (do_command, πριν την κίνηση): ο εχθρός κάτω από τον κέρσορα (όπως
+; το κλικ: από τη μπροστινή του ORDER προς τα πίσω, ζωντανός, ομάδα 1)
+; γίνεται ο στόχος όσων είναι επιλεγμένες — αλλιώς καμία εντολή επίθεσης.
+ord_cmd:
+        ld c,255
+        ld a,(ord_n)
+        or a
+        jr z,.set
+        ld b,a
+        add a,a
+        ld l,a
+        ld h,ORDER >> 8
+        ld a,ORDER & 255
+        add a,l
+        ld l,a
+        adc a,h
+        sub l
+        ld h,a
+.l:     dec hl
+        ld d,(hl)
+        dec hl
+        ld e,(hl)
+        push de
+        pop iy
+        ld a,(iy+U_TEAM)
+        dec a
+        jr nz,.n
+        ld a,(cur_x)
+        sub (iy+U_SX)
+        cp 4
+        jr nc,.n
+        ld a,(cur_y)
+        sub (iy+U_SY)
+        cp 16
+        jr nc,.n
+        ld c,(iy+U_IDX)
+        jr .set
+.n:     djnz .l
+.set:   ld a,(sel_n)
+        or a
+        ret z
+        ld b,a
+        ld hl,SELLIST
+.s:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push de
+        pop iy
+        ld e,(iy+U_IDX)
+        ld d,C7_ORD >> 8
+        ld a,c
+        ld (de),a
+        djnz .s
         ret
 
 ; ------------------------------------------------------------ occlude.asm

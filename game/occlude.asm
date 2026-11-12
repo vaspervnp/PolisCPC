@@ -24,8 +24,10 @@ OCC_MAX     equ 8               ; το ορθογώνιο οθόνης για τ
                                 ; μονάδας, και τα όρια του «πίσω» (occ_bld)
 SPR_ARROW   equ SPR_CURSOR + 3 * 128 ; στην C5: ένα βέλος (αχρησιμοποίητο, M8)
 OCC_E       equ SPR_CURSOR + 4 * 128 ; στην C5: 16 bytes ανά καρέ (make_edges.py)
-OCC_OM      equ OCC_E + #700    ; στην C5: η μάσκα (και +256 το pen) ανά byte
-C5_TAIL     equ 4 * 128 + #700 + 512 ; ό,τι πάει στην C5 από το SPR_CURSOR
+OCC_OM      equ OCC_E + #700    ; στην C5: η μάσκα (και +256 το pen) ανά byte·
+                                ; +512 ξανά, με το pen της ομάδας 1
+TR1         equ OCC_OM + #400   ; στην C5: byte -> byte, τα pens της ομάδας 1
+C5_TAIL     equ 4 * 128 + #700 + 5 * 256 ; ό,τι πάει στην C5 από το SPR_CURSOR
 
         assert OCC_L + OCC_MAX * 10 <= ACT_TAB, 'OCC_L'
         assert SPR_STRIDE == 25 * 128, 'OCC_E: 25 frames per set'
@@ -109,7 +111,11 @@ occ_make:
         add iy,de
         ld e,(ix+U_OADDR)
         ld d,(ix+U_OADDR+1)
-        ld h,OCC_OM >> 8
+        ld a,(ix+U_TEAM)        ; το pen της ομάδας: H = OCC_OM, ή + 2
+        and 1                   ; σελίδες για την ομάδα 1
+        add a,a
+        add a,OCC_OM >> 8
+        ld h,a
         ld b,16
 .row:   ld a,(iy+0)             ; C: τα bits της γραμμής, 2 ανά byte
         inc iy

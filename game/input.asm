@@ -292,7 +292,8 @@ do_select:
 
 ; IX -> επιλεγμένη, στη λίστα (ως SEL_MAX).
 unit_select:
-        bit 7,(ix+U_TEAM)       ; νεκρή, βέλος, ελεύθερη (M8): όχι
+        ld a,(ix+U_TEAM)        ; μόνο του παίκτη: όχι εχθρός, νεκρή,
+        or a                    ; ελεύθερη (M8)
         ret nz
         ld hl,sel_n
         ld a,(hl)
@@ -349,6 +350,8 @@ do_command:
         ld a,(sel_n)
         or a
         ret z
+        ld hl,ord_cmd           ; εχθρός κάτω από τον κέρσορα: επίθεση
+        call far7               ; (bank7.asm)· και η κίνηση ως εκεί
         ld hl,(cw_x)            ; το κελί του στόχου, και το flow field του
         ld de,(cw_y)
         call feet_tile

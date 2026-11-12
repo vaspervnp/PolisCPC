@@ -32,7 +32,10 @@ def frames(name):
             for k in range(0, len(blob), 128)]
 
 
-SPRITES = [frames(n) for n in SETS]
+# το σετ 3 όπως μπαίνει στην C5: με τα W της επίθεσης των σετ 0-2 στα καρέ
+# 12-14 (src/make_edges.py)
+SPRITES = [frames(n) for n in SETS[:3]] + [frames('set3')]
+STRIDE = 25                                     # καρέ ανά σετ στην C5
 CURSOR, MARK, ANCHOR = frames('cursor')[:3]
 ARROWS, PR_N = 0xA5E0, 4                       # τα βέλη (game/bank7.asm)
 
@@ -42,7 +45,7 @@ def rec(c, addr):
     w = lambda o: b[o] | b[o + 1] << 8                     # noqa: E731
     return dict(addr=addr, wx=w(0), wy=w(2), tx=w(4), ty=w(6), set=b[8],
                 step=b[9], face=b[10], fl=b[11], sx=b[12], sy=b[13],
-                drawn=b[14], frame=w(16), idx=b[22])
+                drawn=b[14], frame=w(16), idx=b[22], team=b[28])
 
 
 def unit(c, i):
@@ -59,9 +62,10 @@ def sprite_of(u):
     if u['addr'] == ANCHOR_REC:            # η γωνία του κουτιού, ή το σημάδι
         return MARK if u['frame'] == 0x7280 else ANCHOR    # του κτιρίου (M7)
     s = SPRITES[u['set']]
-    if u['face'] & 0x80:                   # πόζα (M8): το U_STEP είναι το καρέ,
-        f = u['step']                      # 21-24 οι όψεις W (τα 4-7 ανάποδα)
-        return gfx.mirror(s[4 + f - 21]) if f >= 21 else s[f]
+    if u['face'] & 0x80:                   # πόζα (M8): το U_STEP είναι το καρέ
+        a = u['set'] * STRIDE + u['step']  # από τη βάση του σετ, ως και σε
+        s, f = SPRITES[a // STRIDE], a % STRIDE    # επόμενο σετ (τα W της
+        return gfx.mirror(s[4 + f - 21]) if f >= 21 else s[f]  # επίθεσης)
     anim = (u['step'] >> 1) & 3
     face = FACES[u['face']]
     if face == 'W':
@@ -90,6 +94,15 @@ BANK6 = open(os.path.join(M.ROOT, 'data', 'bank6.bin'), 'rb').read()
 import make_bank6 as MB                         # noqa: E402
 import make_map as MM                           # noqa: E402
 OUTLINE = gfx.PEN[MM.OUTLINE_PEN]
+_, RED_HI, RED_LO = gfx.TEAMS[1]
+RED = {gfx.TEAM_HI: RED_HI, gfx.TEAM_LO: RED_LO}
+
+
+def painted(u, spr):
+    """Η ομάδα 1 (και όταν πεθαίνει): τα pens της ομάδας κόκκινα."""
+    if u['addr'] < ANCHOR_REC and u['team'] & 0x7F == 1:
+        return gfx.recolour(spr, RED)
+    return spr
 
 
 def buildings(c):
@@ -127,12 +140,12 @@ def hidden(u, blds):
     return False
 
 
-def occluded(spr):
+def occluded(spr, pen=OUTLINE):
     """Μόνο το περίγραμμα: τα pixels της σιλουέτας με διάφανο γείτονα, στο
-    pen OUTLINE· όλα τα άλλα διάφανα."""
+    pen OUTLINE (της ομάδας)· όλα τα άλλα διάφανα."""
     def on(i, j):
         return 0 <= i < 8 and 0 <= j < 16 and spr[j][i] is not None
-    return [[OUTLINE if on(i, j) and not (on(i - 1, j) and on(i + 1, j) and
+    return [[pen if on(i, j) and not (on(i - 1, j) and on(i + 1, j) and
                                            on(i, j - 1) and on(i, j + 1))
              else None for i in range(8)] for j in range(16)]
 
@@ -144,7 +157,9 @@ def expected(c, sym, ref):
         spr = sprite_of(u)
         if not u['fl'] & F_FIXED and u['addr'] < ANCHOR_REC and blds and \
                 hidden(u, blds):
-            spr = occluded(spr)
+            spr = occluded(spr, RED_HI if u['team'] & 1 else OUTLINE)
+        else:
+            spr = painted(u, spr)
         stamp(img, spr, u['sx'], u['sy'])
         if u['fl'] & F_SEL:
             stamp(img, MARK, u['sx'], u['sy'])

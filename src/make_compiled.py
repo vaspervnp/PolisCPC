@@ -24,6 +24,14 @@ sprite δεν περνάει όριο σελίδας (το low byte κάθε σ�
     ...     οι ρουτίνες
 
 Οι όψεις W είναι οι E καθρεφτισμένες, όπως στην τράπεζα C5.
+
+-> data/compiled_red.bin   ΟΙ ΚΟΚΚΙΝΟΙ (ομάδα 1): ο σπαθοφόρος και ο τοξότης
+                           με τα pens της ομάδας αλλαγμένα (gfx.TEAMS[1]), στο
+                           τέλος της τράπεζας C6 (RED_ORG, στοιχισμένο σε
+                           σελίδα: make_bank6.py). Ίδια διάταξη: πίνακας 2 σετ
+                           x 16 καρέ x dw, μετά οι ρουτίνες. Οι κόκκινοι
+                           χωρικοί (και ό,τι δεν είναι μεταγλωττισμένο) πάνε
+                           από το blit16t, με πίνακα pen προς pen (make_edges.py).
 """
 import json
 import os
@@ -34,6 +42,33 @@ DATA = os.path.join(gfx.OUT, 'data')
 SETS = ['villager_m', 'swordsman', 'archer', 'villager_carry']   # = U_SET
 ORG = 0x4000
 LIMIT = 0x4000                  # μία τράπεζα
+RED_SETS = ['swordsman', 'archer']                             # = U_SET 1, 2
+RED = 1                         # gfx.TEAMS: η ομάδα 1
+
+
+def red(img):
+    _, hi, lo = gfx.TEAMS[RED]
+    return gfx.recolour(img, {gfx.TEAM_HI: hi, gfx.TEAM_LO: lo})
+
+
+def build(names, org, paint=lambda img: img):
+    base = org + len(names) * 16 * 2
+    code = bytearray()
+    entries = []
+    sizes = {}
+    for name in names:
+        n = 0
+        regs = VIL_REGS if name in VIL_SETS else None
+        for img in frames(name):
+            entries.append(base + len(code))
+            r = compile_frame(paint(img), regs)
+            code += r
+            n += len(r)
+        sizes[name] = n
+    blob = bytearray()
+    for e in entries:
+        blob += bytes([e & 255, e >> 8])
+    return blob + code, sizes
 
 
 def frames(name):
@@ -43,7 +78,28 @@ def frames(name):
     return dec + [gfx.mirror(dec[4 + k]) for k in range(4)]   # S E N W
 
 
-def compile_frame(img):
+# ΟΙ ΧΩΡΙΚΟΙ (σετ 0, 3): τα bytes με pens της ομάδας είναι μόνο τρία, και
+# γράφονται από τους B, D, E, που τους φορτώνει ο καλών ανά ομάδα
+# (game/units.asm, units_draw: VIL_T0 / VIL_T1) — ένας κώδικας για όλες τις
+# ομάδες. `ld (hl),r` / `or r` αντί για `ld (hl),n` / `or n`.
+VIL_REGS = {12: 0, 196: 2, 200: 3}              # byte -> r (B 0, D 2, E 3)
+VIL_SETS = ('villager_m', 'villager_carry')
+
+
+def vil_values(team):
+    """(B, D, E) της ομάδας: τα τρία bytes, βαμμένα."""
+    import cpcimg
+    _, hi, lo = gfx.TEAMS[team]
+    m = {gfx.TEAM_HI: hi, gfx.TEAM_LO: lo}
+    out = {}
+    for v, r in VIL_REGS.items():
+        a, b = cpcimg.mode0_pens(v)
+        out[r] = cpcimg.mode0_byte(m.get(a, a), m.get(b, b))
+    return out[0], out[2], out[3]
+
+
+def compile_frame(img, regs=None):
+    regs = regs or {}
     data = gfx.encode_masked(img)
     out = bytearray([0x4D])                     # ld c,l
     for y in range(16):
@@ -55,10 +111,15 @@ def compile_frame(img):
             out += b'\x2C' * (k - cur)          # inc l
             cur = k
             if m == 0:
-                out += bytes([0x36, d])         # ld (hl),d
+                if d in regs:
+                    out += bytes([0x70 + regs[d]])      # ld (hl),r
+                else:
+                    out += bytes([0x36, d])     # ld (hl),d
             else:
                 out += bytes([0x7E, 0xE6, m])   # ld a,(hl) / and m
-                if d:
+                if d in regs:
+                    out += bytes([0xB0 + regs[d]])      # or r
+                elif d:
                     out += bytes([0xF6, d])     # or d
                 out += b'\x77'                  # ld (hl),a
         out += b'\xC9' if y == 15 else b'\xEF'  # ret / rst #28
@@ -66,31 +127,31 @@ def compile_frame(img):
 
 
 def main():
-    base = ORG + len(SETS) * 16 * 2
-    code = bytearray()
-    entries = []
-    sizes = {}
-    for name in SETS:
-        n = 0
-        for img in frames(name):
-            entries.append(base + len(code))
-            r = compile_frame(img)
-            code += r
-            n += len(r)
-        sizes[name] = n
-    blob = bytearray()
-    for e in entries:
-        blob += bytes([e & 255, e >> 8])
-    blob += code
+    blob, sizes = build(SETS, ORG)
     assert len(blob) <= LIMIT, 'τα μεταγλωττισμένα δεν χωράνε: %d' % len(blob)
     with open(os.path.join(DATA, 'compiled.bin'), 'wb') as f:
         f.write(blob)
+    size = len(build(RED_SETS, 0x4000, red)[0])
+    red_org = (0x8000 - size) & ~0xFF           # στο τέλος της C6
+    rblob, _ = build(RED_SETS, red_org, red)
+    with open(os.path.join(DATA, 'compiled_red.bin'), 'wb') as f:
+        f.write(rblob)
     with open(os.path.join(DATA, 'compiled.json'), 'w') as f:
         json.dump({'org': ORG, 'sets': SETS, 'frames_per_set': 16,
-                   'bytes': len(blob), 'per_set': sizes}, f, indent=1)
+                   'bytes': len(blob), 'per_set': sizes,
+                   'red_org': red_org, 'red_sets': RED_SETS,
+                   'red_bytes': len(rblob)}, f, indent=1)
         f.write('\n')
     print('data/compiled.bin  %d bytes (%d ελεύθερα στην τράπεζα): %s'
           % (len(blob), LIMIT - len(blob), sizes))
+    with open(os.path.join(DATA, 'compiled.asm'), 'w') as f:
+        f.write('; ΠΑΡΑΓΕΤΑΙ από src/make_compiled.py: B, D, E των χωρικών '
+                'ανά ομάδα\n')
+        for t in (0, 1):
+            b, d, e = vil_values(t)
+            f.write('VIL_B%d      equ #%02X\nVIL_DE%d     equ #%02X%02X\n'
+                    % (t, b, t, d, e))
+    print('data/compiled_red.bin  %d bytes, στο #%04X της C6' % (len(rblob), red_org))
 
 
 if __name__ == '__main__':

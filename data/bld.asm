@@ -9,6 +9,7 @@
 BT_N        equ 10
 BT_SIZE     equ 18
 START_AGE   equ 2
+CMP_RED     equ #6400      ; οι κόκκινοι μεταγλωττισμένοι (C6)
 BTY_TOWN_CENTER equ 0
 BTY_HOUSE equ 1
 BTY_BARRACKS equ 2

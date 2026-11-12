@@ -605,14 +605,19 @@ unit_think:
         ld hl,dead_think
         call far7
         jp unit_think_vis
-.alive: bit F_WANDER,(ix+U_FL)  ; ΜΑΧΗ: στρατιώτες (σετ 1, 2) που δεν
-        jr nz,.nc               ; περιπλανιούνται — ο κοντινότερος εχθρός,
-        ld a,(ix+U_SET)         ; και η απόφαση στην C7
-        dec a
+.alive: bit F_WANDER,(ix+U_FL)  ; ΜΑΧΗ (όχι όσες περιπλανιούνται: ποτέ
+        jr nz,.nc               ; εντολή, ποτέ στόχος). Στρατιώτες (σετ 1,
+        ld a,(ix+U_SET)         ; 2): ο κοντινότερος εχθρός, και η απόφαση
+        dec a                   ; στην C7 (που προτιμά την εντολή επίθεσης)
         cp 2
-        jr nc,.nc
-        call find_nearest
-        ld hl,combat_think
+        jr c,.sol
+        ld hl,ord_get           ; χωρικός: μόνο με εντολή επίθεσης (ή όταν
+        call far7               ; απαντάει)
+        inc a
+        jr z,.nc
+        jr .ct
+.sol:   call find_nearest
+.ct:    ld hl,combat_think
         call far7
         call died_flush
 .nc:    ld a,(ix+U_JOB)         ; χωρικός με δουλειά (gather.asm)
@@ -1533,7 +1538,7 @@ units_draw:
         push bc
         pop ix
         bit 2,(ix+U_DRAWN)
-        jr z,.skip              ; δεν άλλαξε
+        jp z,.skip              ; δεν άλλαξε
         ld a,(ix+U_SY)
         ld b,(ix+U_SX)
         call line_x
@@ -1544,7 +1549,7 @@ units_draw:
         push de                 ; πίσω από κτίριο: ζωγραφίστηκε, με το
         call occ_draw           ; περίγραμμα (occlude.asm)
         pop de
-        jr nz,.mark
+        jp nz,.mark
         bit 7,(ix+U_FACE)       ; πόζα: τα καρέ της δεν είναι μεταγλωττισμένα
         jr nz,.data
         ld a,e                  ; καμία γραμμή σε όριο σελίδας: το low byte
@@ -1570,7 +1575,20 @@ units_draw:
         add a,a
         ld l,a
         ld h,#40
-        ld a,RAM_CMP
+        ld c,RAM_CMP
+        ld a,(ix+U_TEAM)        ; ομάδα 1: σπαθοφόρος / τοξότης από τους
+        or a                    ; κόκκινους της C6 (make_compiled.py)· οι
+        jr z,.c0                ; χωρικοί, της C7 με τα B, D, E της ομάδας
+        ld a,(ix+U_SET)
+        dec a
+        cp 2
+        jr nc,.c0
+        ld a,l
+        sub 32
+        ld l,a
+        ld h,CMP_RED >> 8
+        ld c,RAM_RES
+.c0:    ld a,c
         call setram
         ld a,(hl)
         inc l
@@ -1578,6 +1596,13 @@ units_draw:
         ld l,a
         ld (.cj + 1),hl
         ex de,hl                ; HL = η οθόνη
+        ld a,(ix+U_TEAM)        ; B, D, E: τα bytes της ομάδας στους
+        and 1                   ; χωρικούς (make_compiled.py, VIL_REGS)
+        ld b,VIL_B0
+        ld de,VIL_DE0
+        jr z,.cj
+        ld b,VIL_B1
+        ld de,VIL_DE1
 .cj:    call 0                  ; (αυτο-τροποποιούμενο: η ρουτίνα του καρέ)
         ld a,RAM_SPR
         call setram
@@ -1585,7 +1610,13 @@ units_draw:
 .data:  push de
         call unit_frame
         pop de
-        call blit16
+        ld a,(ix+U_TEAM)        ; ομάδα 1 (και πεθαίνει): με τον πίνακα
+        and #7F
+        dec a
+        jr nz,.d0
+        call blit16t
+        jr .mark
+.d0:    call blit16
 .mark:  bit F_SEL,(ix+U_FL)     ; επιλεγμένη: οι αγκύλες, στο ίδιο ορθογώνιο
         call nz,blit_mark
         set 0,(ix+U_DRAWN)

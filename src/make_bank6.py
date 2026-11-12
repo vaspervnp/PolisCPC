@@ -106,6 +106,12 @@ def main():
                        ', '.join(map(str, cost)), pts, w, h,
                        ', '.join(map(str, (u,) + ucost)), utime, addr, key,
                        hot))
+    # οι κόκκινοι μεταγλωττισμένοι (make_compiled.py), στο τέλος της τράπεζας
+    cj = json.load(open(os.path.join(DATA, 'compiled.json')))
+    red = open(os.path.join(DATA, 'compiled_red.bin'), 'rb').read()
+    free = cj['red_org'] - ORG - len(blob)
+    assert free >= 0, 'η C6 δεν χωράει τους κόκκινους: %d' % free
+    blob += bytes(free) + red
     assert len(blob) <= 0x4000
     with open(os.path.join(DATA, 'bank6.bin'), 'wb') as f:
         f.write(blob)
@@ -123,8 +129,9 @@ def main():
                 'καρέ εκπαίδευσης, και\n'
                 '; η εικόνα στην τράπεζα C6.\n\n'
                 'BT_N        equ %d\nBT_SIZE     equ 18\nSTART_AGE   equ %d\n'
+                'CMP_RED     equ #%04X      ; οι κόκκινοι μεταγλωττισμένοι (C6)\n'
                 '%s\nbld_types:\n%s'
-                % (len(TYPES), START_AGE, keys, ''.join(rows)))
+                % (len(TYPES), START_AGE, cj['red_org'], keys, ''.join(rows)))
         keym = [MATRIX[t[1]] for t in TYPES] + [MATRIX[TRAIN_KEY],
                                                  MATRIX['ESC']]
         f.write('\n; τα πλήκτρα: οι τύποι (%s), μετά %s (εκπαίδευση) και ESC\n'
@@ -133,8 +140,9 @@ def main():
                 % (''.join(t[1] for t in TYPES), TRAIN_KEY, BLD_RES,
                    ''.join('        db %d, #%02X\n' % (r, 1 << b)
                            for r, b in keym)))
-    print('data/bank6.bin  %d bytes (πόροι %d + %d τύποι κτιρίων)'
-          % (len(blob), len(res), len(TYPES)))
+    print('data/bank6.bin  %d bytes (πόροι %d + %d τύποι κτιρίων, %d ελεύθερα, '
+          'οι κόκκινοι στο #%04X)' % (len(blob), len(res), len(TYPES), free,
+                                      cj['red_org']))
 
 
 if __name__ == '__main__':
