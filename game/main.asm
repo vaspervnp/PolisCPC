@@ -147,9 +147,9 @@ frame_work:
 
 ; Το παράθυρο χάρτη από το μηδέν: έδαφος, μετά οι πόροι από πάνω.
 render:
-        call draw_ground
-        ld a,RAM_RES
+        ld a,RAM_RES            ; έδαφος, πόροι και κτίρια: στην C6
         call setram
+        call draw_ground
         call rg_full            ; τα κτίρια του παραθύρου (buildings.asm)
         call bld_cands
         call draw_resources
@@ -226,6 +226,7 @@ crtc_regs:
         ;   R0  R1  R2  R3  R4  R5  R6  R7  R8  R9 R10 R11 R12 R13
         db  63, 40, 46,#8E, 38,  0, 25, 30,  0,  7,  0,  0,#30,  0
 
+        ifdef BARS            ; μόνο στην οθόνη ελέγχου του M0
 ; Δεκάξι κάθετες λωρίδες των 5 bytes (10 pixels): pen 0 αριστερά, pen 15
 ; δεξιά. Μία γραμμή 80 bytes χτίζεται μία φορά και αντιγράφεται 200 φορές.
 draw_bars:
@@ -255,6 +256,7 @@ draw_bars:
         djnz .line
         ret
 
+
 ; HL = διεύθυνση γραμμής -> HL = η από κάτω της.
 next_line:
         ld a,h
@@ -275,6 +277,7 @@ next_line:
 ; πίσω την οθόνη και επιβεβαιώνει κάθε λωρίδα.
 pen_pair:
         db #00,#C0,#0C,#CC,#30,#F0,#3C,#FC,#03,#C3,#0F,#CF,#33,#F3,#3F,#FF
+        endif
 
         include "../palette.asm"
         include "ground.asm"
@@ -291,8 +294,10 @@ pen_pair:
         include "../data/bld.asm"
         include "buildings.asm"
 
+        ifdef BARS
 linebuf:
         ds 80
+        endif
 
 ; Η διεύθυνση κάθε γραμμής οθόνης: #C000 + (y%8)*#800 + (y/8)*80.
 line_addr:
@@ -446,7 +451,7 @@ bp_slot:    db 0
 cand_n:     db 0                ; τα υποψήφια κτίρια μιας σχεδίασης
 cand_k:     db 0
 cand_c:     db 0
-cand:       ds CAND_MAX
+cand:       ds 2 * CAND_MAX
 rg_x0:      db 0                ; η περιοχή της σχεδίασης
 rg_x1:      db 0
 rg_y0:      db 0
@@ -466,6 +471,14 @@ rq_yb:      dw 0
 rq_h:       db 0
 rq_n:       db 255
 bq_tot:     db 0                ; μονάδες σε όλες τις ουρές
+bld_top:    db 1                ; οι βρόχοι των κτιρίων: ως εδώ (bld_new, >= 1)
+card_on:    db 0                ; η κάρτα του HUD δείχνει κτίριο
+anc_force:  db 0                ; η γωνία / το σημάδι άλλαξε
+dr_kind:    db 0                ; job_go_drop
+dr_best:    db 0
+dr_rec:     dw 0
+int_t:      db 0                ; 300 Hz, πάντα (η διακοπή)
+t0:         db 0                ; η αρχή του καρέ μονάδων
 cmd_kind:   db 255              ; το είδος του πόρου κάτω από την εντολή
 cmd_sj:     db 0                ; (ld (cmd_sj),de: j και μετά i)
 cmd_si:     db 0
@@ -505,13 +518,10 @@ set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
 spr_tab:    dw spr_z0, spr_z1, spr_z2, spr_z3
 
 ; ------------------------------------------------------------ γραφικά
-; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη: το byte του χάρτη
-; AND #F0 είναι κατευθείαν το low byte της διεύθυνσης.
-        align 256
-tile_gfx:
-        incbin "../data/terrain.bin"
-TILE_PAGE   equ tile_gfx >> 8
-        assert $ - tile_gfx == 256, 'terrain.bin must be exactly one page'
+; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη, στην τράπεζα C6
+; (src/make_bank6.py): το byte του χάρτη AND #F0 είναι κατευθείαν το low
+; byte της διεύθυνσης. Όποιος ζωγραφίζει έδαφος τρέχει με την C6 μέσα.
+TILE_PAGE   equ #48
 
 ; Οι πόροι (και τα κτίρια, M7) ζουν στην τράπεζα C6 (RAM_RES): res_gfx =
 ; #4000. Οι ρουτίνες που ζωγραφίζουν πόρους τρέχουν με την C6 μέσα

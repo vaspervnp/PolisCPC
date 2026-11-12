@@ -455,6 +455,8 @@ make_swap:
 ; ---------------------------------------------------------- το καρέ
 
 units_tick:
+        ld a,(int_t)            ; η αρχή του καρέ, σε 1/300 s
+        ld (t0),a
         ld a,(bench_req)
         or a
         call nz,bench_targets
@@ -471,8 +473,14 @@ units_tick:
         ld a,(n_busy)           ; το BFS μιας εντολής, σε κομμάτια
         or a
         call nz,field_cont
-        call units_think
+        ld a,(t0)               ; αργό καρέ (κύλιση): οι αποφάσεις στο επόμενο
+        ld b,a
+        ld a,(int_t)
+        sub b
+        cp T_LATE
+        call c,units_think
         call bld_tick           ; κτίρια: επανασχεδίαση, ουρές (buildings.asm)
+        call hud_card
         ld a,(hud_dirty)        ; άλλαξε η μπάρα (gather.asm)
         or a
         call nz,hud_update
@@ -510,6 +518,8 @@ units_tick:
 ; του M5 το βήμα ακρίβυνε, και τα αθροιστικά βήματα των μακρινών έτρωγαν
 ; το καρέ. Με 6, κάθε μονάδα μία φορά στα ~22 καρέ.)
 THINK_N     equ 6
+T_BUDGET    equ 5               ; σε 1/300 s: μετά από 17 ms, όχι άλλα βήματα
+T_LATE      equ 8               ; σε 1/300 s: μετά από 27 ms, καμία απόφαση
 units_think:
         ld a,(think_i)
         ld b,THINK_N
@@ -854,11 +864,25 @@ units_move:
 .sk:    inc l
         bit 7,l
         jr z,.scan
-.ents:  ld ix,ANCHOR_REC
+.ents:  ld ix,ANCHOR_REC          ; η γωνία του κουτιού, ή το σημάδι του
+        ld hl,SPR_ANCHOR        ; επιλεγμένου κτιρίου (buildings.asm)
         ld a,(box_on)
         or a
+        jr nz,.anc
+        call bld_mark
         jr z,.noanc
-        call unit_update
+.anc:   ld (ix+U_FRAME),l
+        ld (ix+U_FRAME+1),h
+        ld hl,anc_force         ; άλλαξε: σβήσιμο και σχεδίαση από την αρχή
+        ld a,(hl)
+        or a
+        jr z,.au
+        ld (hl),0
+        bit 0,(ix+U_DRAWN)
+        call nz,old_rect
+        ld (ix+U_DRAWN),0
+        ld (ix+U_SY),255
+.au:    call unit_update
         jr .cur
 .noanc: call unit_still
         call unit_hide
@@ -885,6 +909,12 @@ unit_update:
         xor (ix+U_IDX)          ; οι μισές στα μονά, οι μισές στα ζυγά
         rra
         jr c,.nostep
+        ld a,(t0)               ; ΟΡΙΟ ΧΡΟΝΟΥ: αν το καρέ έχει ήδη φάει
+        ld b,a                  ; T_BUDGET / 300 s (κύλιση, απόφαση, βήματα
+        ld a,(int_t)            ; και τα σβησίματα και οι σχεδιάσεις τους που
+        sub b                   ; ακολουθούν), η μονάδα δεν κάνει βήμα αυτό
+        cp T_BUDGET             ; το καρέ. Στο επόμενο, ξανά.
+        jr nc,.nostep
         ld de,#0102             ; 1 byte, 2 γραμμές: η ισομετρική διαγώνιος
         call nav_step
         jr nz,.went

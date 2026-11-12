@@ -11,6 +11,14 @@ res_spent:  db 0,4,4,4,0,6,0,9,9,0,0,0,0,0,0,0
 BAR_Y       equ 6
 bar_x:      db 5,17,29,41,53,65
 
+; η κάρτα του επιλεγμένου κτιρίου: ψηφίο και μπάρα προόδου
+CARD_X      equ 13
+CARD_Y      equ 29
+CARD_BY     equ 37
+CARD_FULL   equ #F3
+CARD_HALF   equ #E2
+CARD_EMPTY  equ #C0
+
 ; 11 ψηφία (0-9, κενό) x 5 γραμμές x 2 bytes
 digits:
             db #C3,#C2,#C2,#C2,#C2,#C2,#C2,#C2,#C3,#C2

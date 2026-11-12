@@ -133,6 +133,7 @@ cursor_input:
         ld (ANCHOR_REC + U_WY),hl
         ld a,1
         ld (box_on),a
+        ld (anc_force),a
         pop bc
 .nf:    bit IN_FIRE,c
         jr z,.nrel
@@ -167,6 +168,8 @@ cur_world:
 ; κέρσορας είναι σχεδόν εκεί που πατήθηκε, η μονάδα κάτω του (η πιο
 ; μπροστινή)· αλλιώς όσες ΦΑΙΝΟΝΤΑΙ (το ORDER) και πατάνε μέσα στο κουτί.
 do_select:
+        ld a,1                  ; η γωνία / το σημάδι αλλάζει
+        ld (anc_force),a
         ld a,255                ; κανένα κτίριο (το κλικ μπορεί να βρει)
         ld (sel_bld),a
         call cur_world

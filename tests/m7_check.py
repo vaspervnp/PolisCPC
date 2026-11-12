@@ -36,16 +36,22 @@ import scene as S                               # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 import make_bank6 as MB                         # noqa: E402
 
-BLD_TAB, B_SIZE, BLD_MAX = 0xBE40, 16, 12
+# οι θέσεις των κτιρίων: 16 στο #A400 και 12 στο #BE40 (game/buildings.asm)
+BLD_SLOTS = [0xA400 + k * 16 for k in range(16)] + \
+    [0xBE40 + k * 16 for k in range(12)]
+B_SIZE, BLD_MAX = 16, 28
+HUD_PAGE = 0x4000
+SPR_MARK, ANCHOR_REC = 0x7280, S.ANCHOR_REC
 MAP = 0x8000
 BARRACKS = (37, 61)             # το κέντρο της κάτοψης (i0 = 36, j0 = 60)
 TC = (30, 58, 4)
+QMAX = 5
 
 
 def blds(c):
     out = []
     for k in range(BLD_MAX):
-        b = c.read_ram(BLD_TAB + k * B_SIZE, B_SIZE)
+        b = c.read_ram(BLD_SLOTS[k], B_SIZE)
         if b[0] != 255:
             out.append(dict(slot=k, type=MB.KEYS[b[0]], i0=b[2], j0=b[3],
                             st=b[4], prog=b[14], qn=b[15]))
@@ -64,6 +70,44 @@ class Nav(M5.Nav):
 
     def blocked(self, i, j):
         return (i, j) in self.foot or super().blocked(i, j)
+
+
+def hud_addr(y, x):
+    return HUD_PAGE + (y & 7) * 0x800 + (y >> 3) * 80 + x
+
+
+def card(c):
+    """Η κάρτα του HUD: (ψηφίο ή None αν κενή, pixels της μπάρας ή None αν
+    η μπάρα δεν είναι γεμάτη από αριστερά)."""
+    glyph = M6.MM.digit_glyphs()
+    rows = [list(c.read_ram(hud_addr(M6.MM.CARD_Y + l, M6.MM.CARD_X), 2))
+            for l in range(5)]
+    dig = [d for d in range(11) if rows == [glyph[d * 10 + 2 * l:
+                                                  d * 10 + 2 * l + 2]
+                                            for l in range(5)]]
+    bar = list(c.read_ram(hud_addr(M6.MM.CARD_BY, M6.MM.CARD_X), 6))
+    val = {M6.MM.card_byte(n): n for n in (2, 1, 0)}
+    px = [val.get(b, -1) for b in bar]
+    ok = -1 not in px and px == sorted(px, reverse=True) and px.count(1) <= 1
+    return (dig[0] if dig and dig[0] < 10 else None), (sum(px) if ok else None)
+
+
+def marked(c):
+    """Το σημάδι του επιλεγμένου κτιρίου φαίνεται."""
+    a = S.rec(c, ANCHOR_REC)
+    return a['frame'] == SPR_MARK and a['drawn'] & 1 and a['sy'] != 255
+
+
+def fake_bld(c, sym, slot, typ, st=1):
+    """Μια εγγραφή κτιρίου έξω από τον χάρτη (WX #4000: ποτέ στην οθόνη)."""
+    rec = bytearray([255] * B_SIZE)
+    rec[0], rec[1], rec[2], rec[3], rec[4] = MB.KEYS.index(typ), 0, 90, 90, st
+    rec[6:10] = bytes([0, 0x40, 0, 0])
+    rec[14], rec[15] = 0, 0
+    for k, b in enumerate(rec):
+        c.poke(BLD_SLOTS[slot] + k, b)
+    top = sym['BLD_TOP']                  # οι βρόχοι ως εκεί (bld_new)
+    c.poke(top, max(c.peek(top), slot + 1))
 
 
 def press(g, key, n=2):
@@ -178,6 +222,12 @@ def main():
     press(g, 't')
     v1 = M6.hud_vals(c, sym)
     qn = [b for b in blds(c) if b['type'] == 'barracks'][0]['qn']
+    g.tick(20)
+    cd = card(c)
+    g.report('κάρτα', cd[0] == 2 and cd[1] is not None and 0 < cd[1] < 12 and
+             marked(c),
+             'το HUD δείχνει ουρά %s και πρόοδο %s/12 pixels· το σημάδι στο '
+             'κτίριο: %s' % (cd[0], cd[1], bool(marked(c))))
     g.report('ουρά', picked == slot and qn == 2 and v1[0] == v0[0] - 70 and
              v1[2] == v0[2] - 30,
              'κλικ στον στρατώνα (θέση %d), T x 2: ουρά %d, τροφή %d -> %d, '
@@ -203,7 +253,11 @@ def main():
              'σε %d καρέ: νέες μονάδες %s (σετ %s), δίπλα στον στρατώνα· '
              'πληθυσμός %d, η μπάρα %s' % (kt + 1, new, [tab[k][8] for k in new],
                                            vals[4], vals))
-    g.report('σύνθεση', g.compose('trained'), 'οι δύο σπαθοφόροι στην οθόνη')
+    cd = card(c)
+    g.report('κάρτα', cd == (0, 0) and marked(c),
+             'άδεια ουρά: ψηφίο %s, μπάρα %s pixels' % cd)
+    g.report('σύνθεση', g.compose('trained'), 'οι δύο σπαθοφόροι στην οθόνη, '
+             'και το σημάδι στον επιλεγμένο στρατώνα')
 
     # ------------------------------------------------- 6. διάβαση
     u5 = S.unit(c, 5)                       # τοξότης, δυτικά του στρατώνα
@@ -245,7 +299,99 @@ def main():
     g.report('εμπόδια', not on_block, 'κανένας χωρικός σε εμπόδιο όσο έχτιζε%s'
              % ('' if not on_block else ': %s' % on_block[:3]))
 
-    # ------------------------------------------------- 7. χρόνος
+    cd = card(c)
+    g.report('κάρτα', cd == (None, 0) and not marked(c),
+             'καμία επιλογή κτιρίου: η κάρτα κενή, κανένα σημάδι')
+
+    # ------------------------------------------------- 7. αποθήκη
+    for k, v in ((0, 9999), (1, 9999), (2, 9999)):
+        c.poke(sym['HUD_VAL'] + 2 * k, v & 255)
+        c.poke(sym['HUD_VAL'] + 2 * k + 1, v >> 8)
+    c.poke(sym['HUD_DIRTY'], c.peek(sym['HUD_DIRTY']) | 7)
+    sel = M6.click_unit(g, 0)
+    v = min(sel)
+    press(g, 's')
+    pit = (31, 72)
+    g.move_cursor(*M6.tile_cursor(g, *pit))
+    press(g, CPCMOD.KEY_RETURN, 1)
+    nav.add(pit[0], pit[1], 2)
+    for k in range(1500):
+        g.tick(1)
+        p = [b for b in blds(c) if b['type'] == 'storage_pit']
+        if p and p[0]['st'] == 1 and c.peek(sym['RQ_N']) == 255:
+            break
+    built = p and p[0]['st'] == 1
+    g.report('αποθήκη', len(sel) == 1 and v in M6.VILLAGERS and built,
+             'S, RETURN στο %s: ο χωρικός %d την έχτισε σε %d καρέ%s'
+             % (pit, v, k + 1, '' if built and len(sel) == 1 else
+                ' — επιλογή %s, %s' % (sorted(sel), p)))
+    M6.command(g, M6.TREE)
+    drops, carry0 = [], 0
+    w0 = M6.hud_vals(c, sym)[1]
+    for k in range(2500):
+        g.tick(1)
+        cr = c.peek(M6.J_CARRY + v)
+        if carry0 and not cr:
+            drops.append(M5.unit_tile(S.unit(c, v)))
+        carry0 = cr
+        if len(drops) == 2:
+            break
+    ring = {(i, j) for i in range(pit[0] - 1, pit[0] + 3)
+            for j in range(pit[1] - 1, pit[1] + 3)}
+    w1 = M6.hud_vals(c, sym)[1]
+    g.report('απόθεση', len(drops) == 2 and all(d in ring for d in drops) and
+             w1 > w0,
+             'ο χωρικός κόβει στο %s και αδειάζει στην αποθήκη (όχι στο '
+             'Κέντρο Πόλης): στα %s, ξύλο %d -> %d'
+             % (M6.TREE, drops, w0, w1))
+
+    # ------------------------------------------------- 8. πληθυσμός
+    for t in [(i0 + a, j0 + b) for a in (2, 1, 0) for b in (2, 1, 0)]:
+        g.move_cursor(*M6.tile_cursor(g, *t))  # ένα πλακίδιο χωρίς μονάδα
+        c.key_down(' ')
+        g.tick(2)
+        c.key_up(' ')
+        g.tick(2)
+        if c.peek(sym['SEL_BLD']) == slot:
+            break
+    pop = M6.hud_vals(c, sym)[4]
+    for k in range(3):
+        press(g, 't')
+    q1 = [b for b in blds(c) if b['type'] == 'barracks'][0]['qn']
+    free = [k for k in range(BLD_MAX) if c.peek(BLD_SLOTS[k]) == 255]
+    fake_bld(c, sym, free[0], 'house')
+    for k in range(3):
+        press(g, 't')
+    q2 = [b for b in blds(c) if b['type'] == 'barracks'][0]['qn']
+    g.report('πληθυσμός', q1 == max(0, min(3, 15 - pop)) and
+             q2 == max(0, min(q1 + 3, QMAX, 20 - pop)),
+             'πληθυσμός %d, όριο 15: T x 3 -> ουρά %d· με ένα σπίτι (όριο 20) '
+             'T x 3 -> ουρά %d (επιλογή %d)' % (pop, q1, q2,
+                                                c.peek(sym['SEL_BLD'])))
+
+    # ------------------------------------------------- 9. 28 κτίρια
+    free = [k for k in range(BLD_MAX) if c.peek(BLD_SLOTS[k]) == 255]
+    for k in free[:-1]:
+        fake_bld(c, sym, k, 'house')
+    sel = M6.click_unit(g, 3)
+    house = (26, 66)
+    press(g, 'h')
+    g.move_cursor(*M6.tile_cursor(g, *house))
+    press(g, CPCMOD.KEY_RETURN, 1)
+    n1 = len(blds(c))
+    last = [b for b in blds(c) if b['slot'] == BLD_MAX - 1]
+    press(g, 'h')
+    g.move_cursor(*M6.tile_cursor(g, house[0] + 3, house[1]))
+    press(g, CPCMOD.KEY_RETURN, 1)
+    n2 = len(blds(c))
+    g.tick(5)
+    g.report('28 κτίρια', n1 == BLD_MAX and n2 == BLD_MAX and last and
+             (last[0]['i0'], last[0]['j0']) == house,
+             'με %d θέσεις γεμάτες, το H βάζει θεμέλιο στην τελευταία (%s), '
+             'και το επόμενο δεν χωράει: %d κτίρια' % (BLD_MAX - 1, last and
+                                                       last[0]['slot'], n2))
+
+    # ------------------------------------------------- 10. χρόνος
     still = [t for t, m in zip(g.times, g.scrolled) if not m]
     g.report('χρόνος', max(still) < 40, 'καρέ χωρίς κύλιση: μέσος %.1f ms, '
              'μέγιστος %.1f ms (όριο 40), %d καρέ'

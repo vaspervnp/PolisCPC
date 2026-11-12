@@ -11,8 +11,8 @@
 ;             κοντά της· όταν σταματήσει (και είναι δίπλα): J_WORK
 ;     J_WORK  σε κάθε απόφαση +GATHER_N, ως CARRY_MAX, από το ποσό της πηγής·
 ;             γεμάτος, ή άδειασε η πηγή: J_BACK
-;     J_BACK  περπατάει στο σημείο απόθεσης (δίπλα στο Κέντρο Πόλης, που
-;             ακόμα δεν ζωγραφίζεται — M7)· εκεί ο φόρτος πάει στη μπάρα του
+;     J_BACK  περπατάει στο κοντινότερο κτίριο που δέχεται το είδος (M7:
+;             Κέντρο Πόλης, σιταποθήκη, αποθήκη)· εκεί ο φόρτος πάει στη μπάρα του
 ;             HUD, και ξανά J_GO στην ίδια πηγή. Αν η πηγή άδειασε: στην
 ;             κοντινότερη του ίδιου είδους (src_next)· αν δεν έχει: αδρανής.
 ;
@@ -47,10 +47,6 @@ SET_CARRY   equ 3               ; το σετ του χωρικού με φορ�
 GATHER_N    equ 2
 FIELD_WALK  equ FIELDS + 1      ; ίσια, με ακολούθηση τοίχου
 
-DROP_I      equ 34              ; ανατολικά του Κέντρου Πόλης (30..33, 58..61)
-DROP_J      equ 59
-DROP_X      equ 2 * (DROP_I - DROP_J) + 190
-DROP_Y      equ 4 * (DROP_I + DROP_J) - 10
 
 ; ------------------------------------------------------------ εκκίνηση
 
@@ -243,15 +239,70 @@ job_at_src:                     ; σταμάτησε: είναι δίπλα στ
         ld (ix+U_JOB),J_WORK
         ret
 
+; Στο κοντινότερο έτοιμο κτίριο του παίκτη που δέχεται το είδος του:
+; Κέντρο Πόλης όλα, σιταποθήκη τροφή, αποθήκη ξύλο, χρυσό και πέτρα. Στο
+; ελεύθερο πλακίδιο γύρω του που είναι πιο κοντά. Κανένα: αδρανής.
 job_go_drop:
-        ld hl,DROP_X
-        ld (ix+U_TX),l
-        ld (ix+U_TX+1),h
-        ld hl,DROP_Y
-        ld (ix+U_TY),l
-        ld (ix+U_TY+1),h
+        call unit_sp
+        ld l,(ix+U_IDX)
+        set 7,l
+        ld h,J_KIND >> 8
+        ld a,(hl)
+        ld (dr_kind),a
+        ld a,255
+        ld (dr_best),a
+        ld iy,BLD_TAB
+        ld a,(bld_top)
+        ld b,a
+.l:     ld a,(iy+B_ST)          ; (ελεύθερη: 255, όχι 0)
+        dec a
+        jr nz,.n
+        ld a,(iy+B_OWN)
+        or a
+        jr nz,.n
+        ld a,(iy+B_TYPE)
+        or a                    ; Κέντρο Πόλης
+        jr z,.ok
+        ld c,a
+        ld a,(dr_kind)
+        or a                    ; Z: τροφή
+        ld a,c
+        jr nz,.pit
+        cp BTY_GRANARY
+        jr z,.ok
+        jr .n
+.pit:   cp BTY_STORAGE_PIT
+        jr nz,.n
+.ok:    ld a,(iy+B_I)           ; |i0 + 1 - ui| + |j0 + 1 - uj|
+        inc a
+        ld c,a
+        ld a,(sp_ui)
+        sub c
+        call abs_a
+        ld c,a
+        ld a,(iy+B_J)
+        inc a
+        ld e,a
+        ld a,(sp_uj)
+        sub e
+        call abs_a
+        add a,c
+        ld hl,dr_best
+        cp (hl)
+        jr nc,.n
+        ld (hl),a
+        ld (dr_rec),iy
+.n:     call bnext
+        djnz .l
+        ld a,(dr_best)
+        inc a
+        jp z,job_idle
+        ld iy,(dr_rec)
+        call bld_ring
+        jp c,job_idle
+        call tile_target
         ld (ix+U_JOB),J_BACK
-        jr job_walk
+        jp job_walk
 
 ; Μαζεύει: min(GATHER_N, ό,τι χωράει, ό,τι έχει η πηγή).
 job_work:
@@ -306,11 +357,11 @@ job_work:
         ld a,c
         cp CARRY_MAX
         ret c
-        jr job_go_drop
+        jp job_go_drop
 .empty: dec hl                  ; η εγγραφή ελεύθερη, το πλακίδιο αλλάζει
         ld (hl),#FF
         call src_deplete
-        jr job_go_drop
+        jp job_go_drop
 .gone:  ld l,(ix+U_IDX)         ; την άδειασε άλλος: ό,τι κουβαλάει στο σπίτι,
         ld h,J_CARRY >> 8       ; αλλιώς στην επόμενη πηγή
         ld a,(hl)
@@ -652,9 +703,8 @@ map_ptr:
         add hl,bc
         ret
 
-; IX -> D = i, E = j: το ελεύθερο πλακίδιο γύρω από την πηγή του που είναι
-; πιο κοντά στο δικό της. Carry αν δεν υπάρχει κανένα.
-stand_point:
+; IX -> sp_ui, sp_uj: το πλακίδιο της, στον χάρτη.
+unit_sp:
         call unit_tile
         ld hl,(n_i)
         call clamp95
@@ -662,6 +712,12 @@ stand_point:
         ld hl,(n_j)
         call clamp95
         ld (sp_uj),a
+        ret
+
+; IX -> D = i, E = j: το ελεύθερο πλακίδιο γύρω από την πηγή του που είναι
+; πιο κοντά στο δικό της. Carry αν δεν υπάρχει κανένα.
+stand_point:
+        call unit_sp
         call job_src
         dec d
         dec e

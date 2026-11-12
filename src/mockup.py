@@ -424,11 +424,13 @@ def hud_background(numbers=True):
             number(img, v, ox + 9, MAP_H + 6, gfx.PEN['I'])
     gfx.stamp(img, T.hud(HUD_ART['alert']), 148, MAP_H + 1)
 
-    # κάρτα επιλεγμένης μονάδας
-    sets = {s.name: s for s in units.all_sets()}
-    gfx.stamp(img, sets['swordsman'].frames[0], 27, 163)
-    for x in range(26, 38):
-        img[181][x] = gfx.PEN['n'] if x < 35 else gfx.PEN['r']
+    # κάρτα επιλεγμένης μονάδας (στο παιχνίδι: ουρά και πρόοδος του
+    # επιλεγμένου κτιρίου, τα γράφει ο Z80)
+    if numbers:
+        sets = {s.name: s for s in units.all_sets()}
+        gfx.stamp(img, sets['swordsman'].frames[0], 27, 163)
+        for x in range(26, 38):
+            img[181][x] = gfx.PEN['n'] if x < 35 else gfx.PEN['r']
 
     # 16 κουμπιά, 8 στη σειρά x 2 σειρές
     for i, (k, _, _, _) in enumerate(T.COMMANDS):

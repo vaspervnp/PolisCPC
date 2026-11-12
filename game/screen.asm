@@ -59,6 +59,9 @@ int_handler:
         in a,(c)
         rra
         jr nc,.count
+        ld a,(int_t)            ; ο μετρητής των 300 Hz (units.asm: χρόνος)
+        inc a
+        ld (int_t),a
         xor a                   ; μέσα στο VSYNC: η πρώτη του καρέ
         ld (int_n),a
         ld a,(split_req)        ; το split ανοίγει ΜΟΝΟ εδώ: αν ανοίξει σε
@@ -67,7 +70,10 @@ int_handler:
         pop af                  ; τελειώνει ώσπου να τυλίξει ο μετρητής
         ei
         ret
-.count: ld a,(int_n)
+.count: ld a,(int_t)
+        inc a
+        ld (int_t),a
+        ld a,(int_n)
         inc a
         ld (int_n),a
         cp 2

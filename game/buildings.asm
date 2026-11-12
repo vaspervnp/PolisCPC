@@ -23,10 +23,14 @@
 ; (ο κέρσορας γίνεται γωνία), RETURN = εδώ (κέντρο της κάτοψης), ESC =
 ; άκυρο. Με κτίριο επιλεγμένο (κλικ πάνω του): T = μία μονάδα στην ουρά.
 
-BLD_TAB     equ #BE40           ; BLD_MAX x B_SIZE, ελεύθερο: τύπος 255 — αμέσως
-BLD_MAX     equ 12              ; μετά το UNIT_TAB, σε ΜΙΑ σελίδα (L = εγγραφή)
-                                ; (όχι στο #AD00: εκεί γράφει το buffer γραμμής
-                                ; της κάθετης κύλισης, BUF_A + #800)
+; Ο πίνακας σε ΔΥΟ κομμάτια (θέση 0..27): 16 εγγραφές στη σελίδα #A400 (το
+; SWAP_TAB, που χρειάζεται μόνο στην εκκίνηση) και 12 στο #BE40, αμέσως μετά
+; το UNIT_TAB. (Όχι στο #AD00: εκεί γράφει το buffer γραμμής της κάθετης
+; κύλισης, BUF_A + #800.) Ελεύθερη εγγραφή: τύπος 255.
+BLD_TAB     equ #A400
+BLD_TAB2    equ #BE40
+BLD_N1      equ 16
+BLD_MAX     equ 28
 B_SIZE      equ 16
 B_TYPE      equ 0
 B_OWN       equ 1
@@ -67,10 +71,15 @@ TC_J        equ 58
 
 bld_init:
         ld hl,BLD_TAB           ; όλα ελεύθερα
-        ld b,BLD_MAX * B_SIZE
+        ld b,0
 .c:     ld (hl),255
         inc l
         djnz .c
+        ld hl,BLD_TAB2
+        ld b,(BLD_MAX - BLD_N1) * B_SIZE
+.c2:    ld (hl),255
+        inc l
+        djnz .c2
         ld a,255
         ld (bmode),a
         ld (sel_bld),a
@@ -100,14 +109,55 @@ bt_hl:  push de
 
 ; A = θέση -> IY = η εγγραφή του κτιρίου.
 brec_iy:
+        cp BLD_N1
+        jr nc,.b
         rlca
         rlca
         rlca
         rlca
-        add a,BLD_TAB & 255
         ld iyl,a
         ld a,BLD_TAB >> 8
         ld iyh,a
+        ret
+.b:     sub BLD_N1
+        rlca
+        rlca
+        rlca
+        rlca
+        add a,BLD_TAB2 & 255
+        ld iyl,a
+        ld a,BLD_TAB2 >> 8
+        ld iyh,a
+        ret
+
+; IY = εγγραφή -> A = η θέση της.
+bidx:   ld a,iyh
+        cp BLD_TAB >> 8
+        ld a,iyl
+        jr z,.a
+        sub BLD_TAB2 & 255
+        rrca
+        rrca
+        rrca
+        rrca
+        add a,BLD_N1
+        ret
+.a:     rrca
+        rrca
+        rrca
+        rrca
+        ret
+
+; IY -> η επόμενη εγγραφή (από το τέλος του πρώτου κομματιού στο δεύτερο).
+; Κρατάει BC, DE, HL.
+bnext:  push de
+        ld de,B_SIZE
+        add iy,de
+        pop de
+        ld a,iyh
+        cp (BLD_TAB >> 8) + 1
+        ret nz
+        ld iy,BLD_TAB2
         ret
 
 ; A = τύπος, D = i0, E = j0, C = κατάσταση -> IY = νέο κτίριο του παίκτη, η
@@ -119,14 +169,17 @@ bld_new:
 .f:     ld a,(iy+B_TYPE)
         inc a
         jr z,.got
-        push de
-        ld de,B_SIZE
-        add iy,de
-        pop de
+        call bnext
         djnz .f
         scf
         ret
-.got:   ld (iy+B_ST),c
+.got:   ld a,BLD_MAX + 1        ; bld_top = max(bld_top, θέση + 1)
+        sub b
+        ld hl,bld_top
+        cp (hl)
+        jr c,.top
+        ld (hl),a
+.top:   ld (iy+B_ST),c
         ld (iy+B_OWN),0
         ld (iy+B_I),d
         ld (iy+B_J),e
@@ -222,7 +275,8 @@ bld_cands:
         ld (cand_k),a
         ld (cand_c),a
         ld iy,BLD_TAB
-        ld b,BLD_MAX
+        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
+        ld b,a
 .l:     push bc
         ld a,(iy+B_TYPE)
         inc a
@@ -289,8 +343,8 @@ bld_cands:
         ld a,l
         cp c
         jr nc,.n
-.add:   ld a,(cand_c)           ; με εισαγωγή, κατά βάθος
-        cp CAND_MAX
+.add:   ld a,(cand_c)           ; με εισαγωγή, κατά βάθος: ζεύγη (θέση,
+        cp CAND_MAX             ; βάθος)
         jr nc,.n
         ld e,a
         inc a
@@ -299,32 +353,36 @@ bld_cands:
         ld d,0
         ld hl,cand
         add hl,de
+        add hl,de
         ld c,(iy+B_DEP)
-.ins:   ld a,e
+.ins:   ld a,e                  ; HL = cand + 2 e
         or a
         jr z,.put
-        dec hl
+        dec hl                  ; το βάθος του προηγούμενου
         ld a,(hl)
-        push hl
-        add a,B_DEP
-        ld l,a
-        ld h,BLD_TAB >> 8
-        ld a,(hl)
-        pop hl
         cp c
         jr c,.put1
         jr z,.put1
-        ld a,(hl)
+        inc hl                  ; μετακινείται ένα πάνω: βάθος -> 2e + 1
         inc hl
         ld (hl),a
         dec hl
+        dec hl
+        dec hl
+        ld a,(hl)               ; θέση -> 2e
+        inc hl
+        inc hl
+        ld (hl),a
+        dec hl
+        dec hl                  ; HL = cand + 2 (e - 1)
         dec e
         jr .ins
 .put1:  inc hl
-.put:   ld a,iyl
+.put:   call bidx
         ld (hl),a
-.n:     ld de,B_SIZE
-        add iy,de
+        inc hl
+        ld (hl),c
+.n:     call bnext
         pop bc
         dec b
         jp nz,.l
@@ -362,10 +420,9 @@ bld_flush:
         ld d,0
         ld hl,cand
         add hl,de
+        add hl,de
         ld a,(hl)
-        ld iyl,a
-        ld a,BLD_TAB >> 8
-        ld iyh,a
+        call brec_iy
         ld a,(bf_r)
         cp (iy+B_DEP)
         jr c,.no
@@ -687,11 +744,20 @@ cur_look:
         ld (cur_force),a
         ret
 
-; T: μία μονάδα στην ουρά του επιλεγμένου κτιρίου.
+; T: μία μονάδα στην ουρά του επιλεγμένου κτιρίου — αν ο πληθυσμός μαζί με
+; τις ουρές είναι κάτω από το όριο (pop_cap).
 bld_train:
         ld a,(sel_bld)
         cp 255
         ret z
+        call pop_cap
+        ld c,a
+        ld a,(hud_val + 8)
+        ld hl,bq_tot
+        add a,(hl)
+        cp c
+        ret nc
+        ld a,(sel_bld)
         call brec_iy
         ld a,(iy+B_ST)
         or a
@@ -712,6 +778,29 @@ bld_train:
         inc (iy+B_QN)
         ld hl,bq_tot
         inc (hl)
+        ret
+
+; -> A = το όριο πληθυσμού: POP_BASE + POP_HOUSE ανά έτοιμο σπίτι (ως 255).
+POP_BASE    equ 15
+POP_HOUSE   equ 5
+pop_cap:
+        ld c,POP_BASE
+        ld iy,BLD_TAB
+        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
+        ld b,a
+.l:     ld a,(iy+B_TYPE)
+        cp BTY_HOUSE
+        jr nz,.n
+        ld a,(iy+B_ST)
+        or a
+        jr z,.n
+        ld a,c
+        add a,POP_HOUSE
+        jr c,.n
+        ld c,a
+.n:     call bnext
+        djnz .l
+        ld a,c
         ret
 
 ; Carry αν υπάρχει χωρικός του παίκτη στην επιλογή.
@@ -760,15 +849,15 @@ bld_can:
         push hl
         ld c,a
         ld iy,BLD_TAB
-        ld b,BLD_MAX
-        ld de,B_SIZE
+        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
+        ld b,a
 .p:     ld a,(iy+B_TYPE)
         cp c
         jr nz,.pn
         ld a,(iy+B_ST)
         or a
         jr nz,.ok
-.pn:    add iy,de
+.pn:    call bnext
         djnz .p
         pop hl
         scf
@@ -910,12 +999,7 @@ bld_place:
         call bld_new
         ret c
         call bld_redraw         ; το θεμέλιο στην οθόνη
-        ld a,iyl                ; οι επιλεγμένοι χωρικοί: να το χτίσουν
-        sub BLD_TAB & 255
-        rrca
-        rrca
-        rrca
-        rrca
+        call bidx               ; οι επιλεγμένοι χωρικοί: να το χτίσουν
         ld (bp_slot),a
         ld a,(sel_n)
         ld b,a
@@ -962,13 +1046,7 @@ build_walk:
         set 7,l
         ld h,J_SJ >> 8
         ld (hl),1
-        call unit_tile
-        ld hl,(n_i)
-        call clamp95
-        ld (sp_ui),a
-        ld hl,(n_j)
-        call clamp95
-        ld (sp_uj),a
+        call unit_sp
         call bld_ring           ; (IY = το κτίριο)
         jp c,job_idle
         call tile_target
@@ -1053,7 +1131,8 @@ bld_tick:
         or a
         ret z
         ld iy,BLD_TAB
-        ld b,BLD_MAX
+        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
+        ld b,a
 .l:     push bc
         ld a,(iy+B_TYPE)
         inc a
@@ -1080,8 +1159,7 @@ bld_tick:
         ld (iy+B_PROG),0
         jr .n
 .hold:  dec (iy+B_PROG)         ; καμία θέση: ξανά στο επόμενο καρέ
-.n:     ld de,B_SIZE
-        add iy,de
+.n:     call bnext
         pop bc
         djnz .l
         ret
@@ -1158,6 +1236,143 @@ bld_spawn:
         or a
         ret
 
+; ------------------------------------------------------------ κάρτα
+
+; Σε κάθε καρέ μονάδων: η κάρτα του HUD. Με κτίριο επιλεγμένο, το μέγεθος της
+; ουράς του (ψηφίο) και η πρόοδος (μπάρα 12 pixels) — της ανέγερσης όσο
+; είναι θεμέλιο, αλλιώς της μονάδας που εκπαιδεύεται. Χωρίς: κενή (μία φορά).
+hud_card:
+        ld a,(sel_bld)
+        cp 255
+        jr nz,.on
+        ld hl,card_on
+        ld a,(hl)
+        or a
+        ret z
+        ld (hl),0
+        ld a,10
+        call card_digit
+        xor a
+        jr card_bar
+.on:    ld a,1
+        ld (card_on),a
+        ld a,(sel_bld)
+        call brec_iy
+        ld a,(iy+B_QN)
+        call card_digit
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_PTS
+        ld a,(iy+B_ST)
+        or a
+        jr z,.f
+        ld de,BT_UTIME
+        ld a,(iy+B_QN)
+        or a
+        jr z,card_bar           ; (A = 0)
+.f:     add hl,de
+        ld e,(hl)               ; pixels = πρόοδος x 12 / μέγιστο
+        ld d,0
+        ld l,(iy+B_PROG)
+        ld h,d
+        ld b,h
+        ld c,l
+        add hl,hl
+        add hl,bc
+        add hl,hl
+        add hl,hl
+        ld b,-1
+.d:     inc b
+        or a
+        sbc hl,de
+        jr nc,.d
+        ld a,b
+
+; A = πόσα pixels (0..12) γεμάτα: η μπάρα της κάρτας.
+card_bar:
+        ld c,a
+        ld hl,HUD_PAGE + (CARD_BY & 7) * #800 + (CARD_BY >> 3) * 80 + CARD_X
+        ld b,6
+.b:     ld d,CARD_EMPTY
+        ld a,c
+        or a
+        jr z,.w
+        dec c
+        ld d,CARD_HALF
+        jr z,.w
+        dec c
+        ld d,CARD_FULL
+.w:     ld (hl),d
+        inc hl
+        djnz .b
+        ret
+
+; A = ψηφίο (0-9, 10 κενό): στην κάρτα.
+card_digit:
+        ld l,a                  ; DE = digits + 10 A
+        add a,a
+        add a,a
+        add a,l
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,digits
+        add hl,de
+        ex de,hl
+        ld hl,card_rows
+        ld b,5
+.l:     ld a,(hl)
+        inc hl
+        push hl
+        ld h,(hl)
+        ld l,a
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc hl
+        ld a,(de)
+        ld (hl),a
+        inc de
+        pop hl
+        inc hl
+        djnz .l
+        ret
+
+card_rows:
+cl_ = CARD_Y
+        repeat 5
+        dw HUD_PAGE + (cl_ & 7) * #800 + (cl_ >> 3) * 80 + CARD_X
+cl_ = cl_ + 1
+        rend
+
+; IX = η γωνία του κουτιού: όταν δεν σέρνεται κουτί, το σημάδι του
+; επιλεγμένου κτιρίου (οι αγκύλες), στη μπροστινή γωνία του. -> NZ αν
+; φαίνεται.
+bld_mark:
+        ld a,(sel_bld)
+        cp 255
+        ret z
+        call brec_iy
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld a,(hl)
+        dec a
+        ld c,a
+        ld a,(iy+B_I)
+        add a,c
+        ld d,a
+        ld a,(iy+B_J)
+        add a,c
+        ld e,a
+        call tile_xy
+        ld (ix+U_WX),l
+        ld (ix+U_WX+1),h
+        ld (ix+U_WY),e
+        ld (ix+U_WY+1),d
+        ld hl,SPR_MARK
+        or 1
+        ret
+
 ; ------------------------------------------------------------ επιλογή
 
 ; Κλικ που δεν βρήκε μονάδα: κτίριο κάτω από τον κέρσορα (πλακίδιο
@@ -1203,15 +1418,13 @@ bld_pick:
         ld a,b
         ld (sel_bld),a
         ret
-.n:     push de
-        ld de,B_SIZE
-        add iy,de
-        pop de
+.n:     call bnext
         inc b
         ld a,b
         cp BLD_MAX
         jr nz,.l
         ret
 
-        assert (BLD_TAB & 255) + BLD_MAX * B_SIZE <= 256, 'BLD_TAB crosses a page'
-        assert BLD_TAB >= UNIT_TAB + (UNITS + 2) * U_SIZE, 'BLD_TAB over UNIT_TAB'
+        assert (BLD_TAB2 & 255) + (BLD_MAX - BLD_N1) * B_SIZE <= 256, 'BLD_TAB2 crosses a page'
+        assert BLD_TAB2 >= UNIT_TAB + (UNITS + 2) * U_SIZE, 'BLD_TAB2 over UNIT_TAB'
+        assert BLD_TAB == SWAP_TAB, 'BLD_TAB is the init-only SWAP_TAB'

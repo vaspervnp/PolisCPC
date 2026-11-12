@@ -237,10 +237,10 @@ scroll_v:
         ld h,a
         ld (v_ns),hl
         call v_enter
+        ld a,RAM_RES            ; έδαφος και πόροι: στην C6
+        call setram
         ld a,(v_y0)             ; το έδαφος
         call draw_rows
-        ld a,RAM_RES            ; οι πόροι είναι στην C6
-        call setram
         xor a                   ; τα κτίρια της λωρίδας (buildings.asm)
         ld (rg_x0),a
         ld a,80

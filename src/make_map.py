@@ -88,6 +88,10 @@ SPENT = {'tree': 'stump', 'tree_pine': 'stump', 'tree_palm': 'stump',
          'stone_rock': 'rock_small'}
 BAR_X = [(i * 24 + 10) // 2 for i in range(6)]     # bytes: τα ψηφία της μπάρας
 BAR_Y = 6                                           # γραμμή του HUD
+# Η κάρτα του επιλεγμένου κτιρίου (M7): ένα ψηφίο (η ουρά) και μια μπάρα
+# προόδου 12 pixels, εκεί που το mockup έχει τη μονάδα και την υγεία της.
+CARD_X, CARD_Y, CARD_BY = 13, 29, 37                # byte, γραμμή ψηφίου, μπάρας
+CARD_PENS = ('n', 'K')                              # γεμάτο, άδειο
 
 
 def res_kind(k):
@@ -114,6 +118,12 @@ def digit_glyphs():
     return out
 
 
+def card_byte(n):
+    """Το byte της μπάρας με n (0-2) pixels γεμάτα από αριστερά."""
+    full, empty = (gfx.PEN[p] for p in CARD_PENS)
+    return cpcimg.mode0_byte(full if n > 0 else empty, full if n > 1 else empty)
+
+
 def gather_asm():
     kind = [255 if res_kind(k) is None else res_kind(k) for k in range(16)]
     amount = [T.RESOURCES[k][4] if res_kind(k) is not None else 0
@@ -130,10 +140,16 @@ def gather_asm():
             '; η μπάρα: το byte κάθε αριθμού (4 ψηφία) και η γραμμή του HUD\n'
             'BAR_Y       equ %d\n'
             'bar_x:      db %s\n\n'
+            '; η κάρτα του επιλεγμένου κτιρίου: ψηφίο και μπάρα προόδου\n'
+            'CARD_X      equ %d\nCARD_Y      equ %d\nCARD_BY     equ %d\n'
+            'CARD_FULL   equ #%02X\nCARD_HALF   equ #%02X\n'
+            'CARD_EMPTY  equ #%02X\n\n'
             '; 11 ψηφία (0-9, κενό) x 5 γραμμές x 2 bytes\n'
             'digits:\n%s'
             % (','.join(map(str, kind)), ','.join(map(str, amount)),
                ','.join(map(str, spent)), BAR_Y, ','.join(map(str, BAR_X)),
+               CARD_X, CARD_Y, CARD_BY, card_byte(2), card_byte(1),
+               card_byte(0),
                ''.join('            db %s\n' % ','.join('#%02X' % b
                                                         for b in g[k:k + 10])
                        for k in range(0, len(g), 10))))

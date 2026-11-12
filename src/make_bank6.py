@@ -3,7 +3,8 @@
     python3 src/make_bank6.py
 
 -> data/bank6.bin   ό,τι μπαίνει στην C6 στο #4000: οι πόροι (resources.bin,
-                    15 x 128, στοιχισμένοι), και μετά οι εικόνες των κτιρίων
+                    15 x 128, στοιχισμένοι), τα πλακίδια εδάφους στο #4800
+                    (terrain.bin, μία σελίδα), και μετά οι εικόνες των κτιρίων
                     της αρχικής εποχής (με μάσκα, mask,data ανά byte, γραμμή
                     προς γραμμή)
 -> data/bld.asm     ο πίνακας των τύπων κτιρίων για τον Z80
@@ -85,6 +86,10 @@ def main():
     k = (BLD_RES - 1) * 128                 # διάφανο: μάσκα #FF, δεδομένα 0
     res[k:k + 128] = bytes([0xFF, 0x00] * 64)
     blob = bytearray(res)
+    blob += bytes(0x800 - len(blob))        # τα πλακίδια εδάφους στο #4800:
+    terrain = open(os.path.join(DATA, 'terrain.bin'), 'rb').read()   # μία
+    assert len(terrain) == 256              # σελίδα, ώστε το byte του χάρτη
+    blob += terrain                         # AND #F0 να είναι το low byte
     rows = []
     for key, hot, pre, cost, pts, unit in TYPES:
         img = image(key)

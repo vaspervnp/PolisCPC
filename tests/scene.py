@@ -41,7 +41,7 @@ def rec(c, addr):
     w = lambda o: b[o] | b[o + 1] << 8                     # noqa: E731
     return dict(addr=addr, wx=w(0), wy=w(2), tx=w(4), ty=w(6), set=b[8],
                 step=b[9], face=b[10], fl=b[11], sx=b[12], sy=b[13],
-                drawn=b[14], idx=b[22])
+                drawn=b[14], frame=w(16), idx=b[22])
 
 
 def unit(c, i):
@@ -55,8 +55,8 @@ def units(c):
 def sprite_of(u):
     if u['addr'] == CURSOR_REC:
         return CURSOR
-    if u['addr'] == ANCHOR_REC:
-        return ANCHOR
+    if u['addr'] == ANCHOR_REC:            # η γωνία του κουτιού, ή το σημάδι
+        return MARK if u['frame'] == 0x7280 else ANCHOR    # του κτιρίου (M7)
     anim = (u['step'] >> 1) & 3
     s = SPRITES[u['set']]
     face = FACES[u['face']]
