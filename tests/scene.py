@@ -51,6 +51,23 @@ def rec(c, addr):
                 drawn=b[14], frame=w(16), idx=b[22], team=b[28])
 
 
+def bank_ram(c, b):
+    """Η τράπεζα b της επέκτασης (4-7: C4-C7), 16 KB, όσο τρέχει (M10)."""
+    from cpc import _lib
+    return _lib.cpcemu_ram_ptr(c._h, b)
+
+
+def c7_read(c, addr, n=1):
+    p = bank_ram(c, 7)
+    return bytes(p[addr - 0x4000 + k] for k in range(n))
+
+
+def c7_write(c, addr, data):
+    p = bank_ram(c, 7)
+    for k, v in enumerate(data):
+        p[addr - 0x4000 + k] = v
+
+
 def unit(c, i):
     return rec(c, UNIT_TAB + i * U_SIZE)
 

@@ -61,11 +61,15 @@ BT_IMG      equ 16
 J_BUILD     equ 4               ; η δουλειά του χωρικού (gather.asm)
 QMAX        equ 5
 CAND_MAX    equ 8
-UNITS_LIVE  equ 116             ; οι υπόλοιπες ως 128: ελεύθερες θέσεις
+UNITS_LIVE  equ 80              ; οι υπόλοιπες ως 128: ελεύθερες θέσεις (M10: 48, για τις δύο ομάδες)
 TEAM_FREE   equ 255
 FOUND_BYTE  equ (4 << 4) | BLD_RES ; θεμέλιο: χώμα τραχύ + πλακίδιο κτιρίου
 TC_I        equ 30              ; το Κέντρο Πόλης του παίκτη
 TC_J        equ 58
+AI_TC_I     equ 58              ; του αντιπάλου (M10)
+AI_TC_J     equ 27
+AI_X        equ 242             ; οι μονάδες του: πάνω-αριστερά (boot.asm)
+AI_Y        equ 350
 
 ; ------------------------------------------------------------ εκκίνηση
 
@@ -577,7 +581,9 @@ rg_full:
 ; που μένουν βρίσκονται σωστά. Το ίδιο για έναν πόρο που άδειασε (rq_set).
 ; IY = κτίριο.
 bld_redraw:
+        push iy                 ; (το rq_free ζωγραφίζει: αλλάζει το IY)
         call rq_free
+        pop iy
         ld l,(iy+B_WX)
         ld h,(iy+B_WX+1)
         ld (rq_x),hl
@@ -780,6 +786,9 @@ bld_train:
         ret nc
         ld a,(sel_bld)
         call brec_iy
+        ld a,(iy+B_OWN)         ; του παίκτη (M10: και του αντιπάλου επιλέγεται)
+        or a
+        ret nz
         ld a,(iy+B_ST)
         or a
         ret z
@@ -811,6 +820,9 @@ pop_cap:
         ld b,a
 .l:     ld a,(iy+B_TYPE)
         cp BTY_HOUSE
+        jr nz,.n
+        ld a,(iy+B_OWN)         ; του παίκτη
+        or a
         jr nz,.n
         ld a,(iy+B_ST)
         or a
@@ -874,6 +886,9 @@ bld_can:
         ld b,a
 .p:     ld a,(iy+B_TYPE)
         cp c
+        jr nz,.pn
+        ld a,(iy+B_OWN)
+        or a
         jr nz,.pn
         ld a,(iy+B_ST)
         or a
@@ -1151,6 +1166,8 @@ bld_job:
 bld_tick:
         call rq_step
         call age_step
+        ld hl,ai_tick           ; ο αντίπαλος (bank7.asm, M10)
+        call far7
         ld a,(res_n)            ; έρευνες (bank7.asm, M9)
         or a
         jr z,.q
@@ -1296,8 +1313,10 @@ bld_spawn:
         ld (ix+U_WY+1),d
         ld (ix+U_TY),e
         ld (ix+U_TY+1),d
-        xor a
+        ld a,(iy+B_OWN)         ; της ομάδας του κτιρίου (M10)
         ld (ix+U_TEAM),a
+        xor a
+        call nt_put             ; στόχος (η θέση ίσως ήταν ουδέτερης)
         ld (ix+U_FL),a
         ld (ix+U_DRAWN),a
         ld (ix+U_STEP),a
@@ -1324,12 +1343,15 @@ bld_spawn:
         call unit_pxy
         call unit_tile
         call bucket_update
-        ld hl,(hud_val + 8)     ; ο πληθυσμός
+        ld a,(iy+B_OWN)
+        or a
+        jr nz,.vis
+        ld hl,(hud_val + 8)     ; ο πληθυσμός (του παίκτη)
         inc hl
         ld (hud_val + 8),hl
         ld hl,hud_dirty
         set 4,(hl)
-        call unit_activity      ; φαίνεται ήδη;
+.vis:   call unit_activity      ; φαίνεται ήδη;
         call vis_test
         call z,unit_update
         or a

@@ -118,6 +118,11 @@ hp_init:
 .r:     ld (hl),255
         inc hl
         djnz .r
+        ld hl,BDMG              ; καμία ζημιά στα κτίρια (M10)
+        ld b,BLD_MAX * 2
+.z:     ld (hl),0
+        inc hl
+        djnz .z
         ld hl,bcopy_src         ; η αντιγραφή C6 -> C5 στο #0008 (rst 8)
         ld de,#0008
         ld bc,BCOPY_LEN
@@ -157,6 +162,8 @@ combat_think:
 .p0:    call ord_get            ; ΕΝΤΟΛΗ: αυτός, όπου κι αν είναι, ώσπου
         cp 255                  ; να πέσει
         jr z,.auto
+        bit 7,a                 ; ή κτίριο (M10)
+        jp nz,bord
         ld (ix+U_TGT),a
         call idx_iy
         ld a,(iy+U_TEAM)
@@ -228,7 +235,24 @@ combat_think:
 .none:  ret
 
 ; Χτυπάει (IX, IY = ο στόχος, c_dx / c_dy). Όποια πέθανε: στο dq.
-attack: res F_MOVE,(ix+U_FL)
+attack: call atk_pose
+        call st_hl
+        inc hl
+        ld b,(hl)               ; η ζημιά
+        inc hl
+        inc hl
+        ld a,(hl)
+        ld c,(ix+U_IDX)         ; ποιος χτυπάει
+        or a
+        jr z,.hit
+        call proj_new           ; τοξότης: βέλος — ή, χωρίς θέση, αμέσως
+        ret nc
+.hit:   call hit
+        jp dq_add
+
+; Η πόζα του χτυπήματος, με όψη προς το c_dx / c_dy.
+atk_pose:
+        res F_MOVE,(ix+U_FL)
         ld hl,(c_dx)            ; όψη: οριζόντια αν 2 |dx| > |dy|
         call abs_hl
         add hl,hl
@@ -264,19 +288,7 @@ attack: res F_MOVE,(ix+U_FL)
         call hp_hl
         set 7,l
         ld (hl),ATK_T
-        call st_hl
-        inc hl
-        ld b,(hl)               ; η ζημιά
-        inc hl
-        inc hl
-        ld a,(hl)
-        ld c,(ix+U_IDX)         ; ποιος χτυπάει
-        or a
-        jr z,.hit
-        call proj_new           ; τοξότης: βέλος — ή, χωρίς θέση, αμέσως
-        ret nc
-.hit:   call hit
-        jp dq_add
+        ret
 
 ; IY = ο στόχος, B = ζημιά, C = ποιος χτυπάει -> A = ο δείκτης του στόχου
 ; αν πέθανε, αλλιώς 255. Χωρικός χωρίς εντολή επίθεσης: απαντάει (C7_ORD).
@@ -616,7 +628,7 @@ ord_cmd:
         ld c,255
         ld a,(ord_n)
         or a
-        jr z,.set
+        jr z,.bld
         ld b,a
         add a,a
         ld l,a
@@ -649,6 +661,25 @@ ord_cmd:
         ld c,(iy+U_IDX)
         jr .set
 .n:     djnz .l
+.bld:   ld a,(sel_bld)          ; κτίριο του αντιπάλου κάτω από τον κέρσορα
+        push af                 ; (M10): 128 + η θέση του
+        call bld_pick
+        ld a,(sel_bld)
+        ld c,a
+        pop af
+        ld (sel_bld),a
+        ld a,c
+        inc a
+        jr z,.set
+        dec a
+        call brec_iy
+        ld a,(iy+B_OWN)
+        or a
+        ld a,c
+        ld c,255
+        jr z,.set
+        or 128
+        ld c,a
 .set:   ld a,(sel_n)
         or a
         ret z
@@ -1303,3 +1334,945 @@ bcopy_src:
         ret
 BCOPY_LEN   equ $ - bcopy_src
         assert BCOPY_LEN <= #20, 'bcopy past #0028'
+
+; ============================================================ ΚΤΙΡΙΑ ΣΤΗ ΜΑΧΗ (M10)
+;
+; Εντολή επίθεσης σε κτίριο: C7_ORD = 128 + η θέση του (ord_cmd, ή ο
+; αντίπαλος). Ο στρατιώτης προτιμά έναν εχθρό μέσα στο οπτικό πεδίο· αλλιώς
+; πάει στο ελεύθερο πλακίδιο γύρω από το κτίριο, και από απόσταση 1 (τόξο:
+; BOW_T πλακίδια) χτυπάει: η ζημιά του στο BDMG του κτιρίου. Με όση υγεία
+; έχει ο τύπος (bld_hp x 4): κατεδαφίζεται (bld_kill).
+
+BDMG        equ RES_P + BLD_MAX + 4 ; 28 x dw: η ζημιά ανά θέση κτιρίου
+        assert BDMG + BLD_MAX * 2 <= #8000, 'BDMG'
+BOW_T       equ 5
+
+; υγεία / 4 ανά τύπο
+bld_hp:     db 150, 40, 75, 60, 60, 75, 75, 75, 25, 75, 75, 100, 100
+        assert $ - bld_hp == BT_N, 'bld_hp'
+
+; IX, A = η εντολή (bit 7), HL = &C7_ORD.
+bord:   and 127
+        push hl
+        call brec_iy
+        pop hl
+        ld a,(iy+B_TYPE)        ; δεν υπάρχει πια, ή είναι δικό του
+        inc a
+        jr z,.end
+        ld a,(iy+B_OWN)
+        cp (ix+U_TEAM)
+        jr nz,.ok
+.end:   ld (hl),255
+        ret
+.ok:    ld a,(ix+U_SET)         ; στρατιώτης: ο κοντινότερος εχθρός πρώτα
+        or a
+        jr z,bld_fight
+        cp 3
+        jr z,bld_fight
+        ld a,(ix+U_TGT)
+        cp 255
+        jr z,bld_fight
+        push iy
+        call idx_iy
+        bit F_WANDER,(iy+U_FL)
+        jr nz,.nb
+        ld a,(iy+U_TEAM)
+        cp 2
+        jr nc,.nb
+        call c_dist
+        ld de,SIGHT + 1
+        or a
+        sbc hl,de
+        jr nc,.nb
+        add hl,de
+        pop de
+        jp combat_think.in
+.nb:    pop iy
+
+; IX, IY = κτίριο του εχθρού: κοντά, χτύπα· αλλιώς πήγαινε.
+bld_fight:
+        call unit_sp
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld c,(hl)               ; n
+        ld a,(sp_ui)            ; η απόσταση (Chebyshev) από την κάτοψη
+        ld b,(iy+B_I)
+        call .d1
+        ld e,a
+        ld a,(sp_uj)
+        ld b,(iy+B_J)
+        call .d1
+        cp e
+        jr nc,.m
+        ld a,e
+.m:     ld e,a
+        call st_hl              ; ως 1, ή BOW_T με τόξο
+        inc hl
+        inc hl
+        inc hl
+        ld a,(hl)
+        or a
+        ld a,1
+        jr z,.r
+        ld a,BOW_T
+.r:     cp e
+        jp nc,bld_hit
+        bit F_MOVE,(ix+U_FL)
+        jr z,.go
+        ld a,(ix+U_TEAM)        ; του παίκτη, και περπατάει ίσια: μήπως
+        or a                    ; ετοιμάστηκε το πεδίο της εντολής του;
+        ret nz
+        ld a,(ix+U_FIELD)
+        cp FIELD_WALK
+        ret nz
+        call fld_of
+        ret z
+        ld (ix+U_FIELD),a
+        ret
+.go:    ld a,(ix+U_TEAM)        ; ο αντίπαλος: πρώτα τα σημεία της
+        dec a                   ; διαδρομής (ai_route), με δείκτη το U_TCELL
+        jr nz,.ring
+.wp:    ld a,(ix+U_TCELL)
+        cp AI_ROUTE_N
+        jr nc,.ring
+        add a,a
+        ld hl,ai_route
+        call tab_a
+        ld d,a
+        inc hl
+        ld e,(hl)
+        ld a,(sp_ui)            ; ως 2 πλακίδια: το επόμενο
+        sub d
+        call abs_a
+        cp 3
+        jr nc,.to
+        ld a,(sp_uj)
+        sub e
+        call abs_a
+        cp 3
+        jr nc,.to
+        inc (ix+U_TCELL)
+        jr .wp
+.to:    call tile_target
+        jr .fw
+.ring:  call bld_ring
+        ret c
+        call tile_target
+        call fld_of
+        jr nz,.f
+.fw:    ld a,FIELD_WALK
+.f:     ld (ix+U_FIELD),a
+        ld (ix+U_WF),0
+        ld (ix+U_STUCK),0
+        set F_MOVE,(ix+U_FL)
+        ret
+.d1:    sub b                   ; A = u, B = i0, C = n -> max(0, i0 - u,
+        jr c,.lo                ; u - (i0 + n - 1))
+        inc a
+        sub c
+        ret nc
+        xor a
+        ret
+.lo:    neg
+        ret
+
+; Τα κύματα του αντιπάλου: από τη βάση του νότια ως τη σειρά j = 44 (όλη
+; ανοιχτή), δυτικά ως το i = 44, νότια ως το j = 56, και από εκεί ίσια στο
+; κτίριο. (Με flow field έμπαιναν σε κοιλώματα του δάσους όπου η ακολούθηση
+; τοίχου έκανε κύκλους· και θα έπαιρναν τα πεδία των εντολών του παίκτη.)
+ai_route:   db 57, 44,  44, 44,  44, 56
+AI_ROUTE_N  equ ($ - ai_route) / 2
+
+; IX -> A = το flow field (1, 2) που πάει στο U_TCELL της (NZ), ή Z.
+fld_of: ld a,(field_tc)
+        cp (ix+U_TCELL)
+        ld a,1
+        jr z,.y
+        ld a,(field_tc + 1)
+        cp (ix+U_TCELL)
+        ld a,2
+        jr z,.y
+        xor a
+        ret
+.y:     or a
+        ret
+
+; IX χτυπάει το κτίριο IY: η πόζα (όψη προς το κέντρο του) και η ζημιά.
+bld_hit:
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld a,(hl)
+        dec a
+        srl a
+        ld c,a
+        ld a,(iy+B_I)
+        add a,c
+        ld d,a
+        ld a,(iy+B_J)
+        add a,c
+        ld e,a
+        call tile_xy
+        ld c,(ix+U_WX)
+        ld b,(ix+U_WX+1)
+        or a
+        sbc hl,bc
+        ld (c_dx),hl
+        ex de,hl
+        ld c,(ix+U_WY)
+        ld b,(ix+U_WY+1)
+        or a
+        sbc hl,bc
+        ld (c_dy),hl
+        call atk_pose
+        call st_hl
+        inc hl
+        ld c,(hl)               ; η ζημιά
+        call bidx
+        add a,a
+        add a,BDMG & 255
+        ld l,a
+        ld h,BDMG >> 8
+        ld a,(hl)
+        add a,c
+        ld (hl),a
+        ld e,a
+        inc hl
+        ld a,(hl)
+        adc a,0
+        ld (hl),a
+        ld d,a
+        ld a,(iy+B_TYPE)        ; η υγεία του τύπου x 4
+        ld hl,bld_hp
+        call tab_a
+        ld l,a
+        ld h,0
+        add hl,hl
+        add hl,hl
+        or a
+        sbc hl,de
+        jr z,bld_kill
+        ret nc
+
+; IY = κτίριο: κατεδαφίζεται. Οι στήλες του ξαναζωγραφίζονται (bld_redraw,
+; με την C0), η κάτοψη γίνεται έδαφος (το χώμα του θεμελίου μένει), και ό,τι
+; είχε (ουρά, έρευνα, επιλογή, ζημιά) σβήνει.
+bld_kill:
+        push iy
+        ld hl,bld_redraw
+        call call0
+        pop iy
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld a,(hl)
+        ld c,a                  ; C = n
+        ld b,a
+        ld e,(iy+B_J)
+.r:     push bc
+        ld d,(iy+B_I)
+        push de
+        call map_ptr
+        pop de
+        pop bc
+        push bc
+        ld b,c
+.t:     ld a,(hl)
+        and #F0
+        ld (hl),a
+        inc hl
+        djnz .t
+        pop bc
+        inc e
+        djnz .r
+        ld (iy+B_TYPE),255
+        ld a,1
+        ld (occ_dirty),a
+        ld a,(bq_tot)
+        sub (iy+B_QN)
+        ld (bq_tot),a
+        ld (iy+B_QN),0
+        call bidx
+        ld c,a
+        add a,a
+        add a,BDMG & 255
+        ld l,a
+        ld h,BDMG >> 8
+        xor a
+        ld (hl),a
+        inc hl
+        ld (hl),a
+        ld a,c
+        call res_hl
+        ld a,(hl)
+        inc a
+        jr z,.nr
+        ld (hl),255
+        ld hl,res_n
+        dec (hl)
+.nr:    ld a,(sel_bld)
+        cp c
+        ret nz
+        ld a,255
+        ld (sel_bld),a
+        ret
+
+; ============================================================ Ο ΑΝΤΙΠΑΛΟΣ (M10)
+;
+; Μηχανή καταστάσεων με σενάριο: χωρικοί -> τροφή (και ξύλο, χρυσός) ->
+; σπίτια -> στρατώνας -> επίθεση σε κύματα. Σκέφτεται ΜΙΑ φορά το
+; δευτερόλεπτο (AI_PER = 25 καρέ μονάδων), μοιρασμένα σε καρέ: 1-2 οι
+; μονάδες (μισές στο καθένα), 3 τα κτίρια, 4 νίκη / ήττα, 5 οικονομία, 6
+; κτίσιμο, 7 στρατός. Ό,τι αγγίζει τους πίνακες των χωρικών (σελίδα του
+; HUD) γίνεται με την C0 (call0).
+;
+;   ΟΙΚΟΝΟΜΙΑ   ένας αδρανής χωρικός ανά δευτερόλεπτο πάει να μαζέψει, με
+;               τη σειρά του ai_mix (ai_gather, boot.asm)· το Κέντρο Πόλης
+;               βγάζει χωρικούς ώς AI_VIL, όσο χωράει ο πληθυσμός
+;   ΚΤΙΣΙΜΟ     ένα κτίριο τη φορά, σε μία από τις θέσεις ai_spots, από τους
+;               2 πρώτους χωρικούς: σπίτι όταν ο χώρος πέφτει κάτω από 3,
+;               αλλιώς στρατώνας (με AI_VIL0 χωρικούς). Θεμέλιο που δεν
+;               προχωράει για AI_STALL s: κι άλλοι δύο χωρικοί
+;   ΣΤΡΑΤΟΣ     ο στρατώνας βγάζει σπαθοφόρους· όταν οι αδρανείς στο σπίτι
+;               (ως HOME_R από το Κέντρο του) φτάσουν το ai_wave και πέρασε το
+;               ai_cool: κύμα — στο Κέντρο Πόλης του παίκτη (αλλιώς σε
+;               κτίριο, αλλιώς σε μονάδα του), από τα σημεία ai_route.
+;               Όσοι του κύματος μείνουν χωρίς στόχο παίρνουν τον επόμενο.
+;               Μετά από κάθε κύμα: ai_cool = AI_GAP, και το κύμα +2
+;   ΤΕΛΟΣ       ομάδα χωρίς μονάδες και χωρίς Κέντρο Πόλης: game_end (1 νίκη,
+;               2 ήττα), το παιχνίδι σταματά, και το περιθώριο γίνεται
+;               πράσινο ή κόκκινο
+
+AI_PER      equ 25              ; καρέ μονάδων ανά σκέψη
+AI_VIL      equ 10
+AI_VIL0     equ 5
+AI_HOUSES   equ 8
+AI_FIRST    equ 180             ; s ώς το πρώτο κύμα
+AI_GAP      equ 60
+AI_WMAX     equ 16
+HOME_I      equ AI_TC_I + 2
+HOME_J      equ AI_TC_J + 2
+HOME_R      equ 18
+
+ai_t:       db 0
+ai_cool:    dw AI_FIRST
+ai_wave:    db 6
+ai_att:     db 0                ; κύμα σε εξέλιξη
+ai_rr:      db 0
+ai_tgt:     db 0
+ap_t:       db 0
+ap_n:       db 0
+au_end:     db 0
+an_blk:                         ; η απογραφή
+an_vil:     db 0                ; χωρικοί του
+an_sol:     db 0                ; στρατιώτες στο κύμα
+an_idle:    db 0                ; αδρανείς στρατιώτες στο σπίτι
+an_lost:    db 0                ; στο κύμα, μακριά, χωρίς στόχο
+an_pop:     db 0                ; όλες του (ζωντανές)
+an_p:       db 0                ; του παίκτη
+ab_hs:      db 0                ; σπίτια έτοιμα
+ab_fd:      db 0                ; θεμέλια
+ab_q:       db 0                ; στις ουρές
+AN_0        equ $ - an_blk
+an_iv:      db 255              ; ένας αδρανής χωρικός
+an_b1:      db 255              ; οι χτίστες
+an_b2:      db 255
+an_pu:      db 255              ; μια μονάδα του παίκτη
+ab_tc:      db 255              ; θέσεις: Κέντρο Πόλης, στρατώνας
+ab_bar:     db 255
+ab_ptc:     db 255              ; του παίκτη: Κέντρο Πόλης, κάποιο κτίριο
+ab_pb:      db 255
+ab_fs:      db 255              ; ένα θεμέλιο του
+AN_LEN      equ $ - an_blk
+ai_fp:      db 0                ; η πρόοδός του στην προηγούμενη σκέψη
+ai_fdt:     db 0                ; δευτερόλεπτα χωρίς πρόοδο
+
+; τροφή, ξύλο, χρυσός: η σειρά των χωρικών
+ai_mix:     db 0, 2, 0, 1, 0, 2, 0, 1   ; (ξύλο μόνο για σπίτια, στρατώνα)
+; οι θέσεις των κτιρίων (i0, j0), γύρω από το Κέντρο (58, 27)
+; (με 2 πλακίδια περιθώριο: κανένα στενό πέρασμα ανάμεσά τους)
+ai_spots:   db 64, 23,  64, 28,  53, 22,  58, 22,  65, 33,  63, 18
+            db 68, 18,  69, 23,  69, 28,  56, 17,  70, 33,  73, 14
+AI_NSP      equ ($ - ai_spots) / 2
+
+; Από το bld_tick, σε κάθε καρέ μονάδων.
+ai_tick:
+        ld a,(ai_on)
+        or a
+        ret z
+        ld a,(game_end)
+        or a
+        ret nz
+        ld hl,ai_t
+        inc (hl)
+        ld a,(hl)
+        dec a
+        jr z,ai_units
+        dec a
+        ld c,UNITS / 2          ; (η απογραφή σε δύο καρέ)
+        jr z,ai_units.half
+        dec a
+        jp z,ai_blds
+        dec a
+        jp z,ai_end
+        dec a
+        jp z,ai_eco
+        dec a
+        jp z,ai_build
+        dec a
+        jp z,ai_army
+        ld a,(hl)
+        cp AI_PER
+        ret c
+        ld (hl),0
+        ld hl,(ai_cool)         ; ένα δευτερόλεπτο
+        ld a,h
+        or l
+        ret z
+        dec hl
+        ld (ai_cool),hl
+        ret
+
+; Η απογραφή των μονάδων.
+ai_units:
+        ld hl,an_blk
+        ld b,AN_0
+.z:     ld (hl),0
+        inc hl
+        djnz .z
+        ld b,AN_LEN - AN_0
+.f:     ld (hl),255
+        inc hl
+        djnz .f
+        ld c,0
+.half:  ld a,c
+        add a,UNITS / 2
+        ld (au_end),a
+        ld a,c
+.u:     push af
+        call idx_ix
+        ld a,(ix+U_TEAM)
+        cp 2
+        jr nc,.n
+        bit F_WANDER,(ix+U_FL)
+        jr nz,.n
+        or a
+        jr nz,.ai
+        ld hl,an_p              ; του παίκτη
+        inc (hl)
+        ld a,(ix+U_IDX)
+        ld (an_pu),a
+        jr .n
+.ai:    ld hl,an_pop
+        inc (hl)
+        ld a,(ix+U_SET)
+        or a
+        jr z,.v
+        cp 3
+        jr z,.v
+        call ai_cls             ; στρατιώτης
+        dec a
+        jr nz,.w
+        ld hl,an_idle
+        inc (hl)
+        jr .n
+.w:     dec a
+        jr z,.ws
+        dec a
+        jr nz,.n
+        ld hl,an_lost
+        inc (hl)
+.ws:    ld hl,an_sol
+        inc (hl)
+        jr .n
+.v:     ld hl,an_vil
+        inc (hl)
+        call ord_get            ; μάχεται
+        inc a
+        jr nz,.n
+        ld a,(ix+U_JOB)
+        cp J_BUILD
+        jr z,.n
+        ld a,(ix+U_IDX)
+        ld hl,an_b1
+        ld a,(hl)
+        inc a
+        jr z,.b
+        inc hl
+        ld a,(hl)
+        inc a
+        jr nz,.nb
+.b:     ld a,(ix+U_IDX)
+        ld (hl),a
+.nb:    ld a,(ix+U_JOB)
+        or a
+        jr nz,.n
+        bit F_MOVE,(ix+U_FL)
+        jr nz,.n
+        ld a,(ix+U_IDX)
+        ld (an_iv),a
+.n:     pop af
+        inc a
+        ld hl,au_end
+        cp (hl)
+        jp nz,.u
+        ret
+
+; IX = στρατιώτης του αντιπάλου -> A: 1 αδρανής στο σπίτι, 2 στο κύμα (με
+; εντολή, ή μακριά και περπατάει), 3 μακριά χωρίς δουλειά, 4 περπατάει στο
+; σπίτι.
+ai_cls: call ord_get
+        inc a
+        ld a,2
+        ret nz
+        call unit_sp
+        ld a,(sp_ui)
+        sub HOME_I
+        call abs_a
+        ld c,a
+        ld a,(sp_uj)
+        sub HOME_J
+        call abs_a
+        cp c
+        jr nc,.m
+        ld a,c
+.m:     cp HOME_R + 1
+        jr c,.home
+        bit F_MOVE,(ix+U_FL)
+        ld a,2
+        ret nz
+        inc a
+        ret
+.home:  bit F_MOVE,(ix+U_FL)
+        ld a,1
+        ret z
+        ld a,4
+        ret
+
+; Η απογραφή των κτιρίων.
+ai_blds:
+        ld iy,BLD_TAB
+        ld a,(bld_top)
+        ld b,a
+.l:     ld a,(iy+B_TYPE)
+        cp 255
+        jr z,.n
+        ld c,a
+        call bidx
+        ld e,a
+        ld a,(iy+B_OWN)
+        or a
+        jr nz,.ai
+        ld a,e                  ; του παίκτη
+        ld (ab_pb),a
+        ld a,c
+        or a
+        jr nz,.n
+        ld a,e
+        ld (ab_ptc),a
+        jr .n
+.ai:    ld a,(iy+B_QN)
+        ld hl,ab_q
+        add a,(hl)
+        ld (hl),a
+        ld a,c
+        or a
+        jr nz,.nt
+        ld a,e
+        ld (ab_tc),a
+        jr .n
+.nt:    cp BTY_BARRACKS
+        jr nz,.nb
+        ld a,e
+        ld (ab_bar),a
+.nb:    ld a,(iy+B_ST)
+        or a
+        jr nz,.rd
+        ld hl,ab_fd
+        inc (hl)
+        ld a,e
+        ld (ab_fs),a
+        jr .n
+.rd:    ld a,c
+        cp BTY_HOUSE
+        jr nz,.n
+        ld hl,ab_hs
+        inc (hl)
+.n:     call bnext
+        djnz .l
+        ret
+
+; Νίκη ή ήττα — όχι στη μέση της επανασχεδίασης ενός κτιρίου που έπεσε (το
+; παιχνίδι σταματά: θα έμενε μισό στην οθόνη).
+ai_end: ld a,(rq_n)
+        inc a
+        ret nz
+        ld a,(an_p)
+        or a
+        jr nz,.ai
+        ld a,(ab_ptc)
+        inc a
+        jr nz,.ai
+        ld a,2                  ; ήττα
+        jr .end
+.ai:    ld a,(an_pop)
+        or a
+        ret nz
+        ld a,(ab_tc)
+        inc a
+        ret nz
+        ld a,1                  ; νίκη
+.end:   ld (game_end),a
+        ld a,1
+        ld (paused),a
+        ld a,(game_end)
+        dec a
+        ld a,HW_GREEN
+        jr z,.c
+        ld a,HW_RED
+.c:     ld (bd_busy),a          ; το περιθώριο (ο κύριος βρόχος)
+        ld (bd_idle),a
+        ret
+
+; -> A = πόσες χωράνε ακόμα (με πρόσημο): POP_BASE + POP_HOUSE x σπίτια -
+; (ζωντανές + στις ουρές). Carry αν καμία.
+ai_room:
+        ld a,(ab_hs)
+        ld c,a
+        add a,a
+        add a,a
+        add a,c
+        add a,POP_BASE
+        ld c,a
+        ld a,(an_pop)
+        ld hl,ab_q
+        add a,(hl)
+        ld b,a
+        ld a,c
+        sub b
+        ret c
+        cp 1
+        ret
+
+; Οικονομία: ένας αδρανής χωρικός στη δουλειά, και χωρικοί από το Κέντρο.
+ai_eco: ld a,(an_iv)
+        cp 255
+        jr z,.tr
+        call idx_ix
+        ld hl,ai_rr
+        ld a,(hl)
+        inc a
+        and 7
+        ld (hl),a
+        ld hl,ai_mix
+        call tab_a
+        ld c,a
+        ld hl,ai_gather
+        call call0
+.tr:    ld a,(ab_tc)
+        cp 255
+        ret z
+        call brec_iy
+        ld a,(iy+B_ST)
+        or a
+        ret z
+        ld a,(iy+B_QN)
+        or a
+        ret nz
+        ld a,(an_vil)
+        cp AI_VIL
+        ret nc
+        call ai_room
+        ret c
+
+; IY = κτίριο του αντιπάλου: μία μονάδα στην ουρά του, αν πληρώνεται.
+ai_queue:
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_UCOST
+        add hl,de
+        call ai_pay
+        ret c
+        inc (iy+B_QN)
+        ld hl,bq_tot
+        inc (hl)
+        ld hl,ab_q
+        inc (hl)
+        ret
+
+; HL -> 4 x κόστος: NC αν το ai_val φτάνει (ai_chk), και αφαιρείται (ai_pay).
+ai_pay: call ai_chk
+        ret c
+        ld de,ai_val
+        ld b,4
+.d:     ld a,(de)
+        sub (hl)
+        ld (de),a
+        inc de
+        ld a,(de)
+        sbc a,0
+        ld (de),a
+        inc de
+        inc hl
+        djnz .d
+        or a
+        ret
+ai_chk: push hl
+        ld de,ai_val
+        ld b,4
+.c:     ld a,(de)
+        sub (hl)
+        inc de
+        ld a,(de)
+        sbc a,0
+        jr c,.no
+        inc de
+        inc hl
+        djnz .c
+.no:    pop hl
+        ret
+
+; Κτίσιμο: ένα κτίριο τη φορά. Θεμέλιο που δεν προχωράει για AI_STALL s
+; (οι χτίστες κόλλησαν, ή σκοτώθηκαν): κι άλλοι δύο χωρικοί.
+AI_STALL    equ 12
+ai_build:
+        ld a,(ab_fd)
+        or a
+        jr z,.new
+        ld a,(ab_fs)
+        call brec_iy
+        ld a,(iy+B_PROG)
+        ld hl,ai_fp
+        cp (hl)
+        ld (hl),a
+        ld hl,ai_fdt
+        jr nz,.prog
+        inc (hl)
+        ld a,(hl)
+        cp AI_STALL
+        ret c
+.prog:  ld (hl),0
+        ret nz                  ; (προχώρησε)
+        ld a,(ab_fs)
+        ld (bp_slot),a
+        jp ai_place.bld
+.new:   ld a,(an_b1)
+        inc a
+        ret z
+        ld a,(ab_hs)
+        cp AI_HOUSES
+        jr nc,.bar
+        call ai_room
+        jr c,.h
+        cp 3
+        jr nc,.bar
+.h:     ld a,BTY_HOUSE
+        jr ai_place
+.bar:   ld a,(ab_bar)
+        inc a
+        ret nz
+        ld a,(an_vil)
+        cp AI_VIL0
+        ret c
+        ld a,BTY_BARRACKS
+
+; A = τύπος: στην πρώτη ελεύθερη θέση του ai_spots, αν πληρώνεται· θεμέλιο,
+; και οι χτίστες εκεί.
+ai_place:
+        ld (ap_t),a
+        call bt_hl
+        ld a,(hl)
+        ld (ap_n),a
+        inc hl
+        inc hl
+        inc hl
+        call ai_chk
+        ret c
+        push hl
+        ld hl,ai_spots
+        ld b,AI_NSP
+.s:     ld d,(hl)
+        inc hl
+        ld e,(hl)
+        inc hl
+        push bc
+        push hl
+        push de
+        call fp_free
+        pop de
+        pop hl
+        pop bc
+        jr z,.got
+        djnz .s
+        pop hl
+        ret
+.got:   ld a,(ap_t)
+        ld c,0
+        call bld_new
+        pop hl
+        ret c
+        call ai_pay
+        ld (iy+B_OWN),1
+        push iy
+        ld hl,bld_redraw        ; το θεμέλιο στην οθόνη
+        call call0
+        pop iy
+        call bidx
+        ld (bp_slot),a
+        ld hl,ab_fd
+        inc (hl)
+.bld:   ld a,(an_b1)
+        call .go
+        ld a,(an_b2)
+.go:    cp 255
+        ret z
+        call idx_ix
+        ld hl,build_go
+        jp call0
+
+; D = i0, E = j0, ap_n = n -> Z αν το (n + 4) x (n + 4) γύρω της είναι μέσα
+; στον χάρτη, χωρίς πόρο (εκτός από κούτσουρο) και χωρίς εμπόδιο: 2
+; πλακίδια ελεύθερα γύρω από το κτίριο (με 1, ανάμεσα σε δύο κτίρια και στο
+; Κέντρο έμεναν περάσματα όπου η ακολούθηση τοίχου κολλούσε).
+fp_free:
+        dec d
+        dec d
+        dec e
+        dec e
+        ld a,(ap_n)
+        add a,4
+        ld c,a
+        ld b,a
+.r:     ld a,e
+        cp MAPW
+        jr nc,.bad
+        push bc
+        push de
+        call map_ptr
+        pop de
+        pop bc
+        push bc
+        push de
+        ld b,c
+.t:     ld a,d
+        cp MAPW
+        jr nc,.bad2
+        ld a,(hl)
+        and 15
+        jr z,.ok
+        cp 4
+        jr nz,.bad2
+.ok:    push hl
+        ld l,(hl)
+        ld h,BLOCK_TAB >> 8
+        ld a,(hl)
+        pop hl
+        or a
+        jr nz,.bad2
+        inc hl
+        inc d
+        djnz .t
+        pop de
+        pop bc
+        inc e
+        djnz .r
+        xor a
+        ret
+.bad2:  pop de
+        pop bc
+.bad:   or 1
+        ret
+
+; Στρατός: σπαθοφόροι από τον στρατώνα, και τα κύματα.
+ai_army:
+        ld a,(ab_bar)
+        cp 255
+        jr z,.att
+        call brec_iy
+        ld a,(iy+B_ST)
+        or a
+        jr z,.att
+        ld a,(iy+B_QN)
+        cp 2
+        jr nc,.att
+        call ai_room
+        call nc,ai_queue
+.att:   ld a,(an_lost)          ; όσοι του κύματος έμειναν μακριά χωρίς
+        or a                    ; στόχο παίρνουν τον επόμενο
+        jr z,.w
+        call ai_target
+        ld c,3
+        call nc,ai_order
+.w:     ld hl,(ai_cool)         ; νέο κύμα
+        ld a,h
+        or l
+        ret nz
+        ld a,(ai_wave)
+        ld c,a
+        ld a,(an_idle)
+        cp c
+        ret c
+        call ai_target
+        ret c
+        ld a,1
+        ld (ai_att),a
+        ld hl,AI_GAP
+        ld (ai_cool),hl
+        ld a,(ai_wave)
+        cp AI_WMAX
+        jr nc,.o
+        add a,2
+        ld (ai_wave),a
+.o:     ld c,1                  ; οι αδρανείς στο σπίτι
+
+; C = η κατηγορία (ai_cls): εντολή ai_tgt (1: νέο κύμα, 3: όσοι έμειναν).
+ai_order:
+        xor a
+.u:     push af
+        push bc
+        call idx_ix
+        ld a,(ix+U_TEAM)
+        dec a
+        jr nz,.n
+        bit F_WANDER,(ix+U_FL)
+        jr nz,.n
+        ld a,(ix+U_SET)
+        or a
+        jr z,.n
+        cp 3
+        jr z,.n
+        call ai_cls
+        pop bc
+        push bc
+        cp c
+        jr nz,.n
+        call ord_get
+        ld a,(ai_tgt)
+        ld (hl),a
+        ld a,c                  ; νέο κύμα: από την αρχή της διαδρομής
+        dec a
+        jr nz,.n
+        ld (ix+U_TCELL),a
+.n:     pop bc
+        pop af
+        inc a
+        cp UNITS
+        jr nz,.u
+        ret
+
+; -> ai_tgt: 128 + το Κέντρο Πόλης του παίκτη, ή άλλο κτίριό του, ή μια
+; μονάδα του. Carry αν τίποτα.
+ai_target:
+        ld a,(ab_ptc)
+        cp 255
+        jr nz,.b
+        ld a,(ab_pb)
+        cp 255
+        jr nz,.b
+        ld a,(an_pu)
+        cp 255
+        scf
+        ret z
+        jr .t
+.b:     or 128
+.t:     ld (ai_tgt),a
+        or a
+        ret

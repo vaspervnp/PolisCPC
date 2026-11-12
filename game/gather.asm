@@ -159,7 +159,10 @@ job_tick:
         ld e,a
         ld d,0
         ld hl,hud_val
-        add hl,de
+        bit 0,(ix+U_TEAM)       ; ή του αντιπάλου (M10)
+        jr z,.p
+        ld hl,ai_val
+.p:     add hl,de
         ld a,(hl)
         add a,c
         ld (hl),a
@@ -239,8 +242,8 @@ job_go_drop:
 .l:     ld a,(iy+B_ST)          ; (ελεύθερη: 255, όχι 0)
         dec a
         jr nz,.n
-        ld a,(iy+B_OWN)
-        or a
+        ld a,(iy+B_OWN)         ; της ομάδας του (M10)
+        cp (ix+U_TEAM)
         jr nz,.n
         ld a,(iy+B_TYPE)
         or a                    ; Κέντρο Πόλης
@@ -296,8 +299,10 @@ job_work:
         inc hl
         ld d,(hl)               ; DE = ποσό
         ld l,(ix+U_IDX)
-        ld h,J_KIND >> 8        ; το όριο του είδους (carry_max: M9)
-        ld a,(hl)
+        set 7,l                 ; το όριο του είδους (carry_max: M9). (Ως το
+        ld h,J_KIND >> 8        ; M10 χωρίς το bit 7: διάβαζε το J_CARRY ως
+        ld a,(hl)               ; είδος, και το όριο από ό,τι ακολουθούσε το
+        res 7,l                 ; carry_max — που έτυχε να είναι 10.)
         add a,carry_max & 255
         ld c,a
         ld b,carry_max >> 8

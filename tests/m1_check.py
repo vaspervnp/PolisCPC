@@ -43,7 +43,8 @@ def symbols():
 
 
 # Τα κτίρια με τα οποία αρχίζει το παιχνίδι (M7): (κλειδί, i0, j0).
-GAME_BLDS = [('town_center', 30, 58)]
+GAME_BLDS = [('town_center', 30, 58),        # του παίκτη, και του
+             ('town_center', 58, 27)]       # αντιπάλου (M10)
 
 
 def game_world(grd=None, res=None, blds=None, found=(), age=None):

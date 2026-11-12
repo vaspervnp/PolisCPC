@@ -50,27 +50,38 @@ units_init:
         ld a,(hl)
         ld (ix+U_BASE+1),a
         ld a,c
+        ld hl,TOWN_X
+        ld de,TOWN_Y
         cp TOWN_UNITS
+        jr c,.town
+        sub TOWN_UNITS          ; οι επόμενες TOWN_UNITS: η πόλη του
+        cp TOWN_UNITS           ; αντιπάλου (M10), ίδια διάταξη
+        ld a,c
         jr nc,.far
-        and 3                   ; οι πρώτες: στην πόλη, 4 στήλες ανά 16 bytes
+        sub TOWN_UNITS
+        ld (ix+U_TEAM),1
+        ld hl,AI_X
+        ld de,AI_Y
+.town:  ld b,a                  ; οι πρώτες: στην πόλη, 4 στήλες ανά 16
+        and 3                   ; bytes
         add a,a
         add a,a
         add a,a
         add a,a
+        push de
         ld e,a
         ld d,0
-        ld hl,TOWN_X
         add hl,de
         ld (ix+U_WX),l
         ld (ix+U_WX+1),h
-        ld a,c                  ; ... και σειρές ανά 32 γραμμές
+        ld a,b                  ; ... και σειρές ανά 32 γραμμές
         and #FC
         ld l,a
         ld h,0
         add hl,hl
         add hl,hl
         add hl,hl
-        ld de,TOWN_Y
+        pop de
         add hl,de
         ld (ix+U_WY),l
         ld (ix+U_WY+1),h
@@ -280,7 +291,14 @@ bld_init:
         ld d,TC_I
         ld e,TC_J
         ld c,1
-        jp bld_new
+        call bld_new
+        xor a                   ; και του αντιπάλου (M10)
+        ld d,AI_TC_I
+        ld e,AI_TC_J
+        ld c,1
+        call bld_new
+        ld (iy+B_OWN),1
+        ret
 
 ; ---- από το game/gather.asm
 
@@ -527,3 +545,51 @@ hl_ = BAR_Y
         dw HUD_PAGE + (hl_ & 7) * #800 + (hl_ >> 3) * 80
 hl_ = hl_ + 1
         rend
+
+; ---- ο αντίπαλος (M10): με την C0, από την C7 (call0)
+
+; IX = χωρικός του αντιπάλου, C = είδος: μαζεύει από την πηγή του είδους
+; στο ai_seed — την τελευταία που βρέθηκε, ή την κοντινότερη ως SRC_R από
+; αυτήν (job_go_src, gather.asm).
+ai_gather:
+        ld a,c
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,ai_seed
+        add hl,de
+        push hl
+        ld d,(hl)
+        inc hl
+        ld e,(hl)
+        ld l,(ix+U_IDX)         ; J_SI, J_SJ = ο σπόρος
+        ld h,J_SI >> 8
+        ld (hl),d
+        set 7,l
+        ld (hl),e
+        ld h,J_KIND >> 8        ; άλλο είδος: ό,τι κουβαλούσε χάνεται
+        ld a,c
+        cp (hl)
+        jr z,.same
+        ld (hl),a
+        res 7,l
+        ld (hl),0
+        xor a
+        call set_look
+.same:  call job_go_src
+        ld a,(ix+U_JOB)         ; βρέθηκε: ο σπόρος για τον επόμενο
+        or a
+        pop hl
+        ret z
+        push hl
+        call job_src
+        pop hl
+        ld (hl),d
+        inc hl
+        ld (hl),e
+        ret
+
+ai_seed:    db 61, 33           ; τροφή (θάμνοι)
+            db 52, 32           ; ξύλο
+            db 75, 36           ; χρυσός
+            db 79, 43           ; πέτρα

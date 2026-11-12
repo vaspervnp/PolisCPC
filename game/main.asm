@@ -45,6 +45,7 @@ CRTC_DAT    equ #BD
 
 HW_BLACK    equ #54
 HW_RED      equ #4C             ; firmware 6, bright red
+HW_GREEN    equ #52             ; firmware 18, bright green
 
         ifdef SNA
         buildsna                ; ο τύπος εξόδου: snapshot αντί για .bin
@@ -135,14 +136,14 @@ frame:
         ld a,(phase)
         cp 6
         jr nz,frame             ; όχι πριν τον καθρέφτη
-        ld a,HW_RED
-        call border
+        ld a,(bd_busy)          ; η λωρίδα του χρόνου (το τέλος της παρτίδας,
+        call border             ; M10: ένα χρώμα και στα δύο)
         ld a,3
         ld (uphase),a           ; 3 = τρέχει το καρέ μονάδων (tests/m3_check.py)
         call units_tick
         ld a,4
         ld (uphase),a
-        ld a,HW_BLACK
+        ld a,(bd_idle)
         call border
         jr frame
 
@@ -400,6 +401,11 @@ bench_req:  db 0
 t_bestd:    db 0                ; στόχευση
 hud_val:    dw 200, 200, 100, 200, TOWN_UNITS, START_AGE ; η μπάρα: τροφή, ξύλο,
                                 ; χρυσό, πέτρα, πληθυσμός, εποχή (gather.asm)
+ai_val:     dw 200, 200, 100, 200 ; ο αντίπαλος (M10): τροφή, ξύλο, χρυσό, πέτρα
+ai_on:      db 1                ; 0: ο αντίπαλος δεν σκέφτεται (tests M0-M9)
+game_end:   db 0                ; 1 νίκη, 2 ήττα (bank7.asm: ai_end)
+bd_busy:    db HW_RED           ; το περιθώριο στο καρέ μονάδων, και μετά
+bd_idle:    db HW_BLACK
 hud_dirty:  db 0                ; bits 0-5: ποιοι αριθμοί της μπάρας άλλαξαν
 u_rescan:   db 0                ; units_forget: όλες οι ενεργές, στο επόμενο καρέ
 bmode:      db 255              ; ο τύπος κτιρίου που τοποθετείται (255 κανένας)
@@ -484,11 +490,11 @@ res_n:      db 0                ; έρευνες σε εξέλιξη (bank7.asm,
 age_req:    db 0                ; 1: τελείωσε η Χαλκού, φόρτωσε το AGE3.BIN
 age_q:      db 255              ; το επόμενο κτίριο να ξαναζωγραφιστεί (255 κανένα)
 age_chg:    dw 0                ; bit τύπου: άλλαξε εικόνα στη νέα εποχή
-dk_blk:     ds 16               ; τα blocks του αρχείου (disk.asm)
-dk_res:     ds 8                ; η φάση αποτελέσματος του FDC
 carry_max:  db 10, 10, 10, 10   ; πόσο κουβαλάει ο χωρικός, ανά είδος (gather.asm)
 cm_cur:     db 10               ; (το όριο της τρέχουσας)
         assert (carry_max & 255) <= 252, 'carry_max: one page'
+dk_blk:     ds 16               ; τα blocks του αρχείου (disk.asm)
+dk_res:     ds 8                ; η φάση αποτελέσματος του FDC
 scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
 int_n:      db 0
 split_on:   db 0
@@ -585,12 +591,14 @@ res_z:
         lzx0
         incbin "../data/bank6.bin"
         lzclose
-; Κέρσορας, σημάδι επιλογής, γωνία -> C5 (μέσω της οθόνης).
+; Κέρσορας, σημάδι επιλογής, γωνία -> C5 (μέσω της οθόνης). Συμπιεσμένα
+; από το M10 (ο κώδικας της C7 μεγάλωσε).
 cursor_gfx:                     ; -> C5, SPR_CURSOR: κέρσορας, αγκύλες, γωνία,
+        lzx0
         incbin "../data/cursor.bin"     ; το βέλος, και τα περιγράμματα των
         incbin "../data/arrow.bin"      ; καρέ (src/make_edges.py)
         incbin "../data/occ_edges.bin"
-        assert $ - cursor_gfx == C5_TAIL, 'C5_TAIL'
+        lzclose
 ; Τα μεταγλωττισμένα sprites (src/make_compiled.py) -> τράπεζα C7.
 cmp_z:
         lzx0

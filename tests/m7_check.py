@@ -48,13 +48,14 @@ TC = (30, 58, 4)
 QMAX = 5
 
 
-def blds(c):
+def blds(c, own=0):
+    """Τα κτίρια του παίκτη (own = 1: του αντιπάλου, None: όλα, M10)."""
     out = []
     for k in range(BLD_MAX):
         b = c.read_ram(BLD_SLOTS[k], B_SIZE)
-        if b[0] != 255:
-            out.append(dict(slot=k, type=MB.KEYS[b[0]], i0=b[2], j0=b[3],
-                            st=b[4], prog=b[14], qn=b[15]))
+        if b[0] != 255 and own in (None, b[1]):
+            out.append(dict(slot=k, type=MB.KEYS[b[0]], own=b[1], i0=b[2],
+                            j0=b[3], st=b[4], prog=b[14], qn=b[15]))
     return out
 
 
@@ -421,12 +422,12 @@ def main():
     press(g, 'h')
     g.move_cursor(*M6.tile_cursor(g, *house))
     press(g, CPCMOD.KEY_RETURN, 1)
-    n1 = len(blds(c))
+    n1 = len(blds(c, None))             # (και το Κέντρο του αντιπάλου, M10)
     last = [b for b in blds(c) if b['slot'] == BLD_MAX - 1]
     press(g, 'h')
     g.move_cursor(*M6.tile_cursor(g, house[0] + 3, house[1]))
     press(g, CPCMOD.KEY_RETURN, 1)
-    n2 = len(blds(c))
+    n2 = len(blds(c, None))
     g.tick(5)
     g.report('28 κτίρια', n1 == BLD_MAX and n2 == BLD_MAX and last and
              (last[0]['i0'], last[0]['j0']) == house,
@@ -435,7 +436,7 @@ def main():
                                                        last[0]['slot'], n2))
 
     # ------------------------------------------------- 11. χρόνος
-    # Μέτρηση, όχι κριτήριο (M9): οι 104 που περιπλανιούνται αποφασίζουν
+    # Μέτρηση, όχι κριτήριο (M9): οι 56 που περιπλανιούνται (M10) αποφασίζουν
     # με το rnd, και το όριο βημάτων (T_BUDGET) τις μετατοπίζει κατά ένα καρέ
     # εδώ κι εκεί — όποια αλλαγή χρόνου φέρνει άλλες στην οθόνη, και το
     # μέγιστο κινείται ±5 ms από build σε build (το M3 / M4, ελεγχόμενα,
@@ -443,7 +444,7 @@ def main():
     still = [t for t, m in zip(g.times, g.scrolled) if not m]
     over = [t for t in still if t >= 40]
     print('%-8s %-9s καρέ χωρίς κύλιση: μέσος %.1f ms, μέγιστος %.1f ms, %d '
-          'από τα %d πάνω από 40 (μέτρηση: με τις 104 που περιπλανιούνται)'
+          'από τα %d πάνω από 40 (μέτρηση: με τις 56 που περιπλανιούνται)'
           % ('χρόνος', '<40' if not over else 'ΠΑΝΩ', sum(still) / len(still),
              max(still), len(over), len(still)))
     if g.shots:

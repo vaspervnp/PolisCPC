@@ -116,6 +116,17 @@ far7:   ld a,RAM_CMP
         ret
 .go:    jp (hl)
 
+; Το αντίστροφο, από την C7 (M10: ο αντίπαλος): HL = ρουτίνα της κύριας
+; RAM — και της σελίδας του HUD (boot.asm) — με την C0, και πίσω στην C7.
+call0:  ld a,RAM_BASE
+        call setram
+        call far7.go
+        push af
+        ld a,RAM_CMP
+        call setram
+        pop af
+        ret
+
 ; Όπως το far7, αλλά γυρίζει με την C5 (units_draw).
 far7s:  ld a,RAM_CMP
         call setram
@@ -183,7 +194,7 @@ bg_snapshot:
         pop bc
         djnz .blk
         ld a,RAM_BASE
-        jr setram
+        jp setram
 
 ; A = δείκτης 0..129 -> IX = η εγγραφή = UNIT_TAB + 32 A. Κρατάει BC, DE, HL.
 ; Με περιστροφή: τα 3 πάνω bits του A πάνε στο high byte, τα 5 κάτω x 32
@@ -249,8 +260,7 @@ units_gfx:
         djnz .set
         ld hl,cursor_gfx        ; ο κέρσορας: μέσω της οθόνης (η πηγή είναι
         ld de,SCREEN            ; πέρα από το #4000, κάτω από την C5) — και
-        ld bc,C5_TAIL           ; τα περιγράμματα (occlude.asm)
-        ldir
+        call dzx0               ; τα περιγράμματα (occlude.asm)
         ld a,RAM_SPR
         call setram
         ld hl,SCREEN
@@ -444,7 +454,7 @@ unit_think:
         cp 2
         jr c,.alive
         inc a
-        jr z,.alive             ; (ελεύθερη θέση: όπως πριν)
+        ret z                   ; ελεύθερη θέση: τίποτα (M10: 48 τέτοιες)
         ld hl,dead_think
         call far7
         jp unit_think_vis
