@@ -57,6 +57,17 @@ def bank_ram(c, b):
     return _lib.cpcemu_ram_ptr(c._h, b)
 
 
+FOG = 0x5F80                    # game/fog.asm: στην C6, 1 bit ανά πλακίδιο
+
+
+def fog_seen(c):
+    """Ο εξερευνημένος χάρτης (M11): seen[j][i]."""
+    p = bank_ram(c, 6)
+    b = bytes(p[FOG - 0x4000 + k] for k in range(96 * 12))
+    return [[bool(b[j * 12 + i // 8] >> (i & 7) & 1) for i in range(96)]
+            for j in range(96)]
+
+
 def c7_read(c, addr, n=1):
     p = bank_ram(c, 7)
     return bytes(p[addr - 0x4000 + k] for k in range(n))

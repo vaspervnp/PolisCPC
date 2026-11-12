@@ -1,323 +1,16 @@
-; boot.asm — ό,τι τρέχει ΜΙΑ φορά, στην εκκίνηση (M9).
+; boot.asm — ρουτίνες της κύριας RAM ΠΑΝΩ από το #4000 (M9, M11).
 ;
-; Ο κύριος κώδικας (#0040-#3FFF) γέμισε. Οι ρουτίνες της εκκίνησης ζουν
-; εδώ: συναρμολογημένες για το BOOT (#7A30, γραμμές της σελίδας του HUD που
-; δεν φαίνονται και δεν τις χρησιμοποιεί κανένας πίνακας), ταξιδεύουν στο
-; POLIS.BIN μετά τον κώδικα της C7, και το `start` τις αντιγράφει εκεί
-; πρώτο απ' όλα. Το hud_init καθαρίζει τη σελίδα ΜΟΝΟ ως το BOOT. Μετά την
-; εκκίνηση η περιοχή είναι ελεύθερη (game/bank7.asm: το AGE_BUF).
-;
-; ΔΕΝ αλλάζουν τράπεζα στο #4000 (θα χανόταν ο κώδικας που τρέχει).
-;
-; ΚΑΙ ΜΕΤΑ ΤΗΝ ΕΚΚΙΝΗΣΗ: κανείς δεν γράφει εδώ, άρα ρουτίνες που τρέχουν με
-; την C0 (η σελίδα του HUD στο #4000) και δεν αλλάζουν τράπεζα μπορούν να
-; ζουν εδώ και στο παιχνίδι — το HUD της μπάρας (hud_update, M6).
+; Ο κύριος κώδικας (#0040-#3FFF) γέμισε. Εδώ ζουν ρουτίνες που τρέχουν ΜΟΝΟ
+; με την C0 (η σελίδα του HUD στο #4000) και δεν αλλάζουν οι ίδιες τράπεζα
+; στο #4000 (θα χανόταν ο κώδικας που τρέχει) — μπορούν όμως να καλούν
+; ρουτίνες του κύριου κώδικα που αλλάζουν και γυρίζουν στην C0 (far7,
+; col_redraw, disk_load). Συναρμολογημένες για το BOOT (#7A30, σειρές 7-20
+; της σελίδας του HUD), ταξιδεύουν στο POLIS.BIN, και το `start` τις
+; αντιγράφει εκεί πρώτο απ' όλα· το hud_init καθαρίζει τη σελίδα ΜΟΝΟ ως το
+; BOOT. Από την C7 με το call0.
 
-; ---- από το game/units.asm
-
-; Οι 128 μονάδες.
-units_init:
-        ld hl,UNIT_TAB          ; όλα μηδέν
-        ld de,UNIT_TAB + 1
-        ld bc,(UNITS + 2) * U_SIZE - 1
-        ld (hl),0
-        ldir
-        ld hl,ACT_TAB
-        ld b,UNITS
-.za:    ld (hl),0
-        inc hl
-        djnz .za
-        xor a
-.u:     push af
-        call idx_ix
-        pop af
-        push af
-        ld (ix+U_IDX),a
-        ld (ix+U_SY),255
-        ld c,a                  ; σετ = i mod 3
-.mod:   sub 3
-        jr nc,.mod
-        add a,3
-        ld (ix+U_SET),a
-        add a,a
-        ld e,a
-        ld d,0
-        ld hl,set_base
-        add hl,de
-        ld a,(hl)
-        ld (ix+U_BASE),a
-        inc hl
-        ld a,(hl)
-        ld (ix+U_BASE+1),a
-        ld a,c
-        ld hl,TOWN_X
-        ld de,TOWN_Y
-        cp TOWN_UNITS
-        jr c,.town
-        sub TOWN_UNITS          ; οι επόμενες TOWN_UNITS: η πόλη του
-        cp TOWN_UNITS           ; αντιπάλου (M10), ίδια διάταξη
-        ld a,c
-        jr nc,.far
-        sub TOWN_UNITS
-        ld (ix+U_TEAM),1
-        ld hl,AI_X
-        ld de,AI_Y
-.town:  ld b,a                  ; οι πρώτες: στην πόλη, 4 στήλες ανά 16
-        and 3                   ; bytes
-        add a,a
-        add a,a
-        add a,a
-        add a,a
-        push de
-        ld e,a
-        ld d,0
-        add hl,de
-        ld (ix+U_WX),l
-        ld (ix+U_WX+1),h
-        ld a,b                  ; ... και σειρές ανά 32 γραμμές
-        and #FC
-        ld l,a
-        ld h,0
-        add hl,hl
-        add hl,hl
-        add hl,hl
-        pop de
-        add hl,de
-        ld (ix+U_WY),l
-        ld (ix+U_WY+1),h
-        jr .pos
-.far:   cp UNITS_LIVE           ; οι τελευταίες: ελεύθερες θέσεις (M7), μακριά
-        jr c,.wan               ; από τον κόσμο, για όσες θα βγουν
-        ld (ix+U_TEAM),TEAM_FREE
-        ld (ix+U_WY+1),2000 >> 8
-        jr .pos
-.wan:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
-        set F_WANDER,(ix+U_FL)  ; — η άλλη ομάδα· ουδέτερες στη μάχη (NT)
-        ld (ix+U_TEAM),1
-        ld a,1
-        call nt_put
-.pos:   ld l,(ix+U_WX)          ; ο στόχος = εκεί που είναι
-        ld h,(ix+U_WX+1)
-        ld (ix+U_TX),l
-        ld (ix+U_TX+1),h
-        ld l,(ix+U_WY)
-        ld h,(ix+U_WY+1)
-        ld (ix+U_TY),l
-        ld (ix+U_TY+1),h
-        pop af
-        inc a
-        cp UNITS
-        jp nz,.u
-        ld ix,ANCHOR_REC        ; η γωνία και ο κέρσορας: σταθερό καρέ, ποτέ
-        ld hl,SPR_ANCHOR        ; στο ORDER των μονάδων
-        call .fixed
-        ld ix,CURSOR_REC
-        ld hl,SPR_CURSOR
-.fixed: set F_FIXED,(ix+U_FL)
-        ld (ix+U_FRAME),l
-        ld (ix+U_FRAME+1),h
-        set F_ORD,(ix+U_FL)
-        ld (ix+U_SY),255
-        ret
-
-; IX: τυχαία θέση στον κόσμο, έξω από την αρχική οθόνη (+ περιθώριο).
-rnd_pos:
-        call rnd                ; WX = (r AND 255) + (r' AND 127), ≤ 380
-        ld e,a
-        ld d,0
-        push de
-        call rnd
-        pop de
-        and 127
-        ld l,a
-        ld h,0
-        add hl,de
-        ld de,WORLD_W
-        call min_hl_de
-        ld (ix+U_WX),l
-        ld (ix+U_WX+1),h
-        call rnd                ; WY = r(0..511) + r'(0..255), ≤ 740
-        push af
-        call rnd
-        and 1
-        ld d,a
-        pop af
-        ld e,a
-        push de
-        call rnd
-        pop de
-        ld l,a
-        ld h,0
-        add hl,de
-        ld de,WORLD_H
-        call min_hl_de
-        ld (ix+U_WY),l
-        ld (ix+U_WY+1),h
-        ld de,280               ; μέσα στο [80,200) x [280,470): ξανά
-        or a
-        sbc hl,de
-        ret c
-        ld de,190
-        or a
-        sbc hl,de
-        ret nc
-        ld l,(ix+U_WX)
-        ld h,(ix+U_WX+1)
-        ld de,80
-        or a
-        sbc hl,de
-        ret c
-        ld de,120
-        or a
-        sbc hl,de
-        jr c,rnd_pos
-        ret
-
-; ---- από το game/pathing.asm
-
-nav_init:
-        ld hl,BLOCK_TAB         ; BLOCK_TAB[b] = ter_block[b>>4] OR res_block[b&15]
-.b:     ld a,l
-        rrca
-        rrca
-        rrca
-        rrca
-        and 15
-        ld e,a
-        ld d,0
-        push hl
-        ld hl,ter_block
-        add hl,de
-        ld c,(hl)
-        pop hl
-        ld a,l
-        and 15
-        ld e,a
-        push hl
-        ld hl,res_block
-        add hl,de
-        ld a,(hl)
-        pop hl
-        or c
-        ld (hl),a
-        inc l
-        jr nz,.b
-        ; τα κελιά
-        ld hl,CELL_TAB
-        ld b,0
-.z:     ld (hl),0
-        inc l
-        djnz .z
-        xor a                   ; A = κελί
-.cell:  ld (n_cell),a
-        call cell_open          ; bit 4
-        ld a,(n_cell)
-        and 15
-        cp 15
-        call nz,edge_e
-        ld a,(n_cell)
-        cp 240
-        call c,edge_s
-        ld a,(n_cell)
-        inc a
-        jr nz,.cell
-        ; οι κάδοι
-        ld hl,BKT0
-        ld b,196
-.h:     ld (hl),255
-        inc hl
-        djnz .h
-        ld hl,BKT1
-        ld b,196
-.h1:    ld (hl),255
-        inc hl
-        djnz .h1
-        xor a
-.u:     push af
-        call idx_ix
-        ld (ix+U_BKT),255
-        ld (ix+U_TGT),255
-        bit F_WANDER,(ix+U_FL)  ; οι τυχαίες θέσεις: όχι μέσα σε εμπόδιο
-        jr z,.pl
-.re:    call unit_tile
-        ld hl,(n_i)
-        ld de,(n_j)
-        call tile_blk
-        or a
-        jr z,.pl
-        call rnd_pos
-        ld l,(ix+U_WX)
-        ld h,(ix+U_WX+1)
-        ld (ix+U_TX),l
-        ld (ix+U_TX+1),h
-        ld l,(ix+U_WY)
-        ld h,(ix+U_WY+1)
-        ld (ix+U_TY),l
-        ld (ix+U_TY+1),h
-        jr .re
-.pl:    call unit_pxy
-        ld a,(ix+U_TEAM)        ; ελεύθερη θέση (M7): σε κανέναν κάδο
-        inc a
-        jr z,.nb
-        call unit_tile
-        call unit_inblk
-        call bucket_update
-.nb:
-        pop af
-        inc a
-        cp UNITS
-        jr nz,.u
-        ret
-
-; ---- από το game/buildings.asm
-
-bld_init:
-        ld hl,BLD_TAB           ; όλα ελεύθερα
-        ld b,0
-.c:     ld (hl),255
-        inc l
-        djnz .c
-        ld hl,BLD_TAB2
-        ld b,(BLD_MAX - BLD_N1) * B_SIZE
-.c2:    ld (hl),255
-        inc l
-        djnz .c2
-        ld a,255
-        ld (bmode),a
-        ld (sel_bld),a
-        ld (bk_prev),a
-        ld (rq_n),a
-        xor a                   ; το Κέντρο Πόλης, έτοιμο
-        ld d,TC_I
-        ld e,TC_J
-        ld c,1
-        call bld_new
-        xor a                   ; και του αντιπάλου (M10)
-        ld d,AI_TC_I
-        ld e,AI_TC_J
-        ld c,1
-        call bld_new
-        ld (iy+B_OWN),1
-        ret
-
-; ---- από το game/gather.asm
-
-gather_init:
-        ld hl,SRC_TAB + 1       ; όλες οι πηγές ελεύθερες
-        ld b,SRC_N
-.s:     ld (hl),#FF
-        inc hl
-        inc hl
-        inc hl
-        inc hl
-        djnz .s
-        ld hl,J_CARRY           ; καμία δεν κουβαλάει τίποτα
-        call zero_page
-        ld hl,J_SI
-        call zero_page
-        ld a,#3F                ; και οι 6 αριθμοί
-        ld (hud_dirty),a
-        jp hud_update
+; Οι ρουτίνες της εκκίνησης (units_init, nav_init, hud_init ...) ζούσαν
+; εδώ ως το M10· πήγαν στο game/init.asm (#F000).
 
 ; ---- από το game/units.asm
 
@@ -336,37 +29,6 @@ make_swap:
         ld (hl),a
         inc l
         jr nz,.s
-        ret
-
-; ---- από το game/screen.asm
-
-; Το HUD στην κύρια RAM #4000 (με τις τράπεζες στη θέση τους): οι 7 σειρές
-; κάθε οκτάδας αποσυμπιέζονται στην οθόνη και πάνε στη θέση τους· τα
-; υπόλοιπα μηδέν (οι σειρές 7-20 του καρέ Β φαίνονται: μαύρο).
-HUD_ROWS    equ 7
-hud_init:
-        ld hl,hud_z
-        ld de,SCREEN
-        call dzx0
-        ld hl,HUD_PAGE          ; όλη η σελίδα ως το BOOT (main.asm)
-        ld de,HUD_PAGE + 1
-        ld bc,BOOT - HUD_PAGE - 1
-        ld (hl),0
-        ldir
-        ld hl,SCREEN
-        ld de,HUD_PAGE
-        ld a,8
-.k:     ld bc,HUD_ROWS * 80
-        ldir
-        ex de,hl                ; DE += #800 - 560
-        ld bc,#800 - HUD_ROWS * 80
-        add hl,bc
-        ex de,hl
-        dec a
-        jr nz,.k
-        ld de,digits            ; και τα ψηφία, στις γραμμές που δεν φαίνονται
-        ld bc,DIGITS_LEN
-        ldir
         ret
 
 ; ---- από το game/main.asm
@@ -593,3 +255,550 @@ ai_seed:    db 61, 33           ; τροφή (θάμνοι)
             db 52, 32           ; ξύλο
             db 75, 36           ; χρυσός
             db 79, 43           ; πέτρα
+
+
+; ---- από το game/buildings.asm (M11): πλήκτρα, τοποθέτηση, ανέγερση
+
+; ------------------------------------------------------------ πλήκτρα
+
+; Από το cursor_input: τα πλήκτρα των κτιρίων, μόνο στο πάτημα.
+bld_input:
+        ld hl,bld_keym
+        ld c,0
+.k:     ld a,(hl)
+        call read_row
+        inc hl
+        and (hl)
+        inc hl
+        jr nz,.got
+        inc c
+        ld a,c
+        cp BT_N + 3
+        jr nz,.k
+        ld c,255
+.got:   ld hl,bk_prev
+        ld a,c
+        cp (hl)
+        ld (hl),a
+        ret z
+        inc a
+        ret z
+        dec a
+        cp BT_N
+        jr c,.type
+        jr z,bld_train
+        cp BT_N + 2             ; U: έρευνα στο επιλεγμένο κτίριο (bank7.asm)
+        jr nz,.esc
+        ld hl,res_start
+        jp far7
+.esc:   ld a,255                ; ESC
+        ld (bmode),a
+        jr cur_look
+.type:  ld (bn_t),a             ; ένας τύπος: αν υπάρχει χωρικός επιλεγμένος
+        call sel_villager       ; και ο τύπος χτίζεται
+        ret nc
+        ld a,(bn_t)
+        call bld_can
+        ret c
+        ld a,(bn_t)
+        ld (bmode),a
+
+; Ο κέρσορας: γωνία όσο διαλέγεις θέση, αλλιώς βέλος.
+cur_look:
+        ld hl,SPR_CURSOR
+        ld a,(bmode)
+        inc a
+        jr z,.s
+        ld hl,SPR_ANCHOR
+.s:     ld (CURSOR_REC + U_FRAME),hl
+        ld a,1
+        ld (cur_force),a
+        ret
+
+; T: μία μονάδα στην ουρά του επιλεγμένου κτιρίου — αν ο πληθυσμός μαζί με
+; τις ουρές είναι κάτω από το όριο (pop_cap).
+bld_train:
+        ld a,(sel_bld)
+        cp 255
+        ret z
+        call pop_cap
+        ld c,a
+        ld a,(hud_val + 8)
+        ld hl,bq_tot
+        add a,(hl)
+        cp c
+        ret nc
+        ld a,(sel_bld)
+        call brec_iy
+        ld a,(iy+B_OWN)         ; του παίκτη (M10: και του αντιπάλου επιλέγεται)
+        or a
+        ret nz
+        ld a,(iy+B_ST)
+        or a
+        ret z
+        ld a,(iy+B_QN)
+        cp QMAX
+        ret nc
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_UNIT
+        add hl,de
+        ld a,(hl)
+        inc a
+        ret z
+        inc hl                  ; το κόστος της μονάδας
+        call pay
+        ret c
+        inc (iy+B_QN)
+        ld hl,bq_tot
+        inc (hl)
+        ret
+
+; -> A = το όριο πληθυσμού: POP_BASE + POP_HOUSE ανά έτοιμο σπίτι (ως 255).
+POP_BASE    equ 15
+POP_HOUSE   equ 5
+pop_cap:
+        ld c,POP_BASE
+        ld iy,BLD_TAB
+        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
+        ld b,a
+.l:     ld a,(iy+B_TYPE)
+        cp BTY_HOUSE
+        jr nz,.n
+        ld a,(iy+B_OWN)         ; του παίκτη
+        or a
+        jr nz,.n
+        ld a,(iy+B_ST)
+        or a
+        jr z,.n
+        ld a,c
+        add a,POP_HOUSE
+        jr c,.n
+        ld c,a
+.n:     call bnext
+        djnz .l
+        ld a,c
+        ret
+
+; Carry αν υπάρχει χωρικός του παίκτη στην επιλογή.
+sel_villager:
+        ld a,(sel_n)
+        or a
+        ret z                   ; NC: κανένας
+        ld b,a
+        ld hl,SELLIST
+.s:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push de
+        pop iy
+        call is_villager
+        scf
+        ret z
+        djnz .s
+        or a
+        ret
+
+; IY = μονάδα -> Z αν είναι χωρικός του παίκτη (σετ 0 ή SET_CARRY, ομάδα 0).
+is_villager:
+        ld a,(iy+U_TEAM)
+        or a
+        ret nz
+        ld a,(iy+U_SET)
+        or a
+        ret z
+        cp SET_CARRY
+        ret
+
+; A = τύπος -> NC αν χτίζεται τώρα: εποχή, προαπαιτούμενο, κόστος (μόνο
+; έλεγχος).
+bld_can:
+        call bt_hl
+        inc hl
+        ld a,(hud_val + 10)     ; η εποχή
+        cp (hl)
+        ret c
+        inc hl
+        ld a,(hl)               ; προαπαιτούμενο: ένα έτοιμο του παίκτη
+        cp 255
+        jr z,.cost
+        push hl
+        ld c,a
+        ld iy,BLD_TAB
+        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
+        ld b,a
+.p:     ld a,(iy+B_TYPE)
+        cp c
+        jr nz,.pn
+        ld a,(iy+B_OWN)
+        or a
+        jr nz,.pn
+        ld a,(iy+B_ST)
+        or a
+        jr nz,.ok
+.pn:    call bnext
+        djnz .p
+        pop hl
+        scf
+        ret
+.ok:    pop hl
+.cost:  inc hl
+        ld de,hud_val           ; 4 x (κόστος ≤ ό,τι έχεις)
+        ld b,4
+.c:     ld a,(de)
+        sub (hl)
+        inc de
+        ld a,(de)
+        sbc a,0
+        ret c
+        inc de
+        inc hl
+        djnz .c
+        or a
+        ret
+
+; HL -> 4 x κόστος: αφαιρείται από τη μπάρα αν φτάνει (NC), αλλιώς carry.
+pay:    push hl
+        ld de,hud_val
+        ld b,4
+.c:     ld a,(de)
+        sub (hl)
+        inc de
+        ld a,(de)
+        sbc a,0
+        jr c,.no
+        inc de
+        inc hl
+        djnz .c
+        pop hl
+        ld de,hud_val
+        ld b,4
+        ld c,1                  ; C = το bit του αριθμού στη μπάρα
+.d:     ld a,(hl)               ; μόνο όσα κοστίζουν: ξαναγράφονται
+        or a
+        jr z,.e
+        ld a,(hud_dirty)
+        or c
+        ld (hud_dirty),a
+.e:     ld a,(de)
+        sub (hl)
+        ld (de),a
+        inc de
+        ld a,(de)
+        sbc a,0
+        ld (de),a
+        inc de
+        inc hl
+        sla c
+        djnz .d
+        or a
+        ret
+.no:    pop hl
+        ret
+
+; ------------------------------------------------------------ τοποθέτηση
+
+; RETURN με τύπο διαλεγμένο: η κάτοψη με κέντρο τον κέρσορα, αν είναι μέσα
+; στον χάρτη και όλα της τα πλακίδια ελεύθερα (χωρίς πόρο ή με κούτσουρο) και
+; ο τύπος χτίζεται: πληρώνεται, γίνεται θεμέλιο, και οι επιλεγμένοι
+; χωρικοί πάνε να το χτίσουν.
+bld_place:
+        ld a,(bmode)
+        call bt_hl
+        ld a,(hl)
+        ld (bn_n),a
+        call cur_world
+        ld hl,(cw_x)
+        ld de,(cw_y)
+        call feet_tile          ; HL = i, DE = j (με πρόσημο)
+        ld a,(bn_n)             ; - (n - 1) / 2
+        dec a
+        srl a
+        ld c,a
+        ld b,0
+        or a
+        sbc hl,bc
+        ex de,hl                ; HL = j, DE = i0
+        or a
+        sbc hl,bc
+        ld a,h                  ; i0, j0 στο 0..96 - n
+        or d
+        ret nz
+        ld a,(bn_n)
+        neg
+        add a,MAPW + 1
+        ld c,a
+        ld a,l
+        cp c
+        ret nc
+        ld a,e
+        cp c
+        ret nc
+        ld d,e                  ; D = i0, E = j0
+        ld e,l
+        ld (bp_ij),de
+        ld a,(bn_n)             ; ελεύθερα;
+        ld b,a
+.r:     push bc
+        push de
+        ld a,(bn_n)
+        ld b,a
+.t:     push bc
+        call map_ptr
+        ld a,(hl)
+        and 15
+        jr z,.ok
+        cp 4                    ; κούτσουρο
+        jr nz,.bad
+.ok:    ld l,(hl)
+        ld h,BLOCK_TAB >> 8
+        ld a,(hl)
+        or a
+        jr nz,.bad
+        inc d
+        pop bc
+        djnz .t
+        pop de
+        inc e
+        pop bc
+        djnz .r
+        ld a,(bmode)
+        call bld_can
+        ret c
+        ld a,(bmode)
+        call bt_hl
+        inc hl
+        inc hl
+        inc hl
+        call pay
+        ret c
+        ld de,(bp_ij)
+        ld a,(bmode)
+        ld c,0
+        call bld_new
+        ret c
+        call bld_redraw         ; το θεμέλιο στην οθόνη
+        call bidx               ; οι επιλεγμένοι χωρικοί: να το χτίσουν
+        ld (bp_slot),a
+        ld a,(sel_n)
+        ld b,a
+        ld hl,SELLIST
+.v:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push bc
+        push hl
+        push de
+        pop ix
+        push ix
+        pop iy
+        call is_villager
+        call z,build_go
+        pop hl
+        pop bc
+        djnz .v
+        ld a,255
+        ld (bmode),a
+        jp cur_look
+.bad:   pop bc
+        pop de
+        pop bc
+        ret
+
+; IX = χωρικός: πάει στο ελεύθερο πλακίδιο γύρω από το κτίριο bp_slot που
+; είναι πιο κοντά του.
+build_go:
+        ld l,(ix+U_IDX)
+        ld h,J_SI >> 8
+        ld a,(bp_slot)
+        ld (hl),a
+        set 7,l                 ; J_SJ = 0: δεν ξεκίνησε ακόμα (το bld_job, στην
+        ld (hl),0               ; απόφασή του: όχι όλοι στο καρέ της εντολής)
+        ld (ix+U_JOB),J_BUILD
+        res F_MOVE,(ix+U_FL)
+        ret
+
+; IX = χωρικός με J_BUILD που δεν ξεκίνησε: στο πλακίδιο δίπλα στο κτίριο.
+build_walk:
+        ld l,(ix+U_IDX)
+        set 7,l
+        ld h,J_SJ >> 8
+        ld (hl),1
+        call unit_sp
+        call bld_ring           ; (IY = το κτίριο)
+        jp c,job_idle
+        call tile_target
+        jp job_walk
+
+; ------------------------------------------------------------ ανέγερση
+
+; IX = χωρικός με J_BUILD που στέκεται (από το job_tick): αν είναι δίπλα
+; στο κτίριο, +1 πόντος· με τους πόντους του τύπου, έτοιμο.
+bld_job:
+        ld l,(ix+U_IDX)
+        ld h,J_SI >> 8
+        ld a,(hl)
+        call brec_iy
+        ld a,(iy+B_TYPE)
+        inc a
+        jp z,job_idle
+        ld a,(iy+B_ST)
+        or a
+        jp nz,job_idle          ; το τελείωσαν άλλοι
+        ld l,(ix+U_IDX)         ; δεν ξεκίνησε ακόμα
+        set 7,l
+        ld h,J_SJ >> 8
+        ld a,(hl)
+        or a
+        jr z,build_walk
+        call unit_tile          ; δίπλα: στο τετράγωνο (i0 - 1 .. i0 + n)
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld c,(hl)
+        inc c
+        inc c                   ; C = n + 2
+        ld hl,(n_i)
+        call clamp95
+        sub (iy+B_I)
+        inc a
+        cp c
+        jp nc,job_idle
+        ld hl,(n_j)
+        call clamp95
+        sub (iy+B_J)
+        inc a
+        cp c
+        jp nc,job_idle
+        inc (iy+B_PROG)
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_PTS
+        add hl,de
+        ld a,(iy+B_PROG)
+        cp (hl)
+        ret c
+        ld (iy+B_ST),1          ; έτοιμο: η εικόνα του
+        ld (iy+B_PROG),0
+        ld a,1                  ; και μπορεί να κρύβει μονάδες (occlude.asm)
+        ld (occ_dirty),a
+        call bld_redraw
+        jp job_idle
+
+
+; ---- από το game/buildings.asm (M11)
+
+; ------------------------------------------------------------ κάρτα
+
+; Σε κάθε καρέ μονάδων: η κάρτα του HUD. Με κτίριο επιλεγμένο, το μέγεθος της
+; ουράς του (ψηφίο) και η πρόοδος (μπάρα 12 pixels) — της ανέγερσης όσο
+; είναι θεμέλιο, αλλιώς της μονάδας που εκπαιδεύεται. Χωρίς: κενή (μία φορά).
+hud_card:
+        ld a,(sel_bld)
+        cp 255
+        jr nz,.on
+        ld hl,card_on
+        ld a,(hl)
+        or a
+        ret z
+        ld (hl),0
+        ld a,10
+        call card_digit
+        xor a
+        jr card_bar
+.on:    ld a,1
+        ld (card_on),a
+        ld a,(sel_bld)
+        call brec_iy
+        ld a,(iy+B_QN)
+        call card_digit
+        ld hl,res_card          ; έρευνα (M9): η μπάρα της
+        call far7
+        cp 255
+        jr nz,card_bar
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_PTS
+        ld a,(iy+B_ST)
+        or a
+        jr z,.f
+        ld de,BT_UTIME
+        ld a,(iy+B_QN)
+        or a
+        jr z,card_bar           ; (A = 0)
+.f:     add hl,de
+        ld e,(hl)               ; pixels = πρόοδος x 12 / μέγιστο
+        ld d,0
+        ld l,(iy+B_PROG)
+        ld h,d
+        ld b,h
+        ld c,l
+        add hl,hl
+        add hl,bc
+        add hl,hl
+        add hl,hl
+        ld b,-1
+.d:     inc b
+        or a
+        sbc hl,de
+        jr nc,.d
+        ld a,b
+
+; A = πόσα pixels (0..12) γεμάτα: η μπάρα της κάρτας.
+card_bar:
+        ld c,a
+        ld hl,HUD_PAGE + (CARD_BY & 7) * #800 + (CARD_BY >> 3) * 80 + CARD_X
+        ld b,6
+.b:     ld d,CARD_EMPTY
+        ld a,c
+        or a
+        jr z,.w
+        dec c
+        ld d,CARD_HALF
+        jr z,.w
+        dec c
+        ld d,CARD_FULL
+.w:     ld (hl),d
+        inc hl
+        djnz .b
+        ret
+
+; A = ψηφίο (0-9, 10 κενό): στην κάρτα.
+card_digit:
+        ld l,a                  ; DE = digits + 10 A
+        add a,a
+        add a,a
+        add a,l
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,digits
+        add hl,de
+        ex de,hl
+        ld hl,card_rows
+        ld b,5
+.l:     ld a,(hl)
+        inc hl
+        push hl
+        ld h,(hl)
+        ld l,a
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc hl
+        ld a,(de)
+        ld (hl),a
+        inc de
+        pop hl
+        inc hl
+        djnz .l
+        ret
+
+card_rows:
+cl_ = CARD_Y
+        repeat 5
+        dw HUD_PAGE + (cl_ & 7) * #800 + (cl_ >> 3) * 80 + CARD_X
+cl_ = cl_ + 1
+        rend
+

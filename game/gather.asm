@@ -632,6 +632,10 @@ col_redraw:
         ld hl,col_y1
         cp (hl)
         jr c,.r
+        xor a                   ; πίσω σε όλο το ύψος: αλλιώς η επόμενη
+        ld (col_y0),a           ; κύλιση (draw_column) ψαλιδίζει τους
+        ld a,VIEW_H             ; πόρους και τα κτίρια της στο κομμάτι
+        ld (col_y1),a
         ret
 
 ; A = ζυγό byte οθόνης: οι γραμμές col_y0..col_y1 της στήλης (2 bytes) στον

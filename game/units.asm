@@ -392,6 +392,12 @@ units_tick:
         call c,units_think
         call bld_tick           ; κτίρια: επανασχεδίαση, ουρές (buildings.asm)
         call hud_card
+        ld a,(t0)               ; μία γραμμή του μίνι χάρτη (M11), ~2 ms:
+        ld b,a                  ; μόνο αν περισσεύει χρόνος (στη μάχη τα
+        ld a,(int_t)            ; καρέ θέλουν τις αποφάσεις, T_LATE)
+        sub b
+        cp MM_T
+        call c,mm_line
         ld a,(hud_dirty)        ; άλλαξε η μπάρα (gather.asm)
         or a
         call nz,hud_update
@@ -904,7 +910,9 @@ unit_update:
 .chg:   bit 0,(ix+U_DRAWN)
         call nz,old_rect
 .new:   set 2,(ix+U_DRAWN)      ; ζωγραφίζεται (αν φαίνεται)
-.pos:   ld a,(v_shx)            ; χωρίς κύλιση, και φαινόταν: SX, SY + το
+.pos:   call unit_fog           ; σε ανεξερεύνητο (M11): δεν φαίνεται
+        jp z,unit_hide
+        ld a,(v_shx)            ; χωρίς κύλιση, και φαινόταν: SX, SY + το
         ld hl,v_shy             ; βήμα, σε 8 bits
         or (hl)
         jr nz,.full

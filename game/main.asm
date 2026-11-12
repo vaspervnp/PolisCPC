@@ -86,8 +86,11 @@ start:
         ld de,MAP
         call dzx0
         call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
+        ld hl,init_phys         ; οι ρουτίνες της εκκίνησης στην οθόνη
+        ld de,INIT              ; (init.asm, M11)
+        ld bc,INIT_LEN
+        ldir
         call hud_init           ; το HUD -> #4000, μέσω της οθόνης
-        call clear_screen
         ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
         ld b,16
 .z:     ld (hl),0
@@ -99,6 +102,8 @@ start:
         call bld_init           ; το Κέντρο Πόλης στον χάρτη, πριν την εύρεση
         call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
         call gather_init        ; οι πηγές, και οι αριθμοί του HUD
+        call fog_init           ; ο εξερευνημένος χάρτης (M11)
+        call clear_screen       ; (και ο κώδικας της εκκίνησης στο #F000)
         ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
         call crtc_w
         ld a,1
@@ -256,6 +261,8 @@ pen_pair:
         include "buildings.asm"
         include "occlude.asm"
         include "disk.asm"
+        include "fog.asm"
+        include "minimap.asm"
 
         ifdef BARS
 linebuf:
@@ -403,6 +410,17 @@ hud_val:    dw 200, 200, 100, 200, TOWN_UNITS, START_AGE ; η μπάρα: τρο
                                 ; χρυσό, πέτρα, πληθυσμός, εποχή (gather.asm)
 ai_val:     dw 200, 200, 100, 200 ; ο αντίπαλος (M10): τροφή, ξύλο, χρυσό, πέτρα
 ai_on:      db 1                ; 0: ο αντίπαλος δεν σκέφτεται (tests M0-M9)
+fr_j:       db 0                ; fog_reveal (fog.asm, M11)
+fr_j1:      db 0
+fr_i0:      db 0
+fr_i1:      db 0
+fd_x:       dw 0                ; fd_add: η νέα εγγραφή (wx, y0, y1)
+fd_y0:      dw 0
+fd_y1:      dw 0
+fd_c:       db 0
+fog_on:     db 1                ; 0: όλα εξερευνημένα (tests M1-M10, M11)
+mm_my:      db 0                ; minimap.asm: η γραμμή του καρέ
+mm_buf:     ds MM_N             ; τα pens της
 game_end:   db 0                ; 1 νίκη, 2 ήττα (bank7.asm: ai_end)
 bd_busy:    db HW_RED           ; το περιθώριο στο καρέ μονάδων, και μετά
 bd_idle:    db HW_BLACK
@@ -492,7 +510,9 @@ age_q:      db 255              ; το επόμενο κτίριο να ξανα
 age_chg:    dw 0                ; bit τύπου: άλλαξε εικόνα στη νέα εποχή
 carry_max:  db 10, 10, 10, 10   ; πόσο κουβαλάει ο χωρικός, ανά είδος (gather.asm)
 cm_cur:     db 10               ; (το όριο της τρέχουσας)
+        ifndef BARS             ; (η οθόνη του M0 δεν τρέχει το παιχνίδι)
         assert (carry_max & 255) <= 252, 'carry_max: one page'
+        endif
 dk_blk:     ds 16               ; τα blocks του αρχείου (disk.asm)
 dk_res:     ds 8                ; η φάση αποτελέσματος του FDC
 scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
@@ -553,6 +573,17 @@ boot_end:
         org boot_phys + boot_end - BOOT
 BOOT_LEN    equ boot_end - BOOT
         assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
+
+; Οι ρουτίνες της εκκίνησης (init.asm, M11): στη μνήμη της οθόνης, πάνω από
+; ό,τι χρησιμοποιεί ως ενδιάμεσο χώρο το hud_init.
+INIT        equ #F000
+init_phys:
+        org INIT,init_phys
+        include "init.asm"
+init_end:
+        org init_phys + init_end - INIT
+INIT_LEN    equ init_end - INIT
+        assert SCREEN + 8 * HUD_ROWS * 80 + DIGITS_LEN <= INIT, 'hud_init temp over INIT'
 
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB).
 map_z:
@@ -624,6 +655,8 @@ end:
         else
         save 'POLIS.BIN',start,end-start,DSK,'build/polis.dsk'
         endif
+
+        assert IMG0 + AGE3_LEN <= FOG && IMG0 + AGE4_LEN <= FOG, 'age images over FOG (M11)'
 
 ; Η Εποχή του Χαλκού (M9): οι εικόνες των κτιρίων, ένα δεύτερο αρχείο στην
 ; ίδια δισκέτα, που το φορτώνει το game/disk.asm στην C6 (IMG0 - 128: η

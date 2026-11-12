@@ -47,7 +47,7 @@ GAME_BLDS = [('town_center', 30, 58),        # του παίκτη, και το�
              ('town_center', 58, 27)]       # αντιπάλου (M10)
 
 
-def game_world(grd=None, res=None, blds=None, found=(), age=None):
+def game_world(grd=None, res=None, blds=None, found=(), age=None, seen=None):
     """Ο κόσμος όπως τον ζωγραφίζει το παιχνίδι: έδαφος, πόροι, και τα
     κτίρια του (με τις εικόνες του src/make_bank6.py, της εποχής `age`).
     `found`: θεμέλια (κλειδί, i0, j0) — η κάτοψη γίνεται «χώμα τραχύ»,
@@ -63,7 +63,7 @@ def game_world(grd=None, res=None, blds=None, found=(), age=None):
                 grd[j][i] = 'dirt_rough'
     items = [(MB.image(k, age or MB.START_AGE), i0, j0, MB.footprint(k))
              for k, i0, j0 in (GAME_BLDS if blds is None else blds)]
-    return mockup.render_world(grd, res, towns=False, blds=items)
+    return mockup.render_world(grd, res, towns=False, blds=items, seen=seen)
 
 
 def reference(world, cam_x, cam_y):
@@ -135,6 +135,7 @@ def main():
     c = CPC()
     c.run_frames(5)
     assert c.quickload(os.path.join(BUILD, 'polis.sna')), 'quickload'
+    c.poke(sym['FOG_ON'], 0)              # χωρίς ομίχλη (M11)
     t0 = wait_phase(c, sym, 2) / 1000.0
     good = compare(c, reference(world, 98, 303), 'sna', shots)
     print('%-7s %-9s αρχική σχεδίαση' % ('sna', 'OK' if good else 'ΑΠΟΤΥΧΙΑ'))
@@ -153,8 +154,11 @@ def main():
     c.insert_disc(os.path.join(BUILD, 'polis.dsk'))
     c.type_text('RUN"POLIS\n')
     wait_phase(c, sym, 2, limit_ms=8000)
-    good = c.mode == 0 and compare(c, reference(world, 98, 303), 'dsk', shots)
-    print('%-7s %-9s RUN"POLIS' % ('dsk', 'OK' if good else 'ΑΠΟΤΥΧΙΑ'))
+    import scene                        # από τη δισκέτα: με την ομίχλη (M11)
+    fogw = game_world(grd, res, seen=scene.fog_seen(c))
+    good = c.mode == 0 and compare(c, reference(fogw, 98, 303), 'dsk', shots)
+    print('%-7s %-9s RUN"POLIS (με την ομίχλη)' % ('dsk', 'OK' if good else
+                                                  'ΑΠΟΤΥΧΙΑ'))
     ok &= good
 
     print('\nολόκληρο το παράθυρο: %.1f - %.1f ms (%.1f - %.1f καρέ των 20 ms)'

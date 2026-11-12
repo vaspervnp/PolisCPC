@@ -1,0 +1,398 @@
+; init.asm — ό,τι τρέχει ΜΙΑ φορά, στην εκκίνηση (M11).
+;
+; Συναρμολογημένο για το INIT (#F000: η μνήμη της οθόνης). Το `start` το
+; αντιγράφει εκεί μετά το units_gfx (που χρησιμοποιεί όλη την οθόνη ως
+; ενδιάμεσο χώρο) και πριν το hud_init (που χρησιμοποιεί μόνο ως το
+; ~#D200)· το clear_screen (στο BOOT) τρέχει όταν τελειώσουν όλα.
+;
+; Ως το M10 ζούσαν στο BOOT (boot.asm), που έγινε πια μόνο για ρουτίνες
+; που μένουν και στο παιχνίδι.
+
+; ---- από το game/units.asm
+
+; Οι 128 μονάδες.
+units_init:
+        ld hl,UNIT_TAB          ; όλα μηδέν
+        ld de,UNIT_TAB + 1
+        ld bc,(UNITS + 2) * U_SIZE - 1
+        ld (hl),0
+        ldir
+        ld hl,ACT_TAB
+        ld b,UNITS
+.za:    ld (hl),0
+        inc hl
+        djnz .za
+        xor a
+.u:     push af
+        call idx_ix
+        pop af
+        push af
+        ld (ix+U_IDX),a
+        ld (ix+U_SY),255
+        ld c,a                  ; σετ = i mod 3
+.mod:   sub 3
+        jr nc,.mod
+        add a,3
+        ld (ix+U_SET),a
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,set_base
+        add hl,de
+        ld a,(hl)
+        ld (ix+U_BASE),a
+        inc hl
+        ld a,(hl)
+        ld (ix+U_BASE+1),a
+        ld a,c
+        ld hl,TOWN_X
+        ld de,TOWN_Y
+        cp TOWN_UNITS
+        jr c,.town
+        sub TOWN_UNITS          ; οι επόμενες TOWN_UNITS: η πόλη του
+        cp TOWN_UNITS           ; αντιπάλου (M10), ίδια διάταξη
+        ld a,c
+        jr nc,.far
+        sub TOWN_UNITS
+        ld (ix+U_TEAM),1
+        ld hl,AI_X
+        ld de,AI_Y
+.town:  ld b,a                  ; οι πρώτες: στην πόλη, 4 στήλες ανά 16
+        and 3                   ; bytes
+        add a,a
+        add a,a
+        add a,a
+        add a,a
+        push de
+        ld e,a
+        ld d,0
+        add hl,de
+        ld (ix+U_WX),l
+        ld (ix+U_WX+1),h
+        ld a,b                  ; ... και σειρές ανά 32 γραμμές
+        and #FC
+        ld l,a
+        ld h,0
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        pop de
+        add hl,de
+        ld (ix+U_WY),l
+        ld (ix+U_WY+1),h
+        jr .pos
+.far:   cp UNITS_LIVE           ; οι τελευταίες: ελεύθερες θέσεις (M7), μακριά
+        jr c,.wan               ; από τον κόσμο, για όσες θα βγουν
+        ld (ix+U_TEAM),TEAM_FREE
+        ld (ix+U_WY+1),2000 >> 8
+        jr .pos
+.wan:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
+        set F_WANDER,(ix+U_FL)  ; — η άλλη ομάδα· ουδέτερες στη μάχη (NT)
+        ld (ix+U_TEAM),1
+        ld a,1
+        call nt_put
+.pos:   ld l,(ix+U_WX)          ; ο στόχος = εκεί που είναι
+        ld h,(ix+U_WX+1)
+        ld (ix+U_TX),l
+        ld (ix+U_TX+1),h
+        ld l,(ix+U_WY)
+        ld h,(ix+U_WY+1)
+        ld (ix+U_TY),l
+        ld (ix+U_TY+1),h
+        pop af
+        inc a
+        cp UNITS
+        jp nz,.u
+        ld ix,ANCHOR_REC        ; η γωνία και ο κέρσορας: σταθερό καρέ, ποτέ
+        ld hl,SPR_ANCHOR        ; στο ORDER των μονάδων
+        call .fixed
+        ld ix,CURSOR_REC
+        ld hl,SPR_CURSOR
+.fixed: set F_FIXED,(ix+U_FL)
+        ld (ix+U_FRAME),l
+        ld (ix+U_FRAME+1),h
+        set F_ORD,(ix+U_FL)
+        ld (ix+U_SY),255
+        ret
+
+; IX: τυχαία θέση στον κόσμο, έξω από την αρχική οθόνη (+ περιθώριο).
+rnd_pos:
+        call rnd                ; WX = (r AND 255) + (r' AND 127), ≤ 380
+        ld e,a
+        ld d,0
+        push de
+        call rnd
+        pop de
+        and 127
+        ld l,a
+        ld h,0
+        add hl,de
+        ld de,WORLD_W
+        call min_hl_de
+        ld (ix+U_WX),l
+        ld (ix+U_WX+1),h
+        call rnd                ; WY = r(0..511) + r'(0..255), ≤ 740
+        push af
+        call rnd
+        and 1
+        ld d,a
+        pop af
+        ld e,a
+        push de
+        call rnd
+        pop de
+        ld l,a
+        ld h,0
+        add hl,de
+        ld de,WORLD_H
+        call min_hl_de
+        ld (ix+U_WY),l
+        ld (ix+U_WY+1),h
+        ld de,280               ; μέσα στο [80,200) x [280,470): ξανά
+        or a
+        sbc hl,de
+        ret c
+        ld de,190
+        or a
+        sbc hl,de
+        ret nc
+        ld l,(ix+U_WX)
+        ld h,(ix+U_WX+1)
+        ld de,80
+        or a
+        sbc hl,de
+        ret c
+        ld de,120
+        or a
+        sbc hl,de
+        jr c,rnd_pos
+        ret
+
+; ---- από το game/pathing.asm
+
+nav_init:
+        ld hl,BLOCK_TAB         ; BLOCK_TAB[b] = ter_block[b>>4] OR res_block[b&15]
+.b:     ld a,l
+        rrca
+        rrca
+        rrca
+        rrca
+        and 15
+        ld e,a
+        ld d,0
+        push hl
+        ld hl,ter_block
+        add hl,de
+        ld c,(hl)
+        pop hl
+        ld a,l
+        and 15
+        ld e,a
+        push hl
+        ld hl,res_block
+        add hl,de
+        ld a,(hl)
+        pop hl
+        or c
+        ld (hl),a
+        inc l
+        jr nz,.b
+        ; τα κελιά
+        ld hl,CELL_TAB
+        ld b,0
+.z:     ld (hl),0
+        inc l
+        djnz .z
+        xor a                   ; A = κελί
+.cell:  ld (n_cell),a
+        call cell_open          ; bit 4
+        ld a,(n_cell)
+        and 15
+        cp 15
+        call nz,edge_e
+        ld a,(n_cell)
+        cp 240
+        call c,edge_s
+        ld a,(n_cell)
+        inc a
+        jr nz,.cell
+        ; οι κάδοι
+        ld hl,BKT0
+        ld b,196
+.h:     ld (hl),255
+        inc hl
+        djnz .h
+        ld hl,BKT1
+        ld b,196
+.h1:    ld (hl),255
+        inc hl
+        djnz .h1
+        xor a
+.u:     push af
+        call idx_ix
+        ld (ix+U_BKT),255
+        ld (ix+U_TGT),255
+        bit F_WANDER,(ix+U_FL)  ; οι τυχαίες θέσεις: όχι μέσα σε εμπόδιο
+        jr z,.pl
+.re:    call unit_tile
+        ld hl,(n_i)
+        ld de,(n_j)
+        call tile_blk
+        or a
+        jr z,.pl
+        call rnd_pos
+        ld l,(ix+U_WX)
+        ld h,(ix+U_WX+1)
+        ld (ix+U_TX),l
+        ld (ix+U_TX+1),h
+        ld l,(ix+U_WY)
+        ld h,(ix+U_WY+1)
+        ld (ix+U_TY),l
+        ld (ix+U_TY+1),h
+        jr .re
+.pl:    call unit_pxy
+        ld a,(ix+U_TEAM)        ; ελεύθερη θέση (M7): σε κανέναν κάδο
+        inc a
+        jr z,.nb
+        call unit_tile
+        call unit_inblk
+        call bucket_update
+.nb:
+        pop af
+        inc a
+        cp UNITS
+        jr nz,.u
+        ret
+
+; ---- από το game/buildings.asm
+
+bld_init:
+        ld hl,BLD_TAB           ; όλα ελεύθερα
+        ld b,0
+.c:     ld (hl),255
+        inc l
+        djnz .c
+        ld hl,BLD_TAB2
+        ld b,(BLD_MAX - BLD_N1) * B_SIZE
+.c2:    ld (hl),255
+        inc l
+        djnz .c2
+        ld a,255
+        ld (bmode),a
+        ld (sel_bld),a
+        ld (bk_prev),a
+        ld (rq_n),a
+        xor a                   ; το Κέντρο Πόλης, έτοιμο
+        ld d,TC_I
+        ld e,TC_J
+        ld c,1
+        call bld_new
+        xor a                   ; και του αντιπάλου (M10)
+        ld d,AI_TC_I
+        ld e,AI_TC_J
+        ld c,1
+        call bld_new
+        ld (iy+B_OWN),1
+        ret
+
+; ---- από το game/gather.asm
+
+gather_init:
+        ld hl,SRC_TAB + 1       ; όλες οι πηγές ελεύθερες
+        ld b,SRC_N
+.s:     ld (hl),#FF
+        inc hl
+        inc hl
+        inc hl
+        inc hl
+        djnz .s
+        ld hl,J_CARRY           ; καμία δεν κουβαλάει τίποτα
+        call zero_page
+        ld hl,J_SI
+        call zero_page
+        ld a,#3F                ; και οι 6 αριθμοί
+        ld (hud_dirty),a
+        jp hud_update
+
+; ---- από το game/screen.asm
+
+; Το HUD στην κύρια RAM #4000 (με τις τράπεζες στη θέση τους): οι 7 σειρές
+; κάθε οκτάδας αποσυμπιέζονται στην οθόνη και πάνε στη θέση τους· τα
+; υπόλοιπα μηδέν (οι σειρές 7-20 του καρέ Β φαίνονται: μαύρο).
+HUD_ROWS    equ 7
+hud_init:
+        ld hl,hud_z
+        ld de,SCREEN
+        call dzx0
+        ld hl,HUD_PAGE          ; όλη η σελίδα ως το BOOT (main.asm)
+        ld de,HUD_PAGE + 1
+        ld bc,BOOT - HUD_PAGE - 1
+        ld (hl),0
+        ldir
+        ld hl,SCREEN
+        ld de,HUD_PAGE
+        ld a,8
+.k:     ld bc,HUD_ROWS * 80
+        ldir
+        ex de,hl                ; DE += #800 - 560
+        ld bc,#800 - HUD_ROWS * 80
+        add hl,bc
+        ex de,hl
+        dec a
+        jr nz,.k
+        ld de,digits            ; και τα ψηφία, στις γραμμές που δεν φαίνονται
+        ld bc,DIGITS_LEN
+        ldir
+        ret
+
+
+; ---- ο εξερευνημένος χάρτης (M11, fog.asm)
+
+; Γύρω από το Κέντρο Πόλης (17 x 17) και από κάθε μονάδα του παίκτη. Το
+; FD_TAB ελεύθερο ΜΕΤΑ: η πρώτη σχεδίαση τα ζωγραφίζει όλα.
+fog_init:
+        ld a,(fog_on)           ; χωρίς ομίχλη: όλα εξερευνημένα
+        or a
+        jr nz,.on
+        ld a,RAM_RES
+        call setram
+        ld hl,FOG
+        ld de,FOG + 1
+        ld bc,FOG_LEN - 1
+        ld (hl),255
+        ldir
+        ld a,RAM_BASE
+        jp setram
+.on:    ld d,TC_I - 2
+.i:     ld e,TC_J - 2
+.j:     push de
+        call fog_reveal
+        pop de
+        ld a,e
+        add a,4
+        ld e,a
+        cp TC_J + 7
+        jr c,.j
+        ld a,d
+        add a,4
+        ld d,a
+        cp TC_I + 7
+        jr c,.i
+        xor a
+.u:     push af
+        call idx_ix
+        ld a,(ix+U_TEAM)
+        or a
+        jr nz,.n
+        call unit_tile
+        call unit_reveal
+.n:     pop af
+        inc a
+        cp UNITS
+        jr nz,.u
+        ld hl,FD_TAB
+        ld b,FD_N * 6
+.f:     ld (hl),255
+        inc hl
+        djnz .f
+        ret

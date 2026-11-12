@@ -723,6 +723,8 @@ col_tile:
         cp MAPW
         jr nc,.void
         ld hl,(col_ptr)
+        call fog_hl             ; ανεξερεύνητο (M11): σαν έξω από τον χάρτη
+        jr z,.void
         ld a,(hl)
         ld l,a
         and #F0
@@ -763,6 +765,8 @@ tile_lookup:
         add hl,de
         ld de,MAP
         add hl,de
+        call fog_hl             ; ανεξερεύνητο (M11)
+        jr z,.void
         ld a,(hl)
         and #F0
         ld l,a
@@ -1058,6 +1062,8 @@ sr_blit:
         cp BLD_RES              ; πλακίδιο κτιρίου (M7): κανένα sprite
         ret z
         ld (sr_res),a
+        call fog_hl             ; ανεξερεύνητο (M11): κανένα
+        ret z
         ld a,c
         cp 77
         jr nc,.edge             ; X < 0 (254) ή X > 76: ψαλίδι οριζόντια

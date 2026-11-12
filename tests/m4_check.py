@@ -34,7 +34,7 @@ CUR_DX, CUR_DY = 2, 6
 
 
 class Game:
-    def __init__(self, shots, ai=False):
+    def __init__(self, shots, ai=False, fog=False):
         self.shots = shots
         self.sym = M.symbols()
         grd, res = M.mockup.make_map()
@@ -44,6 +44,8 @@ class Game:
         assert self.c.quickload(os.path.join(M.BUILD, 'polis.sna'))
         if not ai:                      # ο αντίπαλος (M10) δεν σκέφτεται: οι
             self.c.poke(self.sym['AI_ON'], 0)   # έλεγχοι M4-M9 μόνοι τους
+        if not fog:                     # και χωρίς ομίχλη (M11): όλα
+            self.c.poke(self.sym['FOG_ON'], 0)  # εξερευνημένα
         M.wait_phase(self.c, self.sym, 6)
         self.times = []
         self.scrolled = []              # κύλησε η κάμερα σε εκείνο το καρέ;

@@ -151,6 +151,7 @@ def main():
     c = CPC()
     c.run_frames(5)
     assert c.quickload(os.path.join(M.BUILD, 'polis.sna')), 'quickload'
+    c.poke(sym['FOG_ON'], 0)              # χωρίς ομίχλη (M11)
     M.wait_phase(c, sym, 6)
 
     # ---------------------------------------------------- 3. μονάδες

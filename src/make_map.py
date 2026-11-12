@@ -168,8 +168,9 @@ def gather_asm():
 
 
 def hud_page(grd, res):
+    # Ο μίνι χάρτης ΔΕΝ μπαίνει εδώ (M11): τον ζωγραφίζει ο Z80, γραμμή-γραμμή,
+    # με τα ανεξερεύνητα μαύρα (game/minimap.asm, από το minimap_asm).
     img = mockup.hud_background(numbers=False)
-    mockup.minimap(img, grd, res, (0, 0), rect=False)
     page = bytearray(0x4000)
     for k in range(HUD_ROWS):
         for l in range(8):
@@ -180,8 +181,55 @@ def hud_page(grd, res):
     return bytes(page)
 
 
+# Ο μίνι χάρτης του Z80 (M11): ο ίδιος κανόνας με το mockup.minimap — το
+# pixel (mx, my) του ρόμβου είναι το πλακίδιο (F[my + mx + 1], F[my - mx]),
+# με F[k] = 96 k / 20, όταν και τα δύο k είναι στο 0..19.
+MM_N = 20
+
+
+def mm_bg():
+    """Το pen του HUD στο κουτί του μίνι χάρτη (ένα, παντού)."""
+    img = mockup.hud_background(numbers=False)
+    pens = {img[mockup.MM_Y + my][mockup.MM_X + mx]
+            for my in range(MM_N + 1) for mx in range(-MM_N // 2, MM_N // 2)}
+    assert len(pens) == 1, pens
+    return pens.pop()
+
+
+def minimap_asm():
+    mm = {'water_deep': 'K', 'water_shallow': 'c', 'dirt': 'o',
+          'dirt_rough': 'o', 'road': 'D', 'sand': 'S', 'sand_dune': 'S',
+          'rock_floor': 'i', 'cliff': 'i'}
+    ter = [gfx.PEN['S' if k.startswith('shore') else mm.get(k, 'n')]
+           for k, _, _, _ in T.TERRAIN]
+    tree = [gfx.PEN['g'] if k.startswith('tree') else 255
+            for k, _, _, _, _ in T.RESOURCES]
+    penl = [cpcimg.mode0_byte(p, 0) for p in range(16)]
+    f = [k * N // MM_N for k in range(MM_N)]
+    return ('; minimap.asm — ο μίνι χάρτης (M11).\n'
+            '; ΠΑΡΑΓΕΤΑΙ από src/make_map.py — μην το πειράζεις με το χέρι.\n\n'
+            'MM_X        equ %d             ; pixel x του κέντρου (mx = -10..9)\n'
+            'MM_Y        equ %d            ; γραμμή οθόνης της κορυφής (my = 0..20)\n'
+            'MM_N        equ %d\n'
+            'MM_FRAME    equ %d              ; το pen του παραθύρου της κάμερας\n'
+            'MM_BG       equ %d              ; το pen του HUD γύρω από τον ρόμβο\n'
+            'mm_f:       db %s\n'
+            '; ανά έδαφος και ανά πόρο (255: το έδαφος)\n'
+            'mm_ter:     db %s\n'
+            'mm_res:     db %s\n'
+            '; το pen ως αριστερό pixel του byte (το δεξί: >> 1)\n'
+            'mm_penl:    db %s\n'
+            % (mockup.MM_X, mockup.MM_Y, MM_N, gfx.PEN['I'], mm_bg(),
+               ','.join(map(str, f)), ','.join(map(str, ter)),
+               ','.join(map(str, tree)),
+               ','.join('#%02X' % b for b in penl)))
+
+
 def main():
     grd, res = mockup.make_map()
+    with open(os.path.join(DATA, 'minimap.asm'), 'w') as f:
+        f.write(minimap_asm())
+    print('data/minimap.asm  ο μίνι χάρτης: χρώματα ανά έδαφος, F')
     with open(os.path.join(DATA, 'hud_page.bin'), 'wb') as f:
         f.write(hud_page(grd, res))
     print('data/hud_page.bin  HUD %d γραμμές, σελίδα 16 KB στη διάταξη CRTC'

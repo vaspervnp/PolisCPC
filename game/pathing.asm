@@ -642,6 +642,9 @@ nav_mv: ld a,(g_x)              ; η κίνηση
         or a
         call nz,unit_inblk      ; έβγαινε από εμπόδιο: βγήκε;
         call bucket_update
+        ld a,(ix+U_TEAM)        ; του παίκτη: ό,τι βλέπει εξερευνήθηκε (M11)
+        or a
+        call z,unit_reveal
         jp set_face
 
 ; ΑΚΟΛΟΥΘΗΣΗ ΤΟΙΧΟΥ (bug2), για όσες έχουν εντολή. Το χονδρό πλέγμα δίνει

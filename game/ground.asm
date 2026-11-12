@@ -58,8 +58,14 @@ draw_ground:
         jr nz,.pair
         ret
 
-; A = y (ζυγό). Ζωγραφίζει τις γραμμές y και y+1.
+; A = y (ζυγό). Ζωγραφίζει τις γραμμές y και y+1. Κρατάει το IY (M11: ο
+; δείκτης του FOG).
 draw_pair:
+        push iy
+        call .go
+        pop iy
+        ret
+.go:
         ld l,a
         ld h,0
         add hl,hl
@@ -124,11 +130,17 @@ pair_a:
         exx
         ld a,19
 .full:  ld ixl,a
+        exx                     ; ο δείκτης του FOG (M11) για το πρώτο πλακίδιο
+        call fog_iy             ; του βρόχου
+        exx
         ld a,(fast)
         or a
         jr nz,.floop
 
-.loop:  exx
+.loop:  ld a,ixh                ; ανεξερεύνητο: μαύρο, όπως έξω από τον χάρτη
+        and (iy+0)
+        jr z,.fog
+        exx
         ld a,b
         cp MAPW
         jr nc,.void
@@ -158,21 +170,29 @@ pair_a:
         ldi
         ldi
         res 3,d
+.next:  ld a,ixh                ; το bit του (i+1, j-1): 95 πίσω
+        rlca
+        ld ixh,a
+        jr nc,.s
+        inc iy
+.s:     ld bc,-12
+        add iy,bc
         dec ixl
         jr nz,.loop
         jr .tail
+.fog:   exx
 .void:  inc b
         dec c
         add hl,de
         exx
-        xor a
         call zero4
-        dec ixl
-        jr nz,.loop
-        jr .tail
+        jr .next
 
 ; Η γρήγορη διαδρομή: ίδια, χωρίς τους δύο ελέγχους ορίων ανά πλακίδιο.
-.floop: exx
+.floop: ld a,ixh
+        and (iy+0)
+        jr z,.ffog
+        exx
         ld a,(hl)
         inc b
         dec c
@@ -196,8 +216,23 @@ pair_a:
         ldi
         ldi
         res 3,d
+.fnext: ld a,ixh
+        rlca
+        ld ixh,a
+        jr nc,.fs
+        inc iy
+.fs:    ld bc,-12
+        add iy,bc
         dec ixl
         jr nz,.floop
+        jr .tail
+.ffog:  exx
+        inc b
+        dec c
+        add hl,de
+        exx
+        call zero4
+        jr .fnext
 
 .tail:  ld a,(lead)
         or a
@@ -249,6 +284,7 @@ pair_b:
         ld de,-MAPW
         inc b                   ; -> πάνω (i+1, J)
         inc hl
+        call fog_iy             ; (M11)
         exx
         ld a,(fast)
         or a
@@ -270,6 +306,7 @@ pair_b:
         ld de,-MAPW
         dec c                   ; -> κάτω (i+1, J-1)
         add hl,de
+        call fog_iy             ; (M11)
         exx
         ld a,(fast)
         or a
@@ -281,8 +318,13 @@ pair_b:
 
 ; Ο βρόχος του B. Μπαίνει από το είδος του επόμενου στοιχείου και βγαίνει
 ; με τους alt καταχωρητές στο στοιχείο ΜΕΤΑ το τελευταίο — που είναι το 41ο.
+; Ο δείκτης του FOG (M11): κάτω (I,J) -> πάνω (I+1,J) ένα bit μπροστά,
+; πάνω (I,J) -> κάτω (I,J-1) 96 πίσω (12 bytes). Γυρίζει με Z.
 b_from_bottom:
-.bot:   exx
+.bot:   ld a,ixh
+        and (iy+0)
+        jr z,.bfog
+        exx
         ld a,b
         cp MAPW
         jr nc,.bvoid
@@ -305,18 +347,25 @@ b_from_bottom:
         ldi                     ; γραμμή 6
         ldi
         res 3,d
-        dec ixl
+.bnext: ld a,ixh
+        rlca
+        ld ixh,a
+        jr nc,.bs
+        inc iy
+.bs:    dec ixl
         ret z
         jr b_from_top
+.bfog:  exx
 .bvoid: inc b
         inc hl
         exx
-        xor a
         call zero2
-        dec ixl
-        ret z
+        jr .bnext
 b_from_top:
-.top:   exx
+.top:   ld a,ixh
+        and (iy+0)
+        jr z,.tfog
+        exx
         ld a,b
         cp MAPW
         jr nc,.tvoid
@@ -338,27 +387,30 @@ b_from_top:
         ldi                     ; γραμμή 2
         ldi
         res 3,d
+.tnext: ld bc,-12
+        add iy,bc
         dec ixl
         ret z
         jr b_from_bottom
+.tfog:  exx
 .tvoid: dec c
         add hl,de
         exx
-        xor a
         call zero2
-        dec ixl
-        ret z
-        jr b_from_bottom
+        jr .tnext
 
 ; Η γρήγορη εκδοχή του βρόχου B: χωρίς ελέγχους ορίων.
 bf_from_bottom:
+        ld a,ixh
+        and (iy+0)
+        jr z,.fog
         exx
         ld a,(hl)
         inc b
         inc hl
         exx
         and #F0
-        or 12
+        or 12                   ; γραμμή 5
         ld l,a
         ld h,TILE_PAGE
         ldi
@@ -366,18 +418,33 @@ bf_from_bottom:
         set 3,d
         dec de
         dec de
-        ldi
+        ldi                     ; γραμμή 6
         ldi
         res 3,d
-        dec ixl
+.next:  ld a,ixh
+        rlca
+        ld ixh,a
+        jr nc,.s
+        inc iy
+.s:     dec ixl
         ret z
+        jr bf_from_top
+.fog:   exx
+        inc b
+        inc hl
+        exx
+        call zero2
+        jr .next
 bf_from_top:
+        ld a,ixh
+        and (iy+0)
+        jr z,.fog
         exx
         ld a,(hl)
         dec c
         add hl,de
         exx
-        and #F0
+        and #F0                 ; γραμμή 1, offset 0
         ld l,a
         ld h,TILE_PAGE
         ldi
@@ -385,12 +452,20 @@ bf_from_top:
         set 3,d
         dec de
         dec de
-        ldi
+        ldi                     ; γραμμή 2
         ldi
         res 3,d
+.next:  ld bc,-12
+        add iy,bc
         dec ixl
         jr nz,bf_from_bottom
         ret
+.fog:   exx
+        dec c
+        add hl,de
+        exx
+        call zero2
+        jr .next
 
 ; ------------------------------------------------------- βοηθητικά
 
@@ -472,6 +547,8 @@ partial:
         ld a,c
         cp MAPW
         jr nc,.void
+        call fog_hl             ; ανεξερεύνητο: μαύρο (M11)
+        jr z,.void
         ld a,(hl)
         exx
         and #F0

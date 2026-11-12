@@ -294,7 +294,7 @@ def world_xy(i, j):
     return iso.tile_xy(i, j, WX0, TOP)
 
 
-def render_world(grd, res, towns=True, blds=()):
+def render_world(grd, res, towns=True, blds=(), seen=None):
     """Όλος ο χάρτης σε ΕΝΑ buffer pixels. Η οθόνη είναι ένα κομμάτι του —
     αυτό ακριβώς είναι η κύλιση. Με towns=False μόνο έδαφος και πόροι: αυτό
     ζωγραφίζει το παιχνίδι στο M1, και με αυτό συγκρίνει το tests/m1_check.py."""
@@ -303,8 +303,12 @@ def render_world(grd, res, towns=True, blds=()):
     # θάλασσα, και ο χάρτης θα έλιωνε μέσα στο περίγραμμα.
     world = gfx.blank(WW, WH, gfx.PEN_MASK)
     tiles = {k: T.tile(TER_ART[k]) for k in TER_ART}
+    # seen (M11): seen[j][i] = εξερευνημένο. Τα άλλα μένουν μαύρα, χωρίς
+    # πόρο· τα κτίρια με το μπροστινό τους πλακίδιο ανεξερεύνητο, όχι.
     for j in range(N):
         for i in range(N):
+            if seen is not None and not seen[j][i]:
+                continue
             x, y = world_xy(i, j)
             gfx.stamp(world, tiles[grd[j][i]], x, y)
 
@@ -315,7 +319,7 @@ def render_world(grd, res, towns=True, blds=()):
     objs = []
     for j in range(N):
         for i in range(N):
-            if res[j][i]:
+            if res[j][i] and (seen is None or seen[j][i]):
                 x, y = world_xy(i, j)
                 objs.append((i + j, i, arts[res[j][i]], x, y - 10))
     red = dict(enumerate(gfx.team_table(1)))
@@ -332,6 +336,8 @@ def render_world(grd, res, towns=True, blds=()):
     # Τα κτίρια του ΠΑΙΧΝΙΔΙΟΥ (M7, game/buildings.asm): (εικόνα, i0, j0, n),
     # ΜΕΤΑ από όλους τους πόρους της σειράς του μπροστινού τους πλακιδίου.
     for b, i0, j0, n in blds:
+        if seen is not None and not seen[j0 + n - 1][i0 + n - 1]:
+            continue
         x, _ = world_xy(i0, j0)
         _, fy = world_xy(i0 + n - 1, j0 + n - 1)
         objs.append((i0 + j0 + 2 * (n - 1), 1e9, b, x + 4 - 4 * n,

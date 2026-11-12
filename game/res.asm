@@ -209,11 +209,13 @@ res_here:
         push de
         push hl
         ld b,a
+        call fog_hl             ; ανεξερεύνητο (M11): κανένα (HL = ο χάρτης)
+        jr z,.out
         ld a,ixl
         ld (rx),a
         ld a,b
         call blit_res
-        pop hl
+.out:   pop hl
         pop de
         pop bc
         ret
