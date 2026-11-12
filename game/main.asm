@@ -56,6 +56,10 @@ HW_RED      equ #4C             ; firmware 6, bright red
 start:
         di
         ld sp,STACK_TOP
+        ld hl,boot_phys         ; οι ρουτίνες της εκκίνησης στο BOOT (boot.asm)
+        ld de,BOOT
+        ld bc,BOOT_LEN
+        ldir
         im 1
         ld a,#C3                ; JP int_handler (screen.asm)
         ld (#0038),a
@@ -159,15 +163,6 @@ render:
         call bld_flush
         ld a,RAM_BASE
         jp setram
-
-; Όλη η οθόνη pen 0.
-clear_screen:
-        ld hl,SCREEN
-        ld de,SCREEN + 1
-        ld bc,#3FFF
-        ld (hl),0
-        ldir
-        ret
 
 ; ------------------------------------------------------------ ρουτίνες
 
@@ -297,6 +292,7 @@ pen_pair:
         include "../data/compiled.asm"
         include "buildings.asm"
         include "occlude.asm"
+        include "disk.asm"
 
         ifdef BARS
 linebuf:
@@ -521,6 +517,14 @@ hn_x:       db 0                ; hud_num
 hn_c:       db 0
 hn_d:       ds 4
 ticks:      db 0
+res_n:      db 0                ; έρευνες σε εξέλιξη (bank7.asm, M9)
+age_req:    db 0                ; 1: τελείωσε η Χαλκού, φόρτωσε το AGE3.BIN
+age_q:      db 255              ; το επόμενο κτίριο να ξαναζωγραφιστεί (255 κανένα)
+dk_blk:     ds 16               ; τα blocks του αρχείου (disk.asm)
+dk_res:     ds 8                ; η φάση αποτελέσματος του FDC
+carry_max:  db 10, 10, 10, 10   ; πόσο κουβαλάει ο χωρικός, ανά είδος (gather.asm)
+cm_cur:     db 10               ; (το όριο της τρέχουσας)
+        assert (carry_max & 255) <= 252, 'carry_max: one page'
 scr_s:      dw 0                ; η μετατόπιση του CRTC, σε λέξεις (screen.asm)
 int_n:      db 0
 split_on:   db 0
@@ -565,6 +569,18 @@ c7_end:
         org c7_phys + c7_end - C7_CODE
 C7_LEN      equ c7_end - C7_CODE
         assert C7_CODE + C7_LEN <= C7_HP, 'C7 code past tables'
+
+; Η εκκίνηση (boot.asm): συναρμολογημένη για το BOOT, αντιγράφεται εκεί από
+; το start. Πριν από τα συμπιεσμένα (ο rasm μετράει τις ετικέτες μετά από
+; LZX0 με το ασυμπίεστο μέγεθος).
+BOOT        equ #7A30           ; σειρές της σελίδας του HUD που δεν φαίνονται
+boot_phys:
+        org BOOT,boot_phys
+        include "boot.asm"
+boot_end:
+        org boot_phys + boot_end - BOOT
+BOOT_LEN    equ boot_end - BOOT
+        assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
 
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB).
 map_z:
@@ -637,4 +653,15 @@ end:
         run start
         else
         save 'POLIS.BIN',start,end-start,DSK,'build/polis.dsk'
+        endif
+
+; Η Εποχή του Χαλκού (M9): οι εικόνες των κτιρίων, ένα δεύτερο αρχείο στην
+; ίδια δισκέτα, που το φορτώνει το game/disk.asm στην C6 (IMG0 - 128: η
+; κεφαλίδα AMSDOS πριν από το IMG0). Σε δικό του χώρο μνήμης του rasm.
+        ifndef SNA
+        bank
+        org IMG0
+age3_file:
+        incbin "../data/age3.bin"
+        save 'AGE3.BIN',age3_file,AGE3_LEN,DSK,'build/polis.dsk'
         endif

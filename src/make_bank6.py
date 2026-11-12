@@ -4,9 +4,19 @@
 
 -> data/bank6.bin   ό,τι μπαίνει στην C6 στο #4000: οι πόροι (resources.bin,
                     15 x 128, στοιχισμένοι), τα πλακίδια εδάφους στο #4800
-                    (terrain.bin, μία σελίδα), και μετά οι εικόνες των κτιρίων
-                    της αρχικής εποχής (με μάσκα, mask,data ανά byte, γραμμή
-                    προς γραμμή)
+                    (terrain.bin, μία σελίδα), στο #4900 η ΣΕΛΙΔΑ ΜΑΣΚΑΣ των
+                    κτιρίων (byte δεδομένων -> μάσκα: το pen 0 είναι το
+                    διάφανο, άρα η μάσκα βγαίνει από τα δεδομένα), και από
+                    το IMG0 (#4A80) οι εικόνες των κτιρίων της αρχικής
+                    εποχής ΧΩΡΙΣ μάσκα (ένα byte ανά 2 pixels, γραμμή προς
+                    γραμμή — οι μισές από το mask,data του M7). Στο τέλος οι
+                    κόκκινοι μεταγλωττισμένοι (make_compiled.py).
+-> data/age3.bin    οι εικόνες της Εποχής του Χαλκού (M9), όλων των τύπων,
+                    από το IMG0: το AGE3.BIN της δισκέτας, που το φορτώνει
+                    το game/disk.asm στην C6 στο IMG0 - 128 (η κεφαλίδα
+                    AMSDOS πέφτει στο #4A00-#4A7F).
+-> data/age3.asm    ανά τύπο το ύψος και η εικόνα του στην Εποχή του Χαλκού
+                    (game/bank7.asm, age_up)
 -> data/bld.asm     ο πίνακας των τύπων κτιρίων για τον Z80
 
 ΕΝΑΣ ΟΡΙΣΜΟΣ: ο πίνακας TYPES εδώ είναι και των ελέγχων (tests/m7_check.py),
@@ -27,6 +37,8 @@ import gfx
 
 DATA = os.path.join(gfx.OUT, 'data')
 ORG = 0x4000
+MASK_PG = 0x4900                # η σελίδα μάσκας των κτιρίων
+IMG0 = 0x4A80                   # οι εικόνες (και πριν, 128 bytes κεφαλίδα)
 CULTURE = 'greek'
 START_AGE = 2
 INFO = {b['key']: b for b in json.load(open(os.path.join(
@@ -47,6 +59,10 @@ TYPES = [
     ('stable',      'L', 'barracks', (0, 150, 0, 0), 30, None),
     ('farm',        'F', 'market',  (0, 75, 0, 0),   15, None),
     ('tower',       'W', 'granary', (0, 0, 0, 150),  30, None),
+    # Εποχή του Χαλκού (M9): χωρίς μονάδες (τα σετ τους δεν χωράνε στην C5)
+    ('temple',      'N', None,      (0, 200, 0, 0),  40, None),
+    ('gov_center',  'K', 'market',  (0, 200, 0, 0),  50, None),
+    ('academy',     'D', 'stable',  (0, 200, 0, 0),  50, None),
 ]
 KEYS = [t[0] for t in TYPES]
 
@@ -58,7 +74,8 @@ BLD_RES = 13
 # Ο πίνακας πλήκτρων του CPC: χαρακτήρας -> (γραμμή, bit).
 MATRIX = {'C': (7, 6), 'H': (5, 4), 'B': (6, 6), 'G': (6, 4), 'S': (7, 4),
           'M': (4, 6), 'R': (6, 2), 'L': (4, 4), 'F': (6, 5), 'W': (7, 3),
-          'T': (6, 3), 'ESC': (8, 2)}
+          'T': (6, 3), 'ESC': (8, 2), 'N': (5, 6), 'K': (4, 5), 'D': (7, 5),
+          'U': (5, 2)}
 TRAIN_KEY = 'T'
 
 # Οι μονάδες που βγαίνουν: κόστος και καρέ (των 25 Hz) εκπαίδευσης.
@@ -81,6 +98,40 @@ def footprint(key):
     return B.footprint(key)
 
 
+def mask_page():
+    """byte δεδομένων -> μάσκα: τα bits του pixel αναμμένα όπου είναι pen 0."""
+    import cpcimg
+    out = bytearray(256)
+    for d in range(256):
+        a, b = cpcimg.mode0_pens(d)
+        out[d] = cpcimg.mode0_byte(15 if a == 0 else 0, 15 if b == 0 else 0)
+    return bytes(out)
+
+
+def encode(img):
+    """Η εικόνα χωρίς μάσκα: το pen 0 είναι το διάφανο (encode_masked το
+    απαγορεύει ως χρώμα, άρα τίποτα δεν χάνεται)."""
+    gfx.encode_masked(img)                  # (ο έλεγχος του pen 0)
+    return gfx.encode_opaque(img)
+
+
+def decode(data, w, h):
+    """bytes (w bytes x h) -> εικόνα με None για το διάφανο."""
+    return [[None if p == 0 else p for p in row]
+            for row in gfx.decode_opaque(data, 2 * w, h)]
+
+
+def age_images(age):
+    """{τύπος: εικόνα} όσων υπάρχουν στην εποχή."""
+    out = {}
+    for t in TYPES:
+        try:
+            out[t[0]] = image(t[0], age)
+        except KeyError:
+            pass
+    return out
+
+
 def main():
     res = bytearray(open(os.path.join(DATA, 'resources.bin'), 'rb').read())
     k = (BLD_RES - 1) * 128                 # διάφανο: μάσκα #FF, δεδομένα 0
@@ -90,13 +141,27 @@ def main():
     terrain = open(os.path.join(DATA, 'terrain.bin'), 'rb').read()   # μία
     assert len(terrain) == 256              # σελίδα, ώστε το byte του χάρτη
     blob += terrain                         # AND #F0 να είναι το low byte
+    assert ORG + len(blob) == MASK_PG
+    blob += mask_page()
+    blob += bytes(IMG0 - ORG - len(blob))
+    start = age_images(START_AGE)
+    bronze = age_images(3)
+    a3 = bytearray()                        # η Εποχή του Χαλκού: όλοι οι
+    a3rows = []                             # τύποι, από το IMG0
+    for key, *_ in TYPES:
+        img = bronze[key]
+        a3rows.append((len(img), IMG0 + len(a3)))
+        a3 += encode(img)
     rows = []
-    for key, hot, pre, cost, pts, unit in TYPES:
-        img = image(key)
-        w, h = len(img[0]) // 2, len(img)
+    for k, (key, hot, pre, cost, pts, unit) in enumerate(TYPES):
+        img = start.get(key) or bronze[key]     # (ναός κλπ: χωρίς εικόνα ως
+        w, h = len(img[0]) // 2, len(img)       # τη Χαλκού)
         assert w == 4 * footprint(key), key
-        addr = ORG + len(blob)
-        blob += gfx.encode_masked(img)
+        if key in start:
+            addr = ORG + len(blob)
+            blob += encode(img)
+        else:
+            addr = 0
         u = UNIT_SETS.index(unit) if unit else 255
         ucost, utime = UNITS[unit] if unit else ((0, 0, 0, 0), 0)
         rows.append('        db %d, %d, %d, %s, %d, %d, %d, %s, %d\n'
@@ -111,6 +176,17 @@ def main():
     red = open(os.path.join(DATA, 'compiled_red.bin'), 'rb').read()
     free = cj['red_org'] - ORG - len(blob)
     assert free >= 0, 'η C6 δεν χωράει τους κόκκινους: %d' % free
+    assert IMG0 + len(a3) <= cj['red_org'], 'η Χαλκού δεν χωράει: %d' % len(a3)
+    with open(os.path.join(DATA, 'age3.bin'), 'wb') as f:
+        f.write(a3)
+    with open(os.path.join(DATA, 'age3.asm'), 'w') as f:
+        f.write('; age3.asm — ΠΑΡΑΓΕΤΑΙ από src/make_bank6.py. Η Εποχή του '
+                'Χαλκού (M9):\n; ανά τύπο το ύψος και η εικόνα του (στην C6, '
+                'από το AGE3.BIN).\n\nAGE3_LEN    equ %d\nage3_tab:\n%s'
+                % (len(a3), ''.join('        db %d\n        dw #%04X'
+                                    '                 ; %s\n'
+                                    % (h, a, t[0]) for (h, a), t
+                                    in zip(a3rows, TYPES))))
     blob += bytes(free) + red
     assert len(blob) <= 0x4000
     with open(os.path.join(DATA, 'bank6.bin'), 'wb') as f:
@@ -129,12 +205,16 @@ def main():
                 'καρέ εκπαίδευσης, και\n'
                 '; η εικόνα στην τράπεζα C6.\n\n'
                 'BT_N        equ %d\nBT_SIZE     equ 18\nSTART_AGE   equ %d\n'
+                'MASK_PG     equ #%04X      ; byte δεδομένων -> μάσκα (C6)\n'
+                'IMG0        equ #%04X      ; οι εικόνες των κτιρίων (C6)\n'
                 'CMP_RED     equ #%04X      ; οι κόκκινοι μεταγλωττισμένοι (C6)\n'
                 '%s\nbld_types:\n%s'
-                % (len(TYPES), START_AGE, cj['red_org'], keys, ''.join(rows)))
+                % (len(TYPES), START_AGE, MASK_PG, IMG0, cj['red_org'], keys,
+                   ''.join(rows)))
         keym = [MATRIX[t[1]] for t in TYPES] + [MATRIX[TRAIN_KEY],
-                                                 MATRIX['ESC']]
-        f.write('\n; τα πλήκτρα: οι τύποι (%s), μετά %s (εκπαίδευση) και ESC\n'
+                                                 MATRIX['ESC'], MATRIX['U']]
+        f.write('\n; τα πλήκτρα: οι τύποι (%s), μετά %s (εκπαίδευση), ESC και U '
+                '(έρευνα, M9)\n'
                 '; ως (γραμμή του πίνακα, μάσκα)\nBLD_RES     equ %d\n'
                 'bld_keym:\n%s'
                 % (''.join(t[1] for t in TYPES), TRAIN_KEY, BLD_RES,
@@ -143,6 +223,8 @@ def main():
     print('data/bank6.bin  %d bytes (πόροι %d + %d τύποι κτιρίων, %d ελεύθερα, '
           'οι κόκκινοι στο #%04X)' % (len(blob), len(res), len(TYPES), free,
                                       cj['red_org']))
+    print('data/age3.bin   %d bytes, IMG0 #%04X ως #%04X'
+          % (len(a3), IMG0, IMG0 + len(a3)))
 
 
 if __name__ == '__main__':

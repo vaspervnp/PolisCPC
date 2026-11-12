@@ -69,28 +69,6 @@ TC_J        equ 58
 
 ; ------------------------------------------------------------ εκκίνηση
 
-bld_init:
-        ld hl,BLD_TAB           ; όλα ελεύθερα
-        ld b,0
-.c:     ld (hl),255
-        inc l
-        djnz .c
-        ld hl,BLD_TAB2
-        ld b,(BLD_MAX - BLD_N1) * B_SIZE
-.c2:    ld (hl),255
-        inc l
-        djnz .c2
-        ld a,255
-        ld (bmode),a
-        ld (sel_bld),a
-        ld (bk_prev),a
-        ld (rq_n),a
-        xor a                   ; το Κέντρο Πόλης, έτοιμο
-        ld d,TC_I
-        ld e,TC_J
-        ld c,1
-        jp bld_new
-
 ; A = τύπος -> HL = η εγγραφή του στο bld_types (18 A). Κρατάει DE, BC.
 bt_hl:  push de
         ld l,a
@@ -511,9 +489,8 @@ blit_bld:
         ld hl,bb_c0
         add a,(hl)
         ld (bb_x),a
-        ld a,(iy+B_W)           ; πηγή: εικόνα + l0 * 2w + 2 c0
-        add a,a
-        ld (bb_w2),a
+        ld a,(iy+B_W)           ; πηγή: εικόνα + l0 * w + c0 (χωρίς μάσκα:
+        ld (bb_w2),a            ; ένα byte ανά 2 pixels, M9)
         ld e,a
         ld d,0
         ld l,(iy+B_IMG)
@@ -525,7 +502,6 @@ blit_bld:
 .m:     add hl,de
         djnz .m
 .s0:    ld a,(bb_c0)
-        add a,a
         ld e,a
         add hl,de
         push hl
@@ -534,34 +510,45 @@ blit_bld:
         ld a,(bb_y)
         call line_x             ; DE = η πρώτη γραμμή στην οθόνη
         pop hl
-.line:  push hl
-        push de
-        ld a,(bb_cn)
-        ld b,a
-.b:     ld a,(de)
+        ld a,(bb_cn)            ; μετά από κάθε γραμμή: + (w - cn)
+        ld c,a
+        ld a,(bb_w2)
+        sub c
+        ld (bb_w2),a
+        push ix
+        ld a,(bb_ln)
+        ld ixh,a                ; IXH: οι γραμμές, IXL: τα bytes
+.line:  push de
+        ld a,c
+        ld ixl,a
+        ld b,MASK_PG >> 8       ; η μάσκα από τα δεδομένα (pen 0 = διάφανο)
+.b:     ld c,(hl)
+        inc hl
+        ld a,(bc)
+        ex de,hl
         and (hl)
-        inc hl
-        or (hl)
-        inc hl
-        ld (de),a
+        or c
+        ld (hl),a
+        ex de,hl
         inc e
         call z,de_carry
-        djnz .b
+        dec ixl
+        jr nz,.b
         pop de                  ; η επόμενη γραμμή: D + 8, ή η επόμενη σειρά
         ld a,d
         add a,8
         ld d,a
         and #38
         call z,col_wrap
-        pop hl
         ld a,(bb_w2)
         ld c,a
         ld b,0
         add hl,bc
-        ld a,(bb_ln)
-        dec a
-        ld (bb_ln),a
+        ld a,(bb_cn)
+        ld c,a
+        dec ixh
         jr nz,.line
+        pop ix
         ret
 .rel:   ld e,a                  ; A - (bb_sx) στο 0..C
         ld d,0
@@ -708,7 +695,7 @@ bld_input:
         jr nz,.got
         inc c
         ld a,c
-        cp BT_N + 2
+        cp BT_N + 3
         jr nz,.k
         ld c,255
 .got:   ld hl,bk_prev
@@ -722,7 +709,11 @@ bld_input:
         cp BT_N
         jr c,.type
         jr z,bld_train
-        ld a,255                ; ESC
+        cp BT_N + 2             ; U: έρευνα στο επιλεγμένο κτίριο (bank7.asm)
+        jr nz,.esc
+        ld hl,res_start
+        jp far7
+.esc:   ld a,255                ; ESC
         ld (bmode),a
         jr cur_look
 .type:  ld (bn_t),a             ; ένας τύπος: αν υπάρχει χωρικός επιλεγμένος
@@ -1131,7 +1122,16 @@ bld_job:
 ; ελεύθερο πλακίδιο δίπλα στο κτίριο πιο κοντά στη μπροστινή του γωνία.
 bld_tick:
         call rq_step
-        ld a,(bq_tot)           ; καμία ουρά: τίποτα άλλο
+        call age_step
+        ld a,(res_n)            ; έρευνες (bank7.asm, M9)
+        or a
+        jr z,.q
+        ld hl,res_tick
+        call far7
+        ld a,(age_req)
+        or a
+        call nz,age_load
+.q:     ld a,(bq_tot)           ; καμία ουρά: τίποτα άλλο
         or a
         ret z
         ld iy,BLD_TAB
@@ -1166,6 +1166,53 @@ bld_tick:
 .n:     call bnext
         pop bc
         djnz .l
+        ret
+
+; Η Εποχή του Χαλκού τελείωσε (res_end): οι εικόνες της από τη δισκέτα
+; (disk.asm), και η εποχή στους πίνακες και στα κτίρια (age_apply).
+age_load:
+        xor a
+        ld (age_req),a
+        ld hl,age3_name
+        call disk_load
+        ret c
+        ld hl,age_apply
+        jp far7
+
+; Μετά το age_apply: όσα κτίρια άλλαξαν εικόνα (έτοιμα, όχι χωράφια)
+; ξαναζωγραφίζονται ένα-ένα, με το bld_redraw (μία στήλη ανά καρέ) — τα
+; άλλα όχι.
+age_step:
+        ld a,(age_q)
+        cp 255
+        ret z
+        ld a,(rq_n)             ; μία επανασχεδίαση τη φορά
+        inc a
+        ret nz
+        ld a,(age_q)
+.l:     ld hl,bld_top
+        cp (hl)
+        jr nc,.end
+        push af
+        call brec_iy
+        pop af
+        inc a
+        ld c,a
+        ld a,(iy+B_TYPE)
+        cp BTY_FARM
+        jr z,.n
+        inc a
+        jr z,.n
+        ld a,(iy+B_ST)
+        or a
+        jr z,.n
+        ld a,c
+        ld (age_q),a
+        jp bld_redraw
+.n:     ld a,c
+        jr .l
+.end:   ld a,255
+        ld (age_q),a
         ret
 
 ; IY = κτίριο -> μια νέα μονάδα του τύπου του, σε ελεύθερη θέση του πίνακα
@@ -1266,6 +1313,10 @@ hud_card:
         call brec_iy
         ld a,(iy+B_QN)
         call card_digit
+        ld hl,res_card          ; έρευνα (M9): η μπάρα της
+        call far7
+        cp 255
+        jr nz,card_bar
         ld a,(iy+B_TYPE)
         call bt_hl
         ld de,BT_PTS

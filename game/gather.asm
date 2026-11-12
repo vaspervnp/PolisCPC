@@ -9,7 +9,7 @@
 ;
 ;     J_GO    περπατάει στο ελεύθερο πλακίδιο δίπλα στην πηγή που είναι πιο
 ;             κοντά της· όταν σταματήσει (και είναι δίπλα): J_WORK
-;     J_WORK  σε κάθε απόφαση +GATHER_N, ως CARRY_MAX, από το ποσό της πηγής·
+;     J_WORK  σε κάθε απόφαση +GATHER_N, ως carry_max[είδος], από την πηγή·
 ;             γεμάτος, ή άδειασε η πηγή: J_BACK
 ;     J_BACK  περπατάει στο κοντινότερο κτίριο που δέχεται το είδος (M7:
 ;             Κέντρο Πόλης, σιταποθήκη, αποθήκη)· εκεί ο φόρτος πάει στη μπάρα του
@@ -42,30 +42,12 @@ J_SJ        equ #7F80           ; 128: η πηγή, j
 SRC_TAB     equ #6F00           ; SRC_N x (θέση στον χάρτη dw, ποσό dw)
 SRC_N       equ 32              ; ελεύθερη: high byte της θέσης = #FF
 
-CARRY_MAX   equ 10
 SET_CARRY   equ 3               ; το σετ του χωρικού με φορτίο (make_carry.py)
 GATHER_N    equ 2
 FIELD_WALK  equ FIELDS + 1      ; ίσια, με ακολούθηση τοίχου
 
 
 ; ------------------------------------------------------------ εκκίνηση
-
-gather_init:
-        ld hl,SRC_TAB + 1       ; όλες οι πηγές ελεύθερες
-        ld b,SRC_N
-.s:     ld (hl),#FF
-        inc hl
-        inc hl
-        inc hl
-        inc hl
-        djnz .s
-        ld hl,J_CARRY           ; καμία δεν κουβαλάει τίποτα
-        call zero_page
-        ld hl,J_SI
-        call zero_page
-        ld a,#3F                ; και οι 6 αριθμοί
-        ld (hud_dirty),a
-        jp hud_update
 
 ; HL = αρχή σελίδας -> 256 μηδενικά.
 zero_page:
@@ -314,8 +296,14 @@ job_work:
         inc hl
         ld d,(hl)               ; DE = ποσό
         ld l,(ix+U_IDX)
+        ld h,J_KIND >> 8        ; το όριο του είδους (carry_max: M9)
+        ld a,(hl)
+        add a,carry_max & 255
+        ld c,a
+        ld b,carry_max >> 8
+        ld a,(bc)
+        ld (cm_cur),a
         ld h,J_CARRY >> 8
-        ld a,CARRY_MAX
         sub (hl)
         ld c,a                  ; C = ό,τι χωράει
         ld a,GATHER_N
@@ -354,9 +342,10 @@ job_work:
         dec hl
         or (hl)
         jr z,.empty
-        ld a,c
-        cp CARRY_MAX
-        ret c
+        ld a,(cm_cur)
+        dec a
+        cp c
+        ret nc                  ; φόρτος < όριο
         jp job_go_drop
 .empty: dec hl                  ; η εγγραφή ελεύθερη, το πλακίδιο αλλάζει
         ld (hl),#FF

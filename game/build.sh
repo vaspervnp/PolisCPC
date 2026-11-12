@@ -36,5 +36,6 @@ print('POLIS.BIN: %d bytes, #0040-#%04X· κώδικας ως #%04X (ελεύθ�
       '#4000: %d)' % (size, end - 1, code - 1, 0x4000 - code))
 assert code <= 0x4000, 'ο κώδικας μπαίνει στο παράθυρο τράπεζας #4000'
 assert end <= 0x8000, 'τα δεδομένα εκκίνησης φτάνουν στον χάρτη #8000'
+assert end <= 0x7A30, 'το POLIS.BIN φτάνει στο BOOT (#7A30, main.asm), όπου αντιγράφεται η εκκίνηση'
 PY
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

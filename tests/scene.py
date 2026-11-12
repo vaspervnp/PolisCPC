@@ -94,6 +94,7 @@ BANK6 = open(os.path.join(M.ROOT, 'data', 'bank6.bin'), 'rb').read()
 import make_bank6 as MB                         # noqa: E402
 import make_map as MM                           # noqa: E402
 OUTLINE = gfx.PEN[MM.OUTLINE_PEN]
+HUD_AGE = M.symbols()['HUD_VAL'] + 10             # η εποχή (main.asm, hud_val)
 _, RED_HI, RED_LO = gfx.TEAMS[1]
 RED = {gfx.TEAM_HI: RED_HI, gfx.TEAM_LO: RED_LO}
 
@@ -105,8 +106,20 @@ def painted(u, spr):
     return spr
 
 
-def buildings(c):
+def bank6(age=None):
+    """Η C6 όπως είναι στην εποχή: στη Χαλκού (3) με το AGE3.BIN στο IMG0."""
+    if age != 3:
+        return BANK6
+    a3 = open(os.path.join(M.ROOT, 'data', 'age3.bin'), 'rb').read()
+    k = MB.IMG0 - 0x4000
+    return BANK6[:k] + a3 + BANK6[k + len(a3):]
+
+
+def buildings(c, age=None):
     """Τα έτοιμα κτίρια του Z80, με την εικόνα τους από την C6."""
+    if age is None:
+        age = c.peek(HUD_AGE)
+    c6 = bank6(age)
     out = []
     for a in BLD_SLOTS:
         b = c.read_ram(a, 16)
@@ -114,12 +127,12 @@ def buildings(c):
             continue
         w, h, img = b[10], b[11], b[12] | b[13] << 8
         k = img - 0x4000
-        if not 0 <= k <= len(BANK6) - 2 * w * h:     # (εγγραφές των ελέγχων
-            continue                                  # χωρίς εικόνα)
+        if not 0 <= k <= len(c6) - w * h:          # (εγγραφές των ελέγχων
+            continue                                # χωρίς εικόνα)
         n = MB.footprint(MB.KEYS[b[0]])
         out.append(dict(i1=b[2] + n - 1, j1=b[3] + n - 1,
                         x=2 * (b[6] | b[7] << 8), y=(b[8] | b[9] << 8) - h,
-                        img=gfx.decode_masked(BANK6[k:k + 2 * w * h], 2 * w, h)))
+                        img=MB.decode(c6[k:k + w * h], w, h)))
     return out
 
 

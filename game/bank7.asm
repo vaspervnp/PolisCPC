@@ -48,19 +48,27 @@ PROJ_DY     equ 6               ; γραμμές
 
         assert OCC_L + OCC_MAX * 10 <= ARROWS && ARROWS + PR_N * 8 <= ACT_TAB, 'ARROWS'
 
-; ανά σετ (U_SET): υγεία, ζημιά, εμβέλεια (2 |dx| + |dy|), βέλος
+; ανά ομάδα (0, 1) και σετ (U_SET): υγεία, ζημιά, εμβέλεια (2 |dx| + |dy|),
+; βέλος. Οι τεχνολογίες (M9) αλλάζουν τα της ομάδας 0.
 stats:      db 25, 3, 14, 0     ; χωρικός
             db 60, 8, 14, 0     ; σπαθοφόρος
             db 35, 6, 80, 1     ; τοξότης
             db 25, 3, 14, 0     ; χωρικός με φορτίο
+            db 25, 3, 14, 0     ; (ομάδα 1)
+            db 60, 8, 14, 0
+            db 35, 6, 80, 1
+            db 25, 3, 14, 0
 ; Το καρέ του χτυπήματος: S E N = 13, 15, 17 του σετ. Το W (το 15
 ; καθρεφτισμένο) των σετ 0-2 είναι στο σετ 3, στα καρέ 12 + σετ
 ; (src/make_edges.py): από τη βάση του σετ, (3 - σετ) x 25 + 12 + σετ.
 ATK_W       equ 3 * 25 + 12     ; - 24 x σετ
 
-; IX -> HL = η γραμμή της στο stats
-st_hl:  ld a,(ix+U_SET)
-        and 3
+; IX -> HL = η γραμμή της στο stats (της ομάδας της)
+st_hl:  ld a,(ix+U_TEAM)
+        and 1
+        add a,a
+        add a,a
+        add a,(ix+U_SET)
         add a,a
         add a,a
         ld hl,stats
@@ -99,6 +107,11 @@ hp_init:
 .o:     ld (hl),255
         inc hl
         djnz .o
+        ld hl,RES_B             ; καμία έρευνα (M9)
+        ld b,BLD_MAX
+.r:     ld (hl),255
+        inc hl
+        djnz .r
         xor a
 .l:     push af
         call idx_ix
@@ -804,3 +817,398 @@ occ_list:
         add hl,hl
         ret
 
+
+; ============================================================ ΕΡΕΥΝΑ (M9)
+;
+; U με κτίριο επιλεγμένο (έτοιμο, του παίκτη, χωρίς έρευνα): η ΠΡΩΤΗ
+; τεχνολογία του τύπου του που δεν έχει γίνει, επιτρέπεται στην εποχή, έχει
+; το προαπαιτούμενό της και πληρώνεται (res_start). Η πρόοδος ανά θέση
+; κτιρίου (RES_B: ποια, RES_P: πόσα βήματα των 8 καρέ), στη μπάρα της
+; κάρτας (res_card). Στο τέλος (res_tick) το αποτέλεσμα:
+;   RK_AGE    η Εποχή του Χαλκού: age_req = 1, και ο κύριος κώδικας
+;             φορτώνει το AGE3.BIN (disk.asm) και καλεί το age_apply
+;   RK_STAT   + b στο stats της ομάδας 0 (θέση a = σετ x 4 + πεδίο)· στην
+;             υγεία και σε όσες ζουν ήδη· στο σετ 0 και στο 3 (με φορτίο)
+;   RK_CARRY  + b στο carry_max[a] (gather.asm): πόσο κουβαλάει ο χωρικός
+
+RES_B       equ #7F80           ; 28: η τεχνολογία που ερευνάται (255 καμία)
+RES_P       equ #7FA0           ; 28: η πρόοδος (βήματα των 8 καρέ)
+RK_AGE      equ 0
+RK_STAT     equ 1
+RK_CARRY    equ 2
+T_SIZE      equ 15
+
+; κτίριο, εποχή, προαπαιτούμενο, κόστος (τροφή, ξύλο, χρυσό, πέτρα: dw),
+; χρόνος (x 8 καρέ), είδος, a, b
+        macro TECH bt, age, pre, f, w, g, s, t, k, a, b
+        db {bt}, {age}, {pre}
+        dw {f}, {w}, {g}, {s}
+        db {t}, {k}, {a}, {b}
+        mend
+techs:  TECH BTY_TOWN_CENTER, 2, 255, 800, 0, 0, 0, 150, RK_AGE, 0, 0   ; Εποχή του Χαλκού
+        TECH BTY_GRANARY, 2, 255, 200, 50, 0, 0, 50, RK_CARRY, 0, 5     ; Εξημέρωση: τροφή
+        TECH BTY_MARKET, 2, 255, 120, 75, 0, 0, 50, RK_CARRY, 1, 5      ; Ξυλουργική: ξύλο
+        TECH BTY_MARKET, 2, 255, 100, 120, 0, 0, 50, RK_CARRY, 2, 5     ; Χρυσωρυχείο: χρυσό
+        TECH BTY_MARKET, 2, 255, 100, 0, 0, 50, 50, RK_CARRY, 3, 5      ; Λιθοξοΐα: πέτρα
+        TECH BTY_STORAGE_PIT, 2, 255, 100, 0, 0, 0, 40, RK_STAT, 5, 2   ; Εργαλειοποιία: σπαθί +2
+        TECH BTY_STORAGE_PIT, 2, 255, 75, 0, 0, 0, 40, RK_STAT, 4, 10   ; Δερμάτινη θωράκιση: +10
+        TECH BTY_STORAGE_PIT, 3, 5, 200, 0, 120, 0, 60, RK_STAT, 5, 3   ; Μεταλλουργία: σπαθί +3
+        TECH BTY_STORAGE_PIT, 3, 6, 100, 0, 50, 0, 60, RK_STAT, 4, 15   ; Θώρακας φολίδων: +15
+        TECH BTY_ARCHERY, 2, 255, 100, 50, 0, 0, 40, RK_STAT, 9, 2      ; Τοξοβολία: τόξο +2
+        TECH BTY_ARCHERY, 3, 9, 0, 180, 100, 0, 60, RK_STAT, 10, 16     ; Σύνθετο τόξο: βεληνεκές
+        TECH BTY_TEMPLE, 3, 255, 120, 0, 60, 0, 50, RK_STAT, 0, 10      ; Ιατρική: χωρικός +10
+        TECH BTY_ACADEMY, 3, 255, 150, 0, 100, 0, 60, RK_STAT, 4, 20    ; Φάλαγγα: σπαθοφόρος +20
+T_N         equ ($ - techs) / T_SIZE
+res_done:   dw 0                ; bit t: έγινε
+
+; A = θέση κτιρίου -> HL = &RES_B[A]
+res_hl: ld l,a
+        ld h,RES_B >> 8
+        ld a,RES_B & 255
+        add a,l
+        ld l,a
+        ret
+
+; A = τεχνολογία -> HL = η γραμμή της
+tech_hl:
+        ld l,a
+        ld h,0
+        ld e,l
+        ld d,h
+        add hl,hl               ; x 15 = x 16 - 1
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        or a
+        sbc hl,de
+        ld de,techs
+        add hl,de
+        ret
+
+; A = τεχνολογία -> NZ αν έγινε
+done_a: ld hl,(res_done)
+        inc a
+.s:     dec a
+        jr z,.t
+        srl h
+        rr l
+        jr .s
+.t:     ld a,l
+        and 1
+        ret
+
+; U: έρευνα στο επιλεγμένο κτίριο.
+res_start:
+        ld a,(sel_bld)
+        cp 255
+        ret z
+        call brec_iy
+        ld a,(iy+B_ST)          ; έτοιμο, του παίκτη
+        or a
+        ret z
+        ld a,(iy+B_OWN)
+        or a
+        ret nz
+        ld a,(sel_bld)
+        call res_hl
+        ld a,(hl)
+        inc a
+        ret nz                  ; ερευνά ήδη
+        ld c,0
+.t:     push bc
+        ld a,c
+        call tech_hl
+        ld a,(iy+B_TYPE)
+        cp (hl)
+        jr nz,.n
+        inc hl
+        ld a,(hud_val + 10)     ; η εποχή
+        cp (hl)
+        jr c,.n
+        inc hl
+        ld a,(hl)               ; το προαπαιτούμενο
+        cp 255
+        jr z,.p
+        push hl
+        call done_a
+        pop hl
+        jr z,.n
+.p:     ld a,c
+        push hl
+        call done_a
+        pop hl
+        jr nz,.n
+        inc hl                  ; το κόστος
+        call pay16
+        jr c,.n
+        pop bc
+        ld a,(sel_bld)
+        call res_hl
+        ld (hl),c
+        ld a,l
+        add a,RES_P - RES_B
+        ld l,a
+        ld (hl),0
+        ld hl,res_n
+        inc (hl)
+        ret
+.n:     pop bc
+        inc c
+        ld a,c
+        cp T_N
+        jr nz,.t
+        ret
+
+; HL = 4 x dw κόστος: αν τα έχεις, πληρώνει (και η μπάρα). Carry αν όχι.
+pay16:  push hl
+        ld de,hud_val
+        ld b,4
+.c:     ld a,(de)
+        sub (hl)
+        inc de
+        inc hl
+        ld a,(de)
+        sbc a,(hl)
+        jr c,.no
+        inc de
+        inc hl
+        djnz .c
+        pop hl
+        ld de,hud_val
+        ld bc,#0401             ; C = το bit του αριθμού στη μπάρα
+.d:     ld a,(hl)
+        inc hl
+        or (hl)
+        jr z,.e
+        ld a,(hud_dirty)
+        or c
+        ld (hud_dirty),a
+.e:     dec hl
+        ld a,(de)
+        sub (hl)
+        ld (de),a
+        inc de
+        inc hl
+        ld a,(de)
+        sbc a,(hl)
+        ld (de),a
+        inc de
+        inc hl
+        sla c
+        djnz .d
+        or a
+        ret
+.no:    pop hl
+        scf
+        ret
+
+; Σε κάθε καρέ μονάδων, όσο res_n > 0: ένα βήμα κάθε 8 καρέ.
+res_tick:
+        ld a,(ticks)
+        and 14                  ; (τα καρέ μονάδων είναι τα ζυγά ticks)
+        ret nz
+        push ix
+        ld b,BLD_MAX
+        ld hl,RES_B
+.l:     ld a,(hl)
+        cp 255
+        jr z,.n
+        push bc
+        push hl
+        ld c,a
+        ld a,l
+        add a,RES_P - RES_B
+        ld l,a
+        inc (hl)
+        ld b,(hl)               ; B = πρόοδος
+        ld a,c
+        call tech_hl
+        ld de,11                ; ο χρόνος
+        add hl,de
+        ld a,b
+        cp (hl)
+        pop hl
+        push hl
+        call nc,res_end
+        pop hl
+        pop bc
+.n:     inc l
+        djnz .l
+        pop ix
+        ret
+
+; HL = &RES_B[θέση]: η τεχνολογία τελείωσε.
+res_end:
+        ld a,(hl)
+        ld (hl),255
+        ld hl,res_n
+        dec (hl)
+        push af
+        ld c,a                  ; έγινε: bit c
+        ld hl,1
+        inc c
+.b:     dec c
+        jr z,.bs
+        add hl,hl
+        jr .b
+.bs:    ld de,(res_done)
+        ld a,l
+        or e
+        ld l,a
+        ld a,h
+        or d
+        ld h,a
+        ld (res_done),hl
+        pop af
+        call tech_hl
+        ld de,12
+        add hl,de
+        ld a,(hl)               ; είδος
+        inc hl
+        ld c,(hl)               ; a
+        inc hl
+        ld b,(hl)               ; b
+        cp RK_STAT
+        jr z,.stat
+        jr c,.age
+        ld hl,carry_max         ; RK_CARRY (στην ίδια σελίδα: main.asm)
+        ld a,l
+        add a,c
+        ld l,a
+        ld a,(hl)
+        add a,b
+        ld (hl),a
+        ret
+.age:   ld a,1
+        ld (age_req),a
+        ret
+.stat:  ld a,c                  ; stats[c] += b, και στο σετ 3 αν είναι σετ 0
+        call .add
+        ld a,c
+        cp 4
+        ret nc
+        add a,12
+.add:   ld hl,stats
+        push af
+        call tab_a              ; (HL = &stats[A])
+        ld a,(hl)
+        add a,b
+        ld (hl),a
+        pop af
+        ld e,a
+        and 3                   ; υγεία: και όσες ζουν, της ομάδας 0
+        ret nz
+        ld a,e
+        rrca
+        rrca
+        ld e,a                  ; το σετ
+        xor a
+.u:     push af
+        call idx_ix
+        ld a,(ix+U_TEAM)
+        or a
+        jr nz,.un
+        ld a,(ix+U_SET)
+        cp e
+        jr nz,.un
+        call hp_hl
+        ld a,(hl)
+        add a,b
+        ld (hl),a
+.un:    pop af
+        inc a
+        cp UNITS
+        jr nz,.u
+        ret
+
+; Το επιλεγμένο κτίριο -> A = τα pixels (0..12) της έρευνάς του, ή 255.
+; (Όχι από το A: το far7 το χαλάει.)
+res_card:
+        ld a,(sel_bld)
+        call res_hl
+        ld a,(hl)
+        cp 255
+        ret z
+        push hl
+        call tech_hl
+        ld de,11
+        add hl,de
+        ld e,(hl)               ; ο χρόνος
+        ld d,0
+        pop hl
+        ld a,l
+        add a,RES_P - RES_B
+        ld l,a
+        ld l,(hl)               ; πρόοδος x 12 / χρόνος
+        ld h,d
+        ld b,h
+        ld c,l
+        add hl,hl
+        add hl,bc
+        add hl,hl
+        add hl,hl
+        ld b,-1
+.d:     inc b
+        or a
+        sbc hl,de
+        jr nc,.d
+        ld a,b
+        ret
+
+; Μετά το φόρτωμα του AGE3.BIN (disk.asm): η εποχή 3 — ύψος και εικόνα
+; κάθε τύπου (age3_tab) στο bld_types και σε κάθε κτίριο, η μπάρα, και τα
+; κτίρια που άλλαξαν ξαναζωγραφίζονται ένα-ένα (age_q, buildings.asm).
+age_apply:
+        ld hl,bld_types + BT_H
+        ld de,age3_tab
+        ld b,BT_N
+.t:     ld a,(de)               ; ύψος
+        ld (hl),a
+        inc de
+        push bc
+        ld bc,BT_IMG - BT_H
+        add hl,bc
+        ld a,(de)
+        ld (hl),a
+        inc hl
+        inc de
+        ld a,(de)
+        ld (hl),a
+        inc de
+        ld bc,BT_SIZE - BT_IMG - 1 + BT_H
+        add hl,bc
+        pop bc
+        djnz .t
+        xor a
+.b:     push af
+        call brec_iy
+        ld a,(iy+B_TYPE)
+        cp 255
+        jr z,.n
+        call bt_hl
+        ld de,BT_H
+        add hl,de
+        ld a,(hl)
+        ld (iy+B_H),a
+        ld de,BT_IMG - BT_H
+        add hl,de
+        ld a,(hl)
+        ld (iy+B_IMG),a
+        inc hl
+        ld a,(hl)
+        ld (iy+B_IMG+1),a
+.n:     pop af
+        inc a
+        cp BLD_MAX
+        jr nz,.b
+        ld hl,hud_val + 10
+        ld (hl),3
+        ld hl,hud_dirty
+        set 5,(hl)
+        ld a,1
+        ld (occ_dirty),a
+        xor a
+        ld (age_q),a
+        ret
+
+        include "../data/age3.asm"      ; ανά τύπο ύψος, εικόνα (Χαλκού)

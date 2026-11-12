@@ -6,9 +6,11 @@
 ; ύψος, μονάδα (σετ, 255 καμία), κόστος της μονάδας (4), καρέ εκπαίδευσης, και
 ; η εικόνα στην τράπεζα C6.
 
-BT_N        equ 10
+BT_N        equ 13
 BT_SIZE     equ 18
 START_AGE   equ 2
+MASK_PG     equ #4900      ; byte δεδομένων -> μάσκα (C6)
+IMG0        equ #4A80      ; οι εικόνες των κτιρίων (C6)
 CMP_RED     equ #6400      ; οι κόκκινοι μεταγλωττισμένοι (C6)
 BTY_TOWN_CENTER equ 0
 BTY_HOUSE equ 1
@@ -20,30 +22,39 @@ BTY_ARCHERY equ 6
 BTY_STABLE equ 7
 BTY_FARM equ 8
 BTY_TOWER equ 9
+BTY_TEMPLE equ 10
+BTY_GOV_CENTER equ 11
+BTY_ACADEMY equ 12
 
 bld_types:
         db 4, 1, 255, 0, 200, 0, 0, 60, 16, 45, 0, 50, 0, 0, 0, 200
-        dw #4900                 ; town_center (C)
+        dw #4A80                 ; town_center (C)
         db 2, 1, 255, 0, 30, 0, 0, 10, 8, 18, 255, 0, 0, 0, 0, 0
-        dw #4EA0                 ; house (H)
+        dw #4D50                 ; house (H)
         db 3, 2, 255, 0, 125, 0, 0, 30, 12, 29, 1, 35, 0, 15, 0, 250
-        dw #4FC0                 ; barracks (B)
+        dw #4DE0                 ; barracks (B)
         db 3, 1, 255, 0, 120, 0, 0, 25, 12, 25, 255, 0, 0, 0, 0, 0
-        dw #5278                 ; granary (G)
+        dw #4F3C                 ; granary (G)
         db 2, 1, 255, 0, 120, 0, 0, 25, 8, 18, 255, 0, 0, 0, 0, 0
-        dw #54D0                 ; storage_pit (S)
+        dw #5068                 ; storage_pit (S)
         db 3, 2, 3, 0, 150, 0, 0, 30, 12, 28, 255, 0, 0, 0, 0, 0
-        dw #55F0                 ; market (M)
+        dw #50F8                 ; market (M)
         db 3, 2, 2, 0, 150, 0, 0, 30, 12, 29, 2, 40, 20, 0, 0, 250
-        dw #5890                 ; archery (R)
+        dw #5248                 ; archery (R)
         db 3, 2, 2, 0, 150, 0, 0, 30, 12, 29, 255, 0, 0, 0, 0, 0
-        dw #5B48                 ; stable (L)
+        dw #53A4                 ; stable (L)
         db 3, 2, 5, 0, 75, 0, 0, 15, 12, 24, 255, 0, 0, 0, 0, 0
-        dw #5E00                 ; farm (F)
+        dw #5500                 ; farm (F)
         db 2, 2, 3, 0, 0, 0, 150, 30, 8, 27, 255, 0, 0, 0, 0, 0
-        dw #6040                 ; tower (W)
+        dw #5620                 ; tower (W)
+        db 3, 3, 255, 0, 200, 0, 0, 40, 12, 30, 255, 0, 0, 0, 0, 0
+        dw #0000                 ; temple (N)
+        db 4, 3, 5, 0, 200, 0, 0, 50, 16, 51, 255, 0, 0, 0, 0, 0
+        dw #0000                 ; gov_center (K)
+        db 4, 3, 7, 0, 200, 0, 0, 50, 16, 39, 255, 0, 0, 0, 0, 0
+        dw #0000                 ; academy (D)
 
-; τα πλήκτρα: οι τύποι (CHBGSMRLFW), μετά T (εκπαίδευση) και ESC
+; τα πλήκτρα: οι τύποι (CHBGSMRLFWNKD), μετά T (εκπαίδευση), ESC και U (έρευνα, M9)
 ; ως (γραμμή του πίνακα, μάσκα)
 BLD_RES     equ 13
 bld_keym:
@@ -57,5 +68,9 @@ bld_keym:
         db 4, #10
         db 6, #20
         db 7, #08
+        db 5, #40
+        db 4, #20
+        db 7, #20
         db 6, #08
         db 8, #04
+        db 5, #04
