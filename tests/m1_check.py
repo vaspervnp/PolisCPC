@@ -42,6 +42,28 @@ def symbols():
     return sym
 
 
+# Τα κτίρια με τα οποία αρχίζει το παιχνίδι (M7): (κλειδί, i0, j0).
+GAME_BLDS = [('town_center', 30, 58)]
+
+
+def game_world(grd=None, res=None, blds=None, found=()):
+    """Ο κόσμος όπως τον ζωγραφίζει το παιχνίδι: έδαφος, πόροι, και τα
+    κτίρια του (με τις εικόνες του src/make_bank6.py). `found`: θεμέλια
+    (κλειδί, i0, j0) — η κάτοψη γίνεται «χώμα τραχύ», χωρίς εικόνα."""
+    import make_bank6 as MB
+    if grd is None:
+        grd, res = mockup.make_map()
+    grd = [list(r) for r in grd]
+    for key, i0, j0 in found:
+        n = MB.footprint(key)
+        for j in range(j0, j0 + n):
+            for i in range(i0, i0 + n):
+                grd[j][i] = 'dirt_rough'
+    items = [(MB.image(k), i0, j0, MB.footprint(k))
+             for k, i0, j0 in (GAME_BLDS if blds is None else blds)]
+    return mockup.render_world(grd, res, towns=False, blds=items)
+
+
 def reference(world, cam_x, cam_y):
     """Το κομμάτι του κόσμου του mockup που αντιστοιχεί στην κάμερα του Z80.
     Ο κόσμος του mockup έχει X σε pixels (= 2 x bytes) και Y μετατοπισμένο
@@ -60,7 +82,7 @@ def reference(world, cam_x, cam_y):
     return out
 
 
-def wait_phase(c, sym, want, limit_ms=2000):
+def wait_phase(c, sym, want, limit_ms=4000):
     t = 0
     while c.peek(sym['PHASE']) != want:
         c.run_us(STEP_US)
@@ -102,7 +124,7 @@ def main():
     shots = '--shots' in sys.argv
     sym = symbols()
     grd, res = mockup.make_map()
-    world = mockup.render_world(grd, res, towns=False)
+    world = game_world(grd, res)
 
     cams = [('town', 98, 303), ('top', 152, -1), ('right', 304, 315),
             ('bottom', 150, 623), ('left', 0, 351)]

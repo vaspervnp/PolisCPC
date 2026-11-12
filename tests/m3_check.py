@@ -82,7 +82,7 @@ def main():
     shots = '--shots' in sys.argv
     sym = M.symbols()
     grd, res = M.mockup.make_map()
-    world = M.mockup.render_world(grd, res, towns=False)
+    world = M.game_world(grd, res)
     ref = M.reference(world, 98, 303)
     ok = True
 

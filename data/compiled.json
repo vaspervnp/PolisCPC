@@ -1,0 +1,17 @@
+{
+ "org": 16384,
+ "sets": [
+  "villager_m",
+  "swordsman",
+  "archer",
+  "villager_carry"
+ ],
+ "frames_per_set": 16,
+ "bytes": 13524,
+ "per_set": {
+  "villager_m": 3140,
+  "swordsman": 3644,
+  "archer": 3392,
+  "villager_carry": 3220
+ }
+}

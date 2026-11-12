@@ -56,7 +56,8 @@ HUD_Y0, HUD_ROWS = mockup.MAP_H, 7
 # και για τους ελέγχους (tests/m5_check.py).
 BLOCK_TER = {'water_deep', 'water_shallow', 'cliff'}
 BLOCK_RES = {'tree', 'tree_pine', 'tree_palm', 'berry_bush', 'bush_empty',
-             'gold_rock', 'stone_rock', 'fish', 'whale', 'ruins'}
+             'gold_rock', 'stone_rock', 'fish', 'whale', 'ruins',
+             'reeds'}          # M7: το 13 είναι το πλακίδιο κτιρίου (make_bank6)
 
 
 def blocked_byte(b):

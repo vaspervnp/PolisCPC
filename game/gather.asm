@@ -13,7 +13,8 @@
 ;             γεμάτος, ή άδειασε η πηγή: J_BACK
 ;     J_BACK  περπατάει στο σημείο απόθεσης (δίπλα στο Κέντρο Πόλης, που
 ;             ακόμα δεν ζωγραφίζεται — M7)· εκεί ο φόρτος πάει στη μπάρα του
-;             HUD, και ξανά J_GO στην ίδια πηγή. Αν η πηγή άδειασε: αδρανής.
+;             HUD, και ξανά J_GO στην ίδια πηγή. Αν η πηγή άδειασε: στην
+;             κοντινότερη του ίδιου είδους (src_next)· αν δεν έχει: αδρανής.
 ;
 ;   Το πρώτο ταξίδι ακολουθεί το flow field της εντολής· τα επόμενα πάνε
 ;   ίσια, με ακολούθηση τοίχου (U_FIELD = FIELD_WALK, pathing.asm).
@@ -42,10 +43,11 @@ SRC_TAB     equ #6F00           ; SRC_N x (θέση στον χάρτη dw, πο
 SRC_N       equ 32              ; ελεύθερη: high byte της θέσης = #FF
 
 CARRY_MAX   equ 10
+SET_CARRY   equ 3               ; το σετ του χωρικού με φορτίο (make_carry.py)
 GATHER_N    equ 2
 FIELD_WALK  equ FIELDS + 1      ; ίσια, με ακολούθηση τοίχου
 
-DROP_I      equ 33              ; ανατολικά του Κέντρου Πόλης (30..32, 58..60)
+DROP_I      equ 34              ; ανατολικά του Κέντρου Πόλης (30..33, 58..61)
 DROP_J      equ 59
 DROP_X      equ 2 * (DROP_I - DROP_J) + 190
 DROP_Y      equ 4 * (DROP_I + DROP_J) - 10
@@ -65,6 +67,8 @@ gather_init:
         call zero_page
         ld hl,J_SI
         call zero_page
+        ld a,#3F                ; και οι 6 αριθμοί
+        ld (hud_dirty),a
         jp hud_update
 
 ; HL = αρχή σελίδας -> 256 μηδενικά.
@@ -125,6 +129,8 @@ job_start:
         ld (hl),a
         res 7,l
         ld (hl),0
+        xor a
+        call set_look
 .same:  call stand_point
         jr c,job_idle           ; τίποτα ελεύθερο γύρω της: απλώς πάει εκεί
         call tile_target
@@ -133,6 +139,22 @@ job_start:
 
 job_idle:
         ld (ix+U_JOB),0
+        ret
+
+; IX, A = σετ (0 ή SET_CARRY) -> U_SET, U_BASE. Το unit_update βλέπει την
+; αλλαγή (U_LOOK) και τον ξαναζωγραφίζει.
+set_look:
+        ld (ix+U_SET),a
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,set_base
+        add hl,de
+        ld a,(hl)
+        ld (ix+U_BASE),a
+        inc hl
+        ld a,(hl)
+        ld (ix+U_BASE+1),a
         ret
 
 ; ------------------------------------------------------------ απόφαση
@@ -146,6 +168,8 @@ job_tick:
         jp z,job_work
         cp J_GO
         jr z,job_at_src
+        cp J_BUILD
+        jp z,bld_job
         ; J_BACK, στο σημείο απόθεσης: ο φόρτος στη μπάρα
         ld l,(ix+U_IDX)
         ld h,J_CARRY >> 8
@@ -165,12 +189,24 @@ job_tick:
         ld a,(hl)
         adc a,0
         ld (hl),a
-        ld a,1
-        ld (hud_dirty),a
+        ld a,e                  ; ο αριθμός του είδους (bit kind)
+        rrca
+        ld b,a
+        inc b
+        xor a
+        scf
+.bit:   rla
+        djnz .bit
+        ld hl,hud_dirty
+        or (hl)
+        ld (hl),a
+        xor a                   ; χωρίς φορτίο
+        call set_look
         ; και πίσω στην πηγή, αν έχει ακόμα
 job_go_src:
-        call src_check
-        jr nz,job_idle
+        call src_check          ; άδειασε: η κοντινότερη του ίδιου είδους
+        call nz,src_next
+        jp nz,job_idle
         call stand_point
         jr c,job_idle
         call tile_target
@@ -192,7 +228,7 @@ job_at_src:                     ; σταμάτησε: είναι δίπλα στ
         sub c
         inc a
         cp 3
-        jr nc,job_idle
+        jp nc,job_idle
         ld hl,(n_j)
         call clamp95
         ld c,a
@@ -247,7 +283,15 @@ job_work:
         add a,b
         ld (hl),a
         ld c,a                  ; C = φόρτος
-        pop hl
+        or a
+        jr z,.nl
+        push bc
+        push de
+        ld a,SET_CARRY          ; με φορτίο
+        call set_look
+        pop de
+        pop bc
+.nl:    pop hl
         ld a,e
         sub b
         ld (hl),a
@@ -267,12 +311,12 @@ job_work:
         ld (hl),#FF
         call src_deplete
         jr job_go_drop
-.gone:  ld l,(ix+U_IDX)         ; την άδειασε άλλος: ό,τι κουβαλάει στο σπίτι
-        ld h,J_CARRY >> 8
+.gone:  ld l,(ix+U_IDX)         ; την άδειασε άλλος: ό,τι κουβαλάει στο σπίτι,
+        ld h,J_CARRY >> 8       ; αλλιώς στην επόμενη πηγή
         ld a,(hl)
         or a
-        jr nz,job_go_drop
-        jp job_idle
+        jp nz,job_go_drop
+        jp job_go_src
 
 ; ------------------------------------------------------------ πηγές
 
@@ -301,6 +345,119 @@ src_check:
         ld h,J_KIND >> 8
         ld a,(hl)
         cp c
+        ret
+
+; IX: η πηγή του άδειασε -> η κοντινότερη (απόσταση Chebyshev από την
+; παλιά) με πόρο του ίδιου είδους, ως SRC_R πλακίδια μακριά, γίνεται η πηγή
+; του: Z. NZ αν δεν υπάρχει. Σε βήματα: ακτίνα 1 (9 πλακίδια), 3, και 6
+; (169, ~5 ms) — συνήθως η επόμενη είναι δίπλα.
+SRC_R       equ 6
+src_next:
+        ld a,1
+        call sn_try
+        ret z
+        ld a,3
+        call sn_try
+        ret z
+        ld a,SRC_R
+sn_try: ld (sn_r),a
+        call job_src            ; D = si, E = sj
+        ld a,255
+        ld (sn_best),a
+        ld l,(ix+U_IDX)
+        set 7,l
+        ld h,J_KIND >> 8
+        ld a,(hl)
+        ld (sn_kind),a
+        ld a,(sn_r)
+        ld c,a
+        ld a,e
+        sub c
+        ld (sn_j),a             ; έξω από τον χάρτη (και τα αρνητικά): ≥ 96
+        ld a,d
+        sub c
+        ld (sn_i0),a
+        xor a
+        sub c
+        ld (sn_dj),a
+.row:   ld a,(sn_j)
+        cp MAPW
+        jr nc,.nrow
+        ld e,a
+        ld d,0
+        call map_ptr            ; HL = MAP + 96 j, + i0 με πρόσημο
+        ld a,(sn_i0)
+        ld c,a                  ; C = i
+        ld e,a
+        rla
+        sbc a,a
+        ld d,a
+        add hl,de
+        ld a,(sn_r)
+        add a,a
+        inc a
+        ld b,a
+.col:   ld a,c
+        cp MAPW
+        jr nc,.nc
+        ld a,(hl)
+        and 15
+        push hl
+        ld e,a
+        ld d,0
+        ld hl,res_kind
+        add hl,de
+        ld e,(hl)
+        pop hl
+        ld a,(sn_kind)
+        cp e
+        jr nz,.nc
+        ld a,(sn_r)             ; max(|i - si|, |dj|)
+        ld e,a
+        ld a,(sn_i0)
+        add a,e
+        sub c
+        call abs_a
+        ld e,a
+        ld a,(sn_dj)
+        call abs_a
+        cp e
+        jr c,.m
+        ld e,a
+.m:     ld a,(sn_best)
+        cp e
+        jr c,.nc
+        jr z,.nc
+        ld a,e
+        ld (sn_best),a
+        ld a,c
+        ld (sn_bi),a
+        ld a,(sn_j)
+        ld (sn_bj),a
+.nc:    inc hl
+        inc c
+        djnz .col
+.nrow:  ld hl,sn_j
+        inc (hl)
+        ld hl,sn_dj
+        inc (hl)
+        ld a,(sn_r)
+        inc a
+        cp (hl)
+        jr nz,.row
+        ld a,(sn_best)
+        inc a
+        jr z,.none
+        ld l,(ix+U_IDX)
+        ld h,J_SI >> 8
+        ld a,(sn_bi)
+        ld (hl),a
+        set 7,l
+        ld a,(sn_bj)
+        ld (hl),a
+        xor a
+        ret
+.none:  or 1
         ret
 
 ; IX -> HL = το ποσό (dw) της πηγής του: η εγγραφή της, ή νέα με το ποσό
@@ -366,13 +523,12 @@ src_entry:
         pop de
         ret
 
-; IX: η πηγή του άδειασε. Ο πόρος γίνεται res_spent, και αν το πλακίδιο
-; φαίνεται, ξαναζωγραφίζεται ΜΟΝΟ το κομμάτι του: οι 2 στήλες (4 bytes) του
-; sprite, στις γραμμές του (σε ομάδες των 4) — έδαφος και πόροι με τη σειρά
-; του ζωγράφου, ψαλιδισμένα εκεί (draw_column της κύλισης, με col_y0..y1),
-; και ο καθρέφτης. Οι μονάδες και ο κέρσορας που το ακουμπάνε ξαναζωγρα-
-; φίζονται από πάνω (ορθογώνια στο RECTS, units_mark). Από την απόφαση:
-; μετά το units_prep, πριν το units_move.
+; IX: η πηγή του άδειασε. Ο πόρος γίνεται res_spent, και ξαναζωγραφίζεται
+; ΜΟΝΟ το κομμάτι του: οι 2 στήλες (4 bytes) του sprite, στις γραμμές του
+; (σε ομάδες των 4), μία ανά καρέ (rq_set) — έδαφος, πόροι και κτίρια με τη
+; σειρά του ζωγράφου, ψαλιδισμένα εκεί (col_redraw), και ο καθρέφτης. Οι
+; μονάδες και ο κέρσορας που το ακουμπάνε ξαναζωγραφίζονται από πάνω
+; (ορθογώνια στο RECTS, units_mark).
 src_deplete:
         call job_src
         push de
@@ -392,57 +548,7 @@ src_deplete:
         ld (hl),a
         pop de
         call tile_xy            ; HL = x, DE = y (= το sprite του πόρου)
-        push hl
-        ex de,hl                ; y - cam_y: -16 < y < VIEW_H
-        ld bc,(cam_y)
-        or a
-        sbc hl,bc
-        ld bc,16
-        add hl,bc
-        pop de
-        ld a,h
-        or a
-        ret nz
-        ld a,l
-        or a
-        ret z
-        cp VIEW_H + 16
-        ret nc
-        sub 16                  ; col_y0 = max(0, y) AND #FC
-        jr nc,.y0
-        xor a
-.y0:    and #FC
-        ld (col_y0),a
-        ld a,l                  ; col_y1 = min(VIEW_H, y + 16 + 3) AND #FC
-        add a,3
-        cp VIEW_H + 1
-        jr c,.y1
-        ld a,VIEW_H
-.y1:    and #FC
-        ld (col_y1),a
-        ex de,hl                ; οι δύο στήλες: x - cam_x και + 2
-        ld bc,(cam_x)
-        or a
-        sbc hl,bc
-        ld b,2
-.c:     push bc
-        push hl
-        ld a,h
-        or a
-        jr nz,.skip
-        ld a,l
-        cp 80 - 1
-        call c,col_redraw
-.skip:  pop hl
-        inc hl
-        inc hl
-        pop bc
-        djnz .c
-        xor a                   ; η κύλιση: όλο το ύψος
-        ld (col_y0),a
-        ld a,VIEW_H
-        ld (col_y1),a
-        ret
+        jp rq_set               ; οι 2 στήλες του, μία ανά καρέ (buildings.asm)
 
 ; A = ζυγό byte οθόνης: το κομμάτι col_y0..col_y1 της στήλης από την αρχή,
 ; ΤΟ ΙΔΙΟ κομμάτι στον καθρέφτη (όχι όλη η στήλη: πιο κάτω μπορεί να είναι
@@ -450,7 +556,21 @@ src_deplete:
 ; καλύπτουν το κομμάτι.
 col_redraw:
         push af
+        xor a                   ; μια κάθετη κύλιση στη μέση έχει ίσως
+        ld (v_pend),a           ; ζωγραφίσει το παλιό: ξαναρχίζει
+        ld a,#FE                ; οι έλεγχοι του παραθύρου στο draw_column
+        ld (cw_j1),a
+        ld (cw_j2),a
+        ld a,RAM_RES            ; οι πόροι είναι στην C6
+        call setram
+        pop af
+        push af
         call draw_column
+        ld a,RAM_BASE
+        call setram
+        ld a,#18                ; πίσω σε «jr»: όλο το ύψος
+        ld (cw_j1),a
+        ld (cw_j2),a
         pop af
         push af
         call mirror_part
@@ -543,32 +663,44 @@ stand_point:
         call clamp95
         ld (sp_uj),a
         call job_src
-        ld (sp_sj),de           ; sp_sj = j, sp_si = i
+        dec d
+        dec e
+        ld c,3
+
+; D, E = γωνία, C = πλευρά: το ελεύθερο πλακίδιο του τετραγώνου C x C που
+; είναι πιο κοντά στο (sp_ui, sp_uj) -> D, E. Carry αν κανένα.
+near_free:
+        ld a,c
+        ld (nf_n),a
         ld a,255
         ld (sp_best),a
-        ld hl,nbr_tab
-        ld b,8
-.n:     push bc
+        ld b,c
+.r:     push bc
+        push de
+        ld a,e                  ; έξω από τον χάρτη (και το -1 = 255)
+        cp MAPW
+        jr nc,.nr
+        push de
+        ld d,0
+        call map_ptr            ; HL = MAP + 96 j, + i με πρόσημο
+        pop de
+        ld a,d
+        ld c,a
+        rla
+        sbc a,a
+        ld b,a
+        add hl,bc
+        ld a,(nf_n)
+        ld b,a
+.c:     ld a,d
+        cp MAPW
+        jr nc,.n
         push hl
-        ld a,(sp_si)
-        add a,(hl)
-        ld d,a
-        inc hl
-        ld a,(sp_sj)
-        add a,(hl)
-        ld e,a
-        ld a,d                  ; έξω από τον χάρτη (και το -1 = 255)
-        cp MAPW
-        jr nc,.next
-        ld a,e
-        cp MAPW
-        jr nc,.next
-        call map_ptr
         ld l,(hl)
         ld h,BLOCK_TAB >> 8
         ld a,(hl)
         or a
-        jr nz,.next
+        jr nz,.nn
         ld a,(sp_ui)            ; |i - ui| + |j - uj|
         sub d
         call abs_a
@@ -579,14 +711,17 @@ stand_point:
         add a,c
         ld hl,sp_best
         cp (hl)
-        jr nc,.next
+        jr nc,.nn
         ld (hl),a
-        ld (sp_bj),de           ; sp_bj = j, sp_bi = i
-.next:  pop hl
-        inc hl
-        inc hl
+        ld (sp_bj),de
+.nn:    pop hl
+.n:     inc hl
+        inc d
+        djnz .c
+.nr:    pop de
+        inc e
         pop bc
-        djnz .n
+        djnz .r
         ld a,(sp_best)
         inc a
         scf
@@ -594,8 +729,6 @@ stand_point:
         ld de,(sp_bj)
         or a
         ret
-
-nbr_tab:    db -1,-1, 0,-1, 1,-1, 1,0, 1,1, 0,1, -1,1, -1,0
 
 abs_a:  bit 7,a
         ret z
@@ -648,27 +781,34 @@ tile_target:
 
 ; ------------------------------------------------------------ HUD
 
-; Οι 6 αριθμοί της μπάρας (hud_val) στη σελίδα του HUD, 4 ψηφία ο καθένας,
-; στοιχισμένα δεξιά. Η σελίδα είναι κύρια RAM: η C0 πρέπει να είναι μέσα.
+; Οι αριθμοί της μπάρας (hud_val) που άλλαξαν (bits του hud_dirty: 0-5) στη
+; σελίδα του HUD, 4 ψηφία ο καθένας, στοιχισμένα δεξιά (~0,6 ms ο καθένας).
+; Η σελίδα είναι κύρια RAM: η C0 πρέπει να είναι μέσα.
 hud_update:
+        ld a,(hud_dirty)
+        ld c,a
         xor a
         ld (hud_dirty),a
         ld hl,hud_val
         ld de,bar_x
         ld b,6
-.n:     push bc
+.n:     srl c
+        jr nc,.skip
+        push bc
         push de
         ld c,(hl)
         inc hl
         ld b,(hl)
-        inc hl
+        dec hl
         push hl
         ld a,(de)
         call hud_num
         pop hl
         pop de
-        inc de
         pop bc
+.skip:  inc hl
+        inc hl
+        inc de
         djnz .n
         ret
 

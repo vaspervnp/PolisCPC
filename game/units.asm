@@ -1,6 +1,6 @@
 ; units.asm — οι μονάδες: 128 στον κόσμο, όσες φαίνονται στην οθόνη. M3 + M4.
 ;
-; ΟΙ ΔΥΟ ΤΡΑΠΕΖΕΣ
+; ΟΙ ΤΡΑΠΕΖΕΣ
 ;
 ;   C4 -> #4000  Ο ΚΑΘΡΕΦΤΗΣ ΤΟΥ ΦΟΝΤΟΥ. Αντίγραφο της οθόνης (#C000-#FFFF)
 ;                με την ΙΔΙΑ διάταξη: το φόντο κάτω από το byte οθόνης
@@ -9,6 +9,10 @@
 ;   C5 -> #4000  ΤΑ SPRITES: τα σετ των μονάδων, αποσυμπιεσμένα εκεί στην
 ;                εκκίνηση, με τις όψεις W από καθρέφτισμα, και μετά τους ο
 ;                κέρσορας, το σημάδι επιλογής και η γωνία του κουτιού.
+;   C7 -> #4000  ΤΑ ΜΕΤΑΓΛΩΤΤΙΣΜΕΝΑ SPRITES: κώδικας ανά καρέ βαδίσματος
+;                (src/make_compiled.py), ~2x πιο γρήγορος από το blit16.
+;                Το blit16 μένει για κέρσορα, γωνία, και γραμμές που περνάνε
+;                όριο σελίδας.
 ;
 ; ΤΡΙΑ ΡΟΛΟΓΙΑ (milestones.md, Μέρος Β)
 ;
@@ -62,6 +66,7 @@ U_DRAWN     equ 14              ; bit 0: είναι στην οθόνη (το OA
                                 ; bit 2: ζωγραφίζεται αυτό το καρέ
 U_WF        equ 15              ; ακολουθεί τοίχο: bit 7 + η κατεύθυνση 0..7
 U_FRAME     equ 16              ; dw: το καρέ, μόνο με το F_FIXED
+U_LOOK      equ 16              ; χωρίς F_FIXED: το σετ με το οποίο ζωγραφίστηκε
 U_OADDR     equ 18              ; dw: το byte οθόνης όπου ζωγραφίστηκε
 U_BASE      equ 20              ; dw: το σετ της στην τράπεζα C5
 U_IDX       equ 22              ; ο δείκτης της (για το ACT_TAB)
@@ -77,7 +82,7 @@ F_MVR       equ 6               ; είναι στο MOVERS: βήματα σε κ
 F_ORD       equ 7               ; είναι στο ORDER
 
 SWAP_TAB    equ #A400           ; 256, στοιχισμένο — αμέσως μετά τον χάρτη
-SPR_SETS    equ 3
+SPR_SETS    equ 4               ; + ο χωρικός που κουβαλάει (M6)
 SPR_BASE    equ #4000
 SPR_STRIDE  equ #C80            ; 21 καρέ x 128 + 4 όψεις W x 128
 SPR_WEST    equ #A80            ; οι όψεις W μέσα στο σετ
@@ -185,11 +190,37 @@ units_gfx:
         pop hl
         pop bc
         djnz .set
+        ld hl,cursor_gfx        ; ο κέρσορας: μέσω της οθόνης (η πηγή είναι
+        ld de,SCREEN            ; πέρα από το #4000, κάτω από την C5)
+        ld bc,3 * 128
+        ldir
         ld a,RAM_SPR
         call setram
-        ld hl,cursor_gfx
+        ld hl,SCREEN
         ld de,SPR_CURSOR
         ld bc,3 * 128
+        ldir
+        ld a,RAM_BASE           ; οι πόροι -> C6
+        call setram
+        ld hl,res_z
+        ld de,SCREEN
+        call dzx0
+        ld a,RAM_RES
+        call setram
+        ld hl,SCREEN
+        ld de,#4000
+        ld bc,#4000
+        ldir
+        ld a,RAM_BASE           ; τα μεταγλωττισμένα -> C7, μέσω της οθόνης
+        call setram
+        ld hl,cmp_z
+        ld de,SCREEN
+        call dzx0
+        ld a,RAM_CMP
+        call setram
+        ld hl,SCREEN
+        ld de,#4000
+        ld bc,#4000
         ldir
         ld a,RAM_BASE
         jp setram
@@ -254,7 +285,12 @@ units_init:
         ld (ix+U_WY),l
         ld (ix+U_WY+1),h
         jr .pos
-.far:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
+.far:   cp UNITS_LIVE           ; οι τελευταίες: ελεύθερες θέσεις (M7), μακριά
+        jr c,.wan               ; από τον κόσμο, για όσες θα βγουν
+        ld (ix+U_TEAM),TEAM_FREE
+        ld (ix+U_WY+1),2000 >> 8
+        jr .pos
+.wan:   call rnd_pos            ; οι υπόλοιπες: τυχαία, έξω από την αρχική οθόνη
         set F_WANDER,(ix+U_FL)  ; — η άλλη ομάδα
         ld (ix+U_TEAM),1
 .pos:   ld l,(ix+U_WX)          ; ο στόχος = εκεί που είναι
@@ -436,6 +472,7 @@ units_tick:
         or a
         call nz,field_cont
         call units_think
+        call bld_tick           ; κτίρια: επανασχεδίαση, ουρές (buildings.asm)
         ld a,(hud_dirty)        ; άλλαξε η μπάρα (gather.asm)
         or a
         call nz,hud_update
@@ -720,8 +757,8 @@ units_prep:
 
 ; ΣΕ ΚΑΘΕ ΚΑΡΕ μόνο όσες φαίνονταν (το ORDER). Όσες δεν φαίνονται τις
 ; ελέγχει η απόφαση, μία φορά στα ~22 καρέ — μια μονάδα που μπαίνει από την
-; άκρη αργεί το πολύ 8 bytes. ΑΝ ΚΥΛΗΣΕ Η ΚΑΜΕΡΑ, όλες οι ενεργές (με
-; CPIR στο ACT_TAB): αλλιώς η λωρίδα θα αποκάλυπτε μονάδες με καθυστέρηση.
+; άκρη αργεί το πολύ 8 bytes. ΑΝ ΚΥΛΗΣΕ Η ΚΑΜΕΡΑ, όσες είναι στη λωρίδα
+; που αποκαλύφθηκε (από τα PX/PY): αλλιώς θα φαίνονταν με καθυστέρηση.
 ; Τέλος η γωνία και ο κέρσορας.
 units_move:
         ld a,(ord_n)
@@ -762,33 +799,61 @@ units_move:
 .mn:    pop hl
         pop bc
         djnz .m
-.scr:   ld hl,u_rescan          ; μετά από πλήρη σχεδίαση: σαν κύλιση
-        ld a,(hl)
-        ld (hl),0
-        ld hl,v_shx
-        or (hl)
-        ld hl,v_shy
-        or (hl)
+.scr:   ld bc,77 << 8           ; x: από 0, 77 τιμές (SX 0..76)
+        ld de,(VIEW_H - 15) << 8 ; y: από 0, 129 τιμές (SY 0..128)
+        ld a,(u_rescan)         ; μετά από πλήρη σχεδίαση: όλη η οθόνη
+        or a
+        jr nz,.full
+        ld a,(v_shx)            ; αλλιώς μόνο η λωρίδα που αποκαλύφθηκε:
+        or a                    ; μια μονάδα έξω από αυτήν είτε φαινόταν
+        jr z,.sy                ; ήδη είτε δεν φαίνεται ούτε τώρα
+        ld b,2
+        bit 7,a                 ; η κάμερα δεξιά: SX 75..76, αριστερά: 0..1
+        jr z,.go
+        ld c,75
+        jr .go
+.sy:    ld a,(v_shy)
+        or a
         jr z,.ents
-        ld hl,ACT_TAB
-        ld bc,UNITS
-.scan:  ld a,1
-        cpir
-        jr nz,.ents
+        ld d,8
+        bit 7,a                 ; κάτω: SY 121..128, πάνω: 0..7
+        jr z,.go
+        ld e,VIEW_H - 16 - 7
+        jr .go
+.full:  xor a
+        ld (u_rescan),a
+.go:    ld a,(cam_x)            ; με τα low bytes (PX, PY, L = ο δείκτης),
+        add a,c                 ; mod 256: όσες περάσουν, ο πλήρης έλεγχος
+        ld c,a
+        ld a,(cam_y)
+        add a,e
+        ld e,a
+        ld hl,PX
+.scan:  ld a,(hl)
+        sub c
+        cp b
+        jr nc,.sk
+        set 7,l
+        ld a,(hl)
+        res 7,l
+        sub e
+        cp d
+        jr nc,.sk
         push hl
         push bc
+        push de
         ld a,l
-        dec a
         call idx_ix
-        ld a,(ix+U_SY)          ; δεν φαινόταν: φαίνεται τώρα; (πρώτα ο
-        inc a                   ; φθηνός έλεγχος — οι περισσότερες όχι)
+        ld a,(ix+U_SY)          ; δεν φαινόταν: φαίνεται τώρα;
+        inc a
         call z,vis_test
         call z,unit_update
+        pop de
         pop bc
         pop hl
-        ld a,b
-        or c
-        jr nz,.scan
+.sk:    inc l
+        bit 7,l
+        jr z,.scan
 .ents:  ld ix,ANCHOR_REC
         ld a,(box_on)
         or a
@@ -829,7 +894,14 @@ unit_update:
 .went:  inc (ix+U_STEP)
 .ch:    ld c,1
 .nostep:
-        bit F_REDRAW,(ix+U_FL)  ; άλλαξε η επιλογή, χωρίς βήμα: ΧΩΡΙΣ
+        bit F_FIXED,(ix+U_FL)   ; άλλαξε σετ (ο χωρικός πήρε ή άφησε φορτίο):
+        jr nz,.look             ; σβήσιμο και σχεδίαση, σαν βήμα
+        ld a,(ix+U_SET)
+        cp (ix+U_LOOK)
+        jr z,.look
+        ld (ix+U_LOOK),a
+        ld c,1
+.look:  bit F_REDRAW,(ix+U_FL)  ; άλλαξε η επιλογή, χωρίς βήμα: ΧΩΡΙΣ
         jr z,.n3                ; σβήσιμο. Επιλέχτηκε: οι αγκύλες από πάνω.
         res F_REDRAW,(ix+U_FL)  ; Ξεεπιλέχτηκε: σβήνονται μόνο οι 2 γραμμές
         ld a,c                  ; τους.
@@ -1007,6 +1079,9 @@ cur_update:
         call unit_still
         or a
         jr z,.new
+        ld a,(cur_force)        ; άλλαξε όψη (κτίρια): σβήσιμο και σχεδίαση
+        or a
+        jr nz,.chg
         ld a,(v_shx)
         ld hl,v_shy
         or (hl)
@@ -1018,7 +1093,9 @@ cur_update:
         cp (ix+U_SY)
         ret z
 .chg:   call old_rect
-.new:   set 2,(ix+U_DRAWN)
+.new:   xor a
+        ld (cur_force),a
+        set 2,(ix+U_DRAWN)
         ld a,(cur_x)
         ld (ix+U_SX),a
         ld a,(cur_y)
@@ -1222,23 +1299,28 @@ units_mark:
 hits:   ld a,(rect_n)
         or a
         ret z
-        ld e,a
+        ld e,b                  ; E = y, B = πόσα
+        ld b,a
         ld hl,RECTS
 .l:     ld a,(hl)
-        inc hl
         sub c
         add a,3
         cp 7
-        jr nc,.no
+        jr c,.x
+.no:    inc hl
+        inc hl
+        djnz .l
+        or a                    ; carry 0
+        ret
+.x:     inc hl
         ld a,(hl)
-        sub b
+        dec hl
+        sub e
         add a,15
         cp 31
-        ret c
-.no:    inc hl
-        dec e
-        jr nz,.l
-        ret                     ; carry 0 από το τελευταίο cp
+        jr nc,.no
+        ld b,e                  ; (το B της καλούσας: y)
+        ret
 
 ; C = x, B = y -> ένα ορθογώνιο ακόμα.
 add_rect:
@@ -1338,11 +1420,48 @@ units_draw:
         call line_x
         ld (ix+U_OADDR),e
         ld (ix+U_OADDR+1),d
-        push de
+        bit F_FIXED,(ix+U_FL)   ; κέρσορας, γωνία: δεδομένα
+        jr nz,.data
+        ld a,e                  ; καμία γραμμή σε όριο σελίδας: το low byte
+        cp #FD                  ; των (ως 3) σειρών χαρακτήρων < #FD
+        jr nc,.data
+        add a,80
+        cp #FD
+        jr nc,.data
+        add a,80
+        cp #FD
+        jr nc,.data
+        ld a,(ix+U_SET)         ; ο πίνακας της C7: (σετ x 16 + όψη x 4 +
+        add a,a                 ; βήμα) x 2
+        add a,a
+        add a,(ix+U_FACE)
+        add a,a
+        add a,a
+        ld c,a
+        ld a,(ix+U_STEP)
+        rrca
+        and 3
+        add a,c
+        add a,a
+        ld l,a
+        ld h,#40
+        ld a,RAM_CMP
+        call setram
+        ld a,(hl)
+        inc l
+        ld h,(hl)
+        ld l,a
+        ld (.cj + 1),hl
+        ex de,hl                ; HL = η οθόνη
+.cj:    call 0                  ; (αυτο-τροποποιούμενο: η ρουτίνα του καρέ)
+        ld a,RAM_SPR
+        call setram
+        jr .mark
+.data:  push de
         call unit_frame
         pop de
         call blit16
-        bit F_SEL,(ix+U_FL)     ; επιλεγμένη: οι αγκύλες, στο ίδιο ορθογώνιο
+.mark:  bit F_SEL,(ix+U_FL)     ; επιλεγμένη: οι αγκύλες, στο ίδιο ορθογώνιο
         call nz,blit_mark
         set 0,(ix+U_DRAWN)
 .skip:  pop hl
@@ -1448,6 +1567,32 @@ unit_frame:
         ret
 
 face_off:   dw 0, 4 * 128, 8 * 128, SPR_WEST        ; S, E, N, W
+
+; Η αλλαγή γραμμής των μεταγλωττισμένων sprites (src/make_compiled.py):
+; αντιγράφεται στο #0028 στην εκκίνηση, ώστε να φαίνεται και με την C7 στο
+; #4000. HL = byte οθόνης, C = η αρχή της γραμμής: L = C, H + 8, και στην
+; αλλαγή σειράς χαρακτήρων (cwrap) +80, τυλιγμένο στα 2 KB.
+rst_code:
+        ld l,c                  ; #28
+        ld a,h
+        add a,8
+        ld h,a
+        and #38
+        ret nz
+        jp cwrap                ; #30
+rst_len     equ $ - rst_code
+        assert rst_len <= #38 - #28, 'rst #28 code overlaps #38'
+
+cwrap:  ld a,c
+        add a,80
+        ld c,a
+        ld l,a
+        ld a,h
+        adc a,0
+        and 7
+        or #C0
+        ld h,a
+        ret
 
 ; Μετά από πλήρη σχεδίαση: καμία δεν έχει ίχνος να σβήσει, το ORDER
 ; ξαναχτίζεται, και η κάμερα μπορεί να πήδηξε: ενεργές από την αρχή.

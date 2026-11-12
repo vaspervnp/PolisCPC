@@ -91,12 +91,15 @@ def hold(c, sym, keys, ticks, times):
 
 
 def expect_cam(c, sym, keys, n):
-    """Πού πρέπει να πάει η κάμερα σε n καρέ: ένας άξονας ανά καρέ, στη
-    διαγώνια εναλλάξ (sdiag), και ο άλλος αν ο δικός του είναι στην άκρη."""
+    """Πού πρέπει να πάει η κάμερα σε n καρέ (+ τα 2 του αφήματος): ένας
+    άξονας ανά καρέ, η κάθετη σε ΔΥΟ καρέ (v_pend: στο πρώτο τίποτα δεν
+    κουνιέται, στο δεύτερο τελειώνει ό,τι κι αν πατιέται), στη διαγώνια
+    εναλλάξ (sdiag), και ο άλλος άξονας αν ο δικός του είναι στην άκρη."""
     x, y = cam(c, sym)
     sx = keys.count('R') - keys.count('L')
     sy = keys.count('D') - keys.count('U')
     diag = c.peek(sym['SDIAG'])
+    pend = None
 
     def step_h(x):
         if sx > 0 and x < MAX_CAM_X:
@@ -113,24 +116,28 @@ def expect_cam(c, sym, keys, n):
         return y
 
     for _ in range(n):
-        if sx and sy:
+        if pend is not None:
+            y, pend = pend, None
+        elif sx and sy:
             diag ^= 1
             if diag:
                 ny = step_v(y)
                 if ny != y:
-                    y = ny
+                    pend = ny
                 else:
                     x = step_h(x)
             else:
                 nx = step_h(x)
                 if nx != x:
                     x = nx
-                else:
-                    y = step_v(y)
+                elif step_v(y) != y:
+                    pend = step_v(y)
         elif sx:
             x = step_h(x)
-        elif sy:
-            y = step_v(y)
+        elif sy and step_v(y) != y:
+            pend = step_v(y)
+    if pend is not None:
+        y = pend
     return x, y
 
 
@@ -138,7 +145,7 @@ def main():
     shots = '--shots' in sys.argv
     sym = M.symbols()
     grd, res = M.mockup.make_map()
-    world = M.mockup.render_world(grd, res, towns=False)
+    world = M.game_world(grd, res)
     ok = True
 
     c = CPC()

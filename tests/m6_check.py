@@ -7,7 +7,7 @@
 μούρων, ένας στα δέντρα, και, αφού κυλήσει λίγο η κάμερα, ένας στον χρυσό.
 
 1. ΑΡΧΗ. Οι 6 αριθμοί της μπάρας του HUD είναι, pixel προς pixel, οι τιμές
-   της hud_val (200 200 100 200 12 1) με τα ψηφία του mockup.
+   της hud_val (200 200 100 200 12 2) με τα ψηφία του mockup.
 2. ΤΑΥΤΟΧΡΟΝΑ. Κάποια στιγμή και οι 4 δουλεύουν (μαζεύουν ή πηγαινοέρχονται)
    σε 3 διαφορετικές πηγές· καθένας αδειάζει φορτίο ≥ 2 φορές.
 3. ΟΙ ΑΡΙΘΜΟΙ. Σε ΚΑΘΕ καρέ, η μπάρα = αρχή + ό,τι αδειάστηκε ως τότε, ανά
@@ -20,7 +20,11 @@
    γίνεται «θάμνος άδειος» και ξαναζωγραφίζεται ΜΟΝΟ το κομμάτι του (οθόνη
    και καθρέφτης)· η οθόνη είναι ακριβώς το mockup με αυτή την αλλαγή, με
    τις μονάδες από πάνω, και μετά το σβήσιμο των μονάδων ακριβώς το φόντο.
-   Οι δύο χωρικοί αδειάζουν ό,τι κουβαλάνε και μένουν αδρανείς.
+   Οι δύο χωρικοί αδειάζουν ό,τι κουβαλάνε και πάνε σε ΑΛΛΟ θάμνο μούρων
+   (ως 6 πλακίδια μακριά), απ' όπου αδειάζουν ξανά φορτίο.
+6. ΦΟΡΤΙΟ ΣΤΗΝ ΟΨΗ. Σε κάθε καρέ, ο χωρικός με φορτίο έχει το σετ 3 (με το
+   δέμα, src/make_carry.py), χωρίς φορτίο το 0· η σύνθεση της οθόνης (με
+   αυτά τα σετ) το επιβεβαιώνει pixel προς pixel.
 """
 import collections
 import os
@@ -121,6 +125,8 @@ class Watch:
         self.on_block = []
         self.together = 0                       # καρέ: 4 δουλεύουν, 3 πηγές
         self.pos = {}
+        self.from_src = collections.defaultdict(list)   # αδειάσματα: από πού
+        self.bad_look = []
 
     def state(self, v):
         c = self.g.c
@@ -134,10 +140,14 @@ class Watch:
             jobs = {}
             for v in VILLAGERS:
                 job, carry, kind, src = self.state(v)
-                pj, pc, pk, _ = self.prev.get(v, (0, 0, 0, None))
+                pj, pc, pk, ps = self.prev.get(v, (0, 0, 0, None))
                 if pj == J_BACK and pc and carry == 0:
                     self.dep[pk] += pc
                     self.trips[v] += 1
+                    self.from_src[v].append(ps)
+                look = c.peek(S.UNIT_TAB + v * S.U_SIZE + 8)
+                if look != (3 if carry else 0) and len(self.bad_look) < 3:
+                    self.bad_look.append((len(g.times), v, carry, look))
                 self.prev[v] = (job, carry, kind, src)
                 if job:
                     jobs[v] = src
@@ -161,7 +171,7 @@ def main():
     blob = nav.blob
 
     start = hud_vals(c, sym)
-    g.report('μπάρα', start == [200, 200, 100, 200, 12, 1] and
+    g.report('μπάρα', start == [200, 200, 100, 200, 12, 2] and
              hud_ok(c, start), 'αρχή: %s, στην οθόνη με τα ψηφία του mockup'
              % ' '.join(map(str, start)))
     w = Watch(g, nav)
@@ -239,30 +249,32 @@ def main():
             break
     gone = c.peek(at) & 15 == RES['bush_empty']
     t_gone = len(g.times)
-    for k2 in range(800):
+    n0 = {v: len(w.from_src[v]) for v in (0, 3)}
+    for k2 in range(1200):
         w.tick(1)
-        if all(w.state(v)[0] == 0 and w.state(v)[1] == 0 for v in (0, 3)):
+        new = {v: [p for p in w.from_src[v][n0[v]:] if p != BERRIES]
+               for v in (0, 3)}
+        if all(new.values()):
             break
-    idle = [w.state(v)[:2] for v in (0, 3)]
-    if idle != [(0, 0), (0, 0)]:
-        for v in (0, 3):
-            u = S.unit(c, v)
-            b = c.read_ram(S.UNIT_TAB + v * S.U_SIZE, S.U_SIZE)
-            print('      %d: θέση (%d,%d) στόχος (%d,%d) fl %02X sy %d field %d '
-                  'wf %02X stuck %d' % (v, u['wx'], u['wy'], u['tx'], u['ty'],
-                                        u['fl'], u['sy'], b[24], b[15], b[29]))
-    g.report('άδειασε', gone and idle == [(0, 0), (0, 0)] and not w.bad_hud,
-             'το πλακίδιο έγινε θάμνος άδειος σε %d καρέ· οι 0 και 3 '
-             'αδειάζουν και μένουν αδρανείς σε %d (δουλειά, φορτίο: %s)'
-             % (k + 1, k2 + 1, idle))
+    near = {v: p[0] for v, p in new.items() if p}
+    good = (gone and len(near) == 2 and not w.bad_hud and
+            all(blob[j * 96 + i] & 15 == RES['berry_bush'] and
+                max(abs(i - BERRIES[0]), abs(j - BERRIES[1])) <= 6
+                for i, j in near.values()))
+    g.report('επόμενη', good, 'το πλακίδιο έγινε θάμνος άδειος σε %d καρέ· '
+             'οι 0 και 3 αδειάζουν πια από τους θάμνους %s (σε %d καρέ)'
+             % (k + 1, near, k2 + 1))
     grd, res = M4.M.mockup.make_map()
     res[BERRIES[1]][BERRIES[0]] = 'bush_empty'
-    g.world = M4.M.mockup.render_world(grd, res, towns=False)
+    g.world = M4.M.game_world(grd, res)
     M4.M.wait_phase(c, sym, 6)
     w.tick(1)
     g.report('χάρτης', g.compose('depleted'), 'η οθόνη = το mockup με τον '
              'άδειο θάμνο, με τις μονάδες από πάνω')
 
+    g.report('όψη', not w.bad_look, 'σε κάθε καρέ: με φορτίο το σετ 3 (δέμα), '
+             'χωρίς το 0%s' % ('' if not w.bad_look else ' — ΛΑΘΟΣ %s'
+                               % w.bad_look))
     g.report('εμπόδια', not w.on_block, 'κανένας χωρικός σε εμπόδιο%s'
              % ('' if not w.on_block else ': %s' % w.on_block[:3]))
     still = [t for t, m in zip(g.times, g.scrolled) if not m]

@@ -294,7 +294,7 @@ def world_xy(i, j):
     return iso.tile_xy(i, j, WX0, TOP)
 
 
-def render_world(grd, res, towns=True):
+def render_world(grd, res, towns=True, blds=()):
     """Όλος ο χάρτης σε ΕΝΑ buffer pixels. Η οθόνη είναι ένα κομμάτι του —
     αυτό ακριβώς είναι η κύλιση. Με towns=False μόνο έδαφος και πόροι: αυτό
     ζωγραφίζει το παιχνίδι στο M1, και με αυτό συγκρίνει το tests/m1_check.py."""
@@ -329,6 +329,13 @@ def render_world(grd, res, towns=True):
         # Το χωράφι είναι ΠΑΤΩΜΑ: μπαίνει πριν από ό,τι πατάει πάνω του.
         depth = -1 if key == 'farm' else i0 + j0 + 2 * (n - 1)
         objs.append((depth, i0 + n - 1, b, x + 4 - 4 * n, fy + 8 - len(b)))
+    # Τα κτίρια του ΠΑΙΧΝΙΔΙΟΥ (M7, game/buildings.asm): (εικόνα, i0, j0, n),
+    # ΜΕΤΑ από όλους τους πόρους της σειράς του μπροστινού τους πλακιδίου.
+    for b, i0, j0, n in blds:
+        x, _ = world_xy(i0, j0)
+        _, fy = world_xy(i0 + n - 1, j0 + n - 1)
+        objs.append((i0 + j0 + 2 * (n - 1), 1e9, b, x + 4 - 4 * n,
+                     fy + 8 - len(b)))
     sets = {s.name: s for s in units.all_sets()}
     for name, frame, i, j, who in (UNITS if towns else ()):
         f = sets[name].frames[frame]

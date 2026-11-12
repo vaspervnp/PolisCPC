@@ -58,6 +58,8 @@ U_TEAM      equ 28
 U_STUCK     equ 29              ; βήματα με ολίσθηση στη σειρά
 U_TGT       equ 30              ; ο κοντινότερος εχθρός (255 κανένας)
 U_OCELL     equ 31              ; το κελί του ΔΙΚΟΥ της στόχου (σχηματισμός)
+U_WH        equ 17              ; ακολούθηση τοίχου: ποιο σημείο πορείας (το
+                                ; δεύτερο byte του U_FRAME, μόνο για F_FIXED)
 
 STUCK_MAX   equ 48
 
@@ -144,9 +146,13 @@ nav_init:
         ld (ix+U_TY+1),h
         jr .re
 .pl:    call unit_pxy
+        ld a,(ix+U_TEAM)        ; ελεύθερη θέση (M7): σε κανέναν κάδο
+        inc a
+        jr z,.nb
         call unit_tile
         call unit_inblk
         call bucket_update
+.nb:
         pop af
         inc a
         cp UNITS
@@ -462,7 +468,7 @@ tile_cell:
 ; ΜΟΙΡΑΣΜΕΝΟ σε καρέ: εδώ μόνο η αρχή, και το field_cont (από το units_tick)
 ; βγάζει ως BFS_N κελιά από την ουρά ανά καρέ. Ώσπου να τελειώσει, το
 ; field_tc του πεδίου είναι 255: οι μονάδες πάνε ίσια.
-BFS_N       equ 128
+BFS_N       equ 96
 field_build:
         ld (n_cell),a
         ld a,1
@@ -775,13 +781,21 @@ follow:
         ld b,a
         call try_step
         jp z,nav_ok
-        ld a,(n_dist)           ; εμπόδιο: αρχίζει να ακολουθεί
+        call way_hash           ; εμπόδιο: αρχίζει να ακολουθεί
+        ld (ix+U_WH),a
+        ld a,(n_dist)
         ld (ix+U_WD),a
         ld (ix+U_STUCK),0
         ld a,(n_gd)
         ld hl,rot_start
         jr .try
-.on:    ld a,(n_dist)           ; ακολουθεί: φεύγει;
+.on:    call way_hash           ; άλλαξε το σημείο πορείας (άλλο κελί): η
+        cp (ix+U_WH)            ; απόσταση αναφοράς ξανά από εδώ — αλλιώς
+        jr z,.same              ; συγκρίνει αποστάσεις από διαφορετικά σημεία
+        ld (ix+U_WH),a          ; και κάνει κύκλους γύρω από το εμπόδιο
+        ld a,(n_dist)
+        ld (ix+U_WD),a
+.same:  ld a,(n_dist)           ; ακολουθεί: φεύγει;
         cp (ix+U_WD)
         jr nc,.keep
         ld a,(g_x)
@@ -838,6 +852,13 @@ follow:
         jp c,nav_mv
         ld (ix+U_WF),0          ; δεν βγαίνει: σταματάει
         xor a
+        ret
+
+; -> A = (n_wx + n_wy) low: ποιο σημείο πορείας.
+way_hash:
+        ld a,(n_wx)
+        ld hl,n_wy
+        add a,(hl)
         ret
 
 ; A -> -1, 0, 1.

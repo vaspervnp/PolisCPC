@@ -111,35 +111,43 @@ calc_cam_h:
 
 ; Ένα βήμα κύλισης από τα sdx, sdy.
 ;
-; ΔΙΑΓΩΝΙΑ: ΕΝΑΛΛΑΞ. Μία λωρίδα ανά καρέ — σειρά στο ένα, στήλη στο επόμενο
-; (sdiag). Δύο λωρίδες στο ίδιο καρέ είναι ως 53 ms, πάνω από τα 40 των
-; 25 Hz. Αν ο άξονας της σειράς του είναι ήδη στην άκρη (το scr_s δεν
-; άλλαξε), κυλάει ο άλλος στο ίδιο καρέ.
+; ΚΑΘΕΤΑ: ΣΕ ΔΥΟ ΚΑΡΕ. Η σειρά 8 γραμμών που θα αποκαλυφθεί είναι στη
+; μνήμη πέρα από τις 18 ορατές (κάθε οκτάδα έχει 2 KB, φαίνονται 1.440
+; bytes): ζωγραφίζεται πριν φανεί. Στο πρώτο καρέ το έδαφος και οι 4 πρώτες
+; (πίσω) σειρές ρόμβων των πόρων, στο δεύτερο οι 3 υπόλοιπες, ο καθρέφτης,
+; και η κάμερα κινείται (v_pend). Πάνω από πυκνό δάσος η λωρίδα ήταν ~25 ms
+; σε ένα καρέ. Η κάθετη κύλιση γίνεται 100 γραμμές/s, όσο η οριζόντια σε
+; pixels.
+;
+; ΔΙΑΓΩΝΙΑ: ΕΝΑΛΛΑΞ. Μία λωρίδα ανά καρέ — στήλη στο ένα, σειρά (δύο καρέ)
+; στο επόμενο (sdiag). Αν ο άξονας της σειράς του είναι ήδη στην άκρη,
+; κυλάει ο άλλος στο ίδιο καρέ.
 scroll_apply:
+        ld a,(v_pend)           ; η κάθετη που άρχισε τελειώνει, μόνη της
+        or a
+        jp nz,scroll_v2
         ld a,(sdy)
         or a
         jr z,.h
         ld a,(sdx)
         or a
         jr z,.v
-        ld hl,(scr_s)
-        push hl
         ld a,(sdiag)
         xor 1
         ld (sdiag),a
         jr z,.hfirst
-        call .v
-        pop de
-        ld hl,(scr_s)
-        or a
-        sbc hl,de
+        ld a,(sdy)
+        call scroll_v           ; NZ: άρχισε
         ret nz
 .h:     ld a,(sdx)
         or a
         ret z
-        jr scroll_h
+        jp scroll_h
 .hfirst:
-        call .h
+        ld hl,(scr_s)
+        push hl
+        ld a,(sdx)
+        call scroll_h
         pop de
         ld hl,(scr_s)
         or a
@@ -182,15 +190,22 @@ scroll_h:
         call build_lines
         call calc_cam_h
         pop bc
+        push bc
+        ld a,RAM_RES            ; οι πόροι είναι στην C6
+        call setram
+        pop bc
+        push bc
         ld a,c
-        push af
         call draw_column        ; έδαφος ΚΑΙ πόροι
-        pop af
-        call mirror_column
+        pop bc
+        ld a,c
+        call mirror_column      ; (επιστρέφει με την C0)
         pop hl
         ld (scr_s),hl
         ret
 
+; A = sdy (±1): το πρώτο καρέ μιας σειράς. NZ αν άρχισε, Z αν η κάμερα
+; είναι ήδη στην άκρη.
 scroll_v:
         ld hl,(cam_y)           ; cam_y + 1 ≥ 0 πάντα: συγκρίσεις χωρίς πρόσημο
         inc hl
@@ -199,49 +214,141 @@ scroll_v:
         ld de,MAX_CAM_Y - 8 + 2 ; κάτω: cam_y + 8 ≤ MAX
         or a
         sbc hl,de
-        ret nc
-        ld hl,(cam_y)
+        jr nc,.edge
         ld de,8
-        add hl,de
-        ld (cam_y),hl
-        ld hl,(scr_s)
-        ld de,40
-        add hl,de
-        ld c,VIEW_H - 8         ; η νέα σειρά: κάτω
+        ld bc,40
+        ld a,VIEW_H - 8         ; η νέα σειρά: κάτω
         jr .v
 .up:    ld de,MIN_CAM_Y + 8 + 1 ; πάνω: cam_y - 8 ≥ MIN
         or a
         sbc hl,de
-        ret c
-        ld hl,(cam_y)
+        jr c,.edge
         ld de,-8
+        ld bc,-40
+        xor a
+.v:     ld (v_y0),a
+        ld hl,(cam_y)
         add hl,de
-        ld (cam_y),hl
+        ld (v_ny),hl
         ld hl,(scr_s)
-        ld de,-40
-        add hl,de
-        ld c,0
-.v:     ld a,h
+        add hl,bc
+        ld a,h
         and 3
         ld h,a
+        ld (v_ns),hl
+        call v_enter
+        ld a,(v_y0)             ; το έδαφος
+        call draw_rows
+        ld a,RAM_RES            ; οι πόροι είναι στην C6
+        call setram
+        xor a                   ; τα κτίρια της λωρίδας (buildings.asm)
+        ld (rg_x0),a
+        ld a,80
+        ld (rg_x1),a
+        ld a,(v_y0)
+        ld (rg_y0),a
+        add a,8
+        ld (rg_y1),a
+        call bld_cands
+        ld a,(v_y0)             ; οι πίσω σειρές των πόρων
+        ld b,4
+        call strip_resources
+        ld a,RAM_BASE
+        call setram
+        ld hl,(var_r)
+        ld (v_r),hl
+        call v_leave
+        ld a,1
+        ld (v_pend),a
+        or a                    ; NZ
+        ret
+.edge:  xor a                   ; Z
+        ret
+
+; Το δεύτερο καρέ: οι υπόλοιπες σειρές των πόρων, ο καθρέφτης, και η κάμερα.
+scroll_v2:
+        call v_enter
+        ld hl,(v_r)
+        ld (var_r),hl
+        ld a,RAM_RES
+        call setram
+        ld a,3
+        call strip_more
+        ld a,255                ; τα κτίρια μπροστά από όλες
+        call bld_flush
+        ld a,RAM_BASE
+        call setram
+        ld a,(v_y0)
+        call mirror_rows
+        call v_leave
+        xor a
+        ld (v_pend),a
+        ld hl,(v_ny)
+        ld (cam_y),hl
+        ld hl,(v_ns)
         push hl
-        push bc
         call build_lines
-        call calc_cam_h
-        pop bc
-        ld a,c
+        pop hl
+        ld (scr_s),hl
+        ret
+
+; Για τη λωρίδα που δεν φαίνεται ακόμα: η κάμερα της νέας θέσης (cam_y), οι
+; 8 γραμμές της στον πίνακα γραμμών με τη νέα μετατόπιση (οι παλιές στο
+; v_save), και το ψαλίδι των πόρων στις 8 γραμμές. Ο πίνακας μένει κατά τα
+; άλλα της ορατής εικόνας: οι μονάδες ζωγραφίζονται σωστά στο ίδιο καρέ.
+v_enter:
+        ld hl,(cam_y)
+        ld (v_oy),hl
+        ld hl,(v_ny)
+        ld (cam_y),hl
+        ld a,(v_y0)
         ld (clip_y0),a
         add a,8
         ld (clip_y1),a
-        ld a,c
-        call draw_rows
-        ld a,(clip_y0)
-        call strip_resources
-        ld a,(clip_y0)
-        call mirror_rows
-        call clip_full
-        pop hl
-        ld (scr_s),hl
+        call v_ent              ; HL = οι 8 θέσεις στο line_addr
+        push hl
+        ld de,v_save
+        ld bc,16
+        ldir
+        pop de
+        ld hl,(v_ns)            ; off = 2 v_ns + (17 x 80 κάτω, 0 πάνω)
+        add hl,hl
+        ld a,(v_y0)
+        or a
+        jr z,.r0
+        ld bc,(VIEW_H / 8 - 1) * 80
+        add hl,bc
+.r0:    ld c,l
+        ld a,h
+        and 7
+        or #C0
+        ld b,8
+.e:     ex de,hl
+        ld (hl),c
+        inc hl
+        ld (hl),a
+        inc hl
+        ex de,hl
+        add a,8
+        djnz .e
+        ret
+
+v_leave:
+        ld hl,(v_oy)
+        ld (cam_y),hl
+        call v_ent
+        ex de,hl
+        ld hl,v_save
+        ld bc,16
+        ldir
+        jp clip_full
+
+v_ent:  ld a,(v_y0)
+        ld l,a
+        ld h,0
+        add hl,hl
+        ld de,line_addr
+        add hl,de
         ret
 
 clip_full:
@@ -281,6 +388,15 @@ clip_full:
 ; sprites που κρέμονται από κάτω προς τα πάνω στο παράθυρο.
 draw_column:
         ld (col_c),a
+        ld (rg_x0),a            ; τα κτίρια που την τέμνουν (buildings.asm)
+        add a,2
+        ld (rg_x1),a
+        ld a,(col_y0)
+        ld (rg_y0),a
+        ld a,(col_y1)
+        ld (rg_y1),a
+        call bld_cands
+        ld a,(col_c)
         ld hl,(cam_h)           ; w = h + c/2
         srl a
         ld e,a
@@ -294,6 +410,7 @@ draw_column:
         sra h
         rr l
         dec hl
+        ld (col_rr),hl          ; η σειρά ρόμβων της ομάδας (για τα κτίρια)
         push hl
         ld de,(col_w)
         add hl,de               ; s
@@ -352,12 +469,14 @@ draw_column:
         call col_tile
         ld (col_t1),hl
         ld (col_r1),a
+.j1:    jr .in                   ; όλο το ύψος: χωρίς ελέγχους (το col_redraw
+                                ; το κάνει «cp n», #FE, για ένα κομμάτι)
         ld a,(col_sy)           ; τα sprites από εδώ και κάτω αρχίζουν
         sub 16                  ; κάτω από το παράθυρο: τέλος
         jr c,.in
         ld hl,col_y1
         cp (hl)
-        ret nc
+        jp nc,.fin
 .in:    ld a,(col_n)
         cp 5
         jp c,.res               ; οι 4 τελευταίες: μόνο το sprite
@@ -368,6 +487,7 @@ draw_column:
         ld bc,7
         add hl,bc
         ld (col_lp),hl
+.j2:    jr .gw                   ; όπως το cw_j1
         ld a,(col_sy)           ; 4k = col_sy - 3: έξω από το col_y0..col_y1
         sub 3                   ; μόνο το sprite (ψαλιδισμένο)
         ld hl,col_y0
@@ -376,6 +496,7 @@ draw_column:
         ld hl,col_y1
         cp (hl)
         jp nc,.res
+.gw:
         ld a,(col_c)
         add a,e
         ld e,a
@@ -440,7 +561,10 @@ draw_column:
         dec e
         ld a,(hl)
         ld (de),a
-.res:   ld a,(col_r0)
+.res:   ld a,(cand_n)           ; τα κτίρια πίσω από αυτή τη σειρά:
+        or a                    ; r = r0 + (VIEW_H / 4 + 4 - col_n)
+        call nz,col_bflush
+        ld a,(col_r0)
         or a
         call nz,col_sprite
         ld hl,(col_t1)          ; το επόμενο γίνεται τρέχον
@@ -456,12 +580,28 @@ draw_column:
         ld a,(col_n)
         dec a
         jp nz,.grp
-        ret
+.fin:   ld a,255                ; και τα κτίρια μπροστά από όλες
+        jp bld_flush
+
+col_bflush:
+        ld a,(col_n)
+        neg
+        add a,VIEW_H / 4 + 4
+        ld e,a
+        ld d,0
+        ld hl,(col_rr)
+        add hl,de
+        jp row_flush
+
+cw_j1       equ draw_column.j1  ; τα δύο «jr» που αλλάζει το col_redraw
+cw_j2       equ draw_column.j2
 
 ; A = πόρος (1-15): το sprite του στη στήλη col_c, από τη γραμμή col_sy - 16
 ; (3..159: χωρίς πρόσημο), τα bytes 0-1 ή 2-3 του (col_par), ψαλιδισμένο στο
 ; col_y0..col_y1 (0..144 για την κύλιση· ένα κομμάτι για το gather.asm).
 col_sprite:
+        cp BLD_RES              ; πλακίδιο κτιρίου (M7): κανένα sprite
+        ret z
         dec a                   ; HL = res_gfx + (A-1)*128
         rrca
         ld l,a
@@ -743,7 +883,8 @@ copy_split:
         ldir
         ret
 
-; A = y0 (πολλαπλάσιο του 8): οι πόροι στη σειρά 8 γραμμών y0..y0+7.
+; A = y0 (πολλαπλάσιο του 8), B = πόσες σειρές ρόμβων (από τις 7, πίσω
+; πρώτα): οι πόροι στη σειρά 8 γραμμών y0..y0+7. Το strip_more συνεχίζει.
 ;
 ; Όπως το draw_resources, αλλά το ψαλίδι είναι ΙΔΙΟ για όλα τα πλακίδια μιας
 ; σειράς ρόμβων r: οι γραμμές l0..l0+n-1 του sprite, η γραμμή οθόνης, η
@@ -764,9 +905,12 @@ strip_resources:
         rr l
         inc hl
         ld (var_r),hl
-        ld a,7                  ; (8 + 16) / 4 + 1 σειρές
+        ld a,b                  ; ως (8 + 16) / 4 + 1 = 7 σειρές
+strip_more:                     ; A σειρές ακόμα, από το var_r
         ld (rows_left),a
-.row:   ld hl,(var_r)           ; ry = 4r - cam_y + 6 = y_top + 16
+.row:   ld hl,(var_r)           ; τα κτίρια πίσω από αυτή τη σειρά
+        call row_flush
+        ld hl,(var_r)           ; ry = 4r - cam_y + 6 = y_top + 16
         add hl,hl
         add hl,hl
         ld de,(cam_y)
@@ -911,6 +1055,8 @@ strip_resources:
 
 ; A = πόρος, C = X. Κρατάει BC, DE, HL.
 sr_blit:
+        cp BLD_RES              ; πλακίδιο κτιρίου (M7): κανένα sprite
+        ret z
         ld (sr_res),a
         ld a,c
         cp 77

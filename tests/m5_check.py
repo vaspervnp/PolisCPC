@@ -94,7 +94,10 @@ def main():
                         bad.append((k, b, bucket_of(u), t))
                     k = c.peek(PN + k)
                     n += 1
-        good = not bad and all(seen[k] == 1 for k in range(S.UNITS))
+        live = [k for k in range(S.UNITS)        # οι ελεύθερες θέσεις (M7): σε
+                if c.peek(S.UNIT_TAB + k * S.U_SIZE + U_TEAM) != 255]  # κανέναν
+        good = not bad and all(seen[k] == 1 for k in live) and \
+            len(seen) == len(live)
         g.report('κάδοι', good, '%s: %d μονάδες, η καθεμία μία φορά, στον '
                  'κάδο της θέσης της%s' % (when, len(seen),
                                            '' if not bad else ' %s' % bad[:3]))
@@ -183,10 +186,12 @@ def main():
 
     wrong, found = [], 0
     for k, u in enumerate(us):
+        if tab[k][U_TEAM] == 255:               # ελεύθερη θέση (M7)
+            continue
         b = bucket_of(u)
         best = None
         for v in us:
-            if tab[v['idx']][U_TEAM] == tab[k][U_TEAM]:
+            if tab[v['idx']][U_TEAM] in (tab[k][U_TEAM], 255):
                 continue
             if bucket_of(v) - b in (-15, -14, -13, -1, 0, 1, 13, 14, 15):
                 d = dist8(u, v)

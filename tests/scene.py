@@ -21,7 +21,7 @@ ORDER = 0xA680
 ACT_TAB = 0xA600
 ANCHOR_REC = UNIT_TAB + UNITS * U_SIZE
 CURSOR_REC = ANCHOR_REC + U_SIZE
-SETS = ['villager_m', 'swordsman', 'archer']
+SETS = ['villager_m', 'swordsman', 'archer', 'villager_carry']
 F_MOVE, F_SEL, F_WANDER, F_FIXED = 1, 2, 4, 16
 FACES = 'SENW'
 

@@ -25,6 +25,7 @@ IN_FIRE     equ 4
 IN_CMD      equ 5
 
 cursor_input:
+        call bld_input          ; τα πλήκτρα των κτιρίων (buildings.asm)
         ld a,9                  ; joystick: 0 πάνω, 1 κάτω, 2 αριστερά,
         call read_row           ; 3 δεξιά, 4 fire 2, 5 fire 1
         ld e,a
@@ -166,6 +167,8 @@ cur_world:
 ; κέρσορας είναι σχεδόν εκεί που πατήθηκε, η μονάδα κάτω του (η πιο
 ; μπροστινή)· αλλιώς όσες ΦΑΙΝΟΝΤΑΙ (το ORDER) και πατάνε μέσα στο κουτί.
 do_select:
+        ld a,255                ; κανένα κτίριο (το κλικ μπορεί να βρει)
+        ld (sel_bld),a
         call cur_world
         ld a,(sel_n)
         or a
@@ -208,7 +211,7 @@ do_select:
         ; ΚΛΙΚ: από τη μπροστινή (τέλος του ORDER) προς τα πίσω
         ld a,(ord_n)
         or a
-        ret z
+        jp z,bld_pick
         ld b,a
         add a,a
         ld l,a
@@ -231,7 +234,7 @@ do_select:
         jr nc,.cn
         jp unit_select
 .cn:    djnz .cl
-        ret
+        jp bld_pick             ; καμία μονάδα: κτίριο;
 .box:   ; ΚΟΥΤΙ: x0..x1, y0..y1 στον κόσμο
         ld hl,(cw_x)
         ld de,(ANCHOR_REC + U_WX)
@@ -334,6 +337,9 @@ cmp_hl_de:
 ; και σειρών (12 γραμμές), με τον κέρσορα στο κέντρο της πρώτης σειράς.
 ; Πάνω σε πόρο, οι χωρικοί αντί γι' αυτό πάνε να μαζέψουν (gather.asm).
 do_command:
+        ld a,(bmode)            ; διαλέγεις θέση για κτίριο
+        inc a
+        jp nz,bld_place
         call cur_world
         ld a,(sel_n)
         or a
@@ -437,9 +443,12 @@ do_command:
         ld a,(cmd_kind)
         inc a
         jr z,.nj
-        ld a,(ix+U_SET)
+        ld a,(ix+U_SET)         ; χωρικός: σετ 0, ή 3 όταν κουβαλάει
         or a
+        jr z,.vil
+        cp SET_CARRY
         jr nz,.nj
+.vil:
         push bc
         call job_start
         pop bc

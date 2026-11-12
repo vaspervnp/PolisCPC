@@ -33,6 +33,8 @@
 ;   #C000-#FFFF   οθόνη
 
 SCREEN      equ #C000
+RAM_RES     equ #C6             ; extra τράπεζα 2: πόροι και κτίρια
+RAM_CMP     equ #C7             ; extra τράπεζα 3: τα μεταγλωττισμένα sprites
 STACK_TOP   equ #C000           ; η στοίβα κατεβαίνει ΚΑΤΩ από την οθόνη
 
 GA          equ #7F             ; gate array: high byte της θύρας
@@ -59,6 +61,10 @@ start:
         ld (#0038),a
         ld hl,int_handler
         ld (#0039),hl
+        ld hl,rst_code          ; RST #28: η αλλαγή γραμμής των
+        ld de,#0028             ; μεταγλωττισμένων sprites (units.asm)
+        ld bc,rst_len
+        ldir
 
         ld bc,GA*256+GA_RMR     ; Mode 0, ROMs κλειστές
         out (c),c
@@ -83,7 +89,8 @@ start:
         inc hl
         djnz .z
         call units_init
-        call nav_init
+        call bld_init           ; το Κέντρο Πόλης στον χάρτη, πριν την εύρεση
+        call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
         call gather_init        ; οι πηγές, και οι αριθμοί του HUD
         ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
         call crtc_w
@@ -102,6 +109,7 @@ frame:
         jr z,.idle
         xor a
         ld (redraw),a
+        ld (v_pend),a           ; μια κάθετη κύλιση στη μέση: ξεχνιέται
         inc a
         ld (phase),a            ; 1 = σχεδιάζει (το διαβάζει το tests/m1_check.py)
         ld hl,0                 ; πλήρης σχεδίαση: η κύλιση ξεκινάει από το 0,
@@ -140,7 +148,15 @@ frame_work:
 ; Το παράθυρο χάρτη από το μηδέν: έδαφος, μετά οι πόροι από πάνω.
 render:
         call draw_ground
-        jp draw_resources
+        ld a,RAM_RES
+        call setram
+        call rg_full            ; τα κτίρια του παραθύρου (buildings.asm)
+        call bld_cands
+        call draw_resources
+        ld a,255                ; και όσα είναι μπροστά από όλους τους πόρους
+        call bld_flush
+        ld a,RAM_BASE
+        jp setram
 
 ; Όλη η οθόνη pen 0.
 clear_screen:
@@ -272,6 +288,8 @@ pen_pair:
         include "../data/nav.asm"
         include "../data/gather.asm"
         include "gather.asm"
+        include "../data/bld.asm"
+        include "buildings.asm"
 
 linebuf:
         ds 80
@@ -320,6 +338,13 @@ clip_y1:    db VIEW_H
 sdx:        db 0                ; κύλιση που ζητήθηκε αυτό το καρέ (scroll.asm)
 sdy:        db 0
 sdiag:      db 0                ; η διαγώνια κύλιση εναλλάξ (scroll.asm)
+v_pend:     db 0                ; η κάθετη κύλιση στη μέση (2 καρέ)
+v_y0:       db 0                ; η γραμμή της λωρίδας: 0 ή VIEW_H - 8
+v_ny:       dw 0                ; η νέα cam_y
+v_ns:       dw 0                ; η νέα μετατόπιση
+v_oy:       dw 0
+v_r:        dw 0                ; η επόμενη σειρά ρόμβων των πόρων
+v_save:     ds 16               ; οι 8 γραμμές του line_addr που άλλαξαν
 v_shx:      db 0                ; η κύλιση από το προηγούμενο καρέ μονάδων
 v_shy:      db 0
 rect_n:     db 0                ; ορθογώνια που σβήνονται/ζωγραφίζονται (units.asm)
@@ -406,10 +431,41 @@ nphase:     db 0                ; 1 -> 2 γύρω από το BFS (tests/m5_chec
 bphase:     db 0                ; 1 -> 2 γύρω από τη μέτρηση στόχευσης
 bench_req:  db 0
 t_bestd:    db 0                ; στόχευση
-hud_val:    dw 200, 200, 100, 200, TOWN_UNITS, 1    ; η μπάρα: τροφή, ξύλο,
+hud_val:    dw 200, 200, 100, 200, TOWN_UNITS, START_AGE ; η μπάρα: τροφή, ξύλο,
                                 ; χρυσό, πέτρα, πληθυσμός, εποχή (gather.asm)
-hud_dirty:  db 0
+hud_dirty:  db 0                ; bits 0-5: ποιοι αριθμοί της μπάρας άλλαξαν
 u_rescan:   db 0                ; units_forget: όλες οι ενεργές, στο επόμενο καρέ
+bmode:      db 255              ; ο τύπος κτιρίου που τοποθετείται (255 κανένας)
+sel_bld:    db 255              ; το επιλεγμένο κτίριο (255 κανένα)
+bk_prev:    db 255              ; το πλήκτρο κτιρίων του προηγούμενου καρέ
+cur_force:  db 0                ; ο κέρσορας άλλαξε όψη: ξαναζωγράφισέ τον
+bn_t:       db 0                ; bld_new
+bn_n:       db 0
+bp_ij:      dw 0                ; bld_place: j0, i0
+bp_slot:    db 0
+cand_n:     db 0                ; τα υποψήφια κτίρια μιας σχεδίασης
+cand_k:     db 0
+cand_c:     db 0
+cand:       ds CAND_MAX
+rg_x0:      db 0                ; η περιοχή της σχεδίασης
+rg_x1:      db 0
+rg_y0:      db 0
+rg_y1:      db 0
+bf_r:       db 0
+bb_sx:      dw 0                ; blit_bld
+bb_c0:      db 0
+bb_cn:      db 0
+bb_l0:      db 0
+bb_ln:      db 0
+bb_x:       db 0
+bb_y:       db 0
+bb_w2:      db 0
+col_rr:     dw 0                ; draw_column: η σειρά ρόμβων της ομάδας
+rq_x:       dw 0                ; η επανασχεδίαση ενός κτιρίου
+rq_yb:      dw 0
+rq_h:       db 0
+rq_n:       db 255
+bq_tot:     db 0                ; μονάδες σε όλες τις ουρές
 cmd_kind:   db 255              ; το είδος του πόρου κάτω από την εντολή
 cmd_sj:     db 0                ; (ld (cmd_sj),de: j και μετά i)
 cmd_si:     db 0
@@ -421,6 +477,15 @@ sp_bj:      db 0
 sp_bi:      db 0
 sp_best:    db 0
 src_spare:  dw 0
+nf_n:       db 0                ; near_free
+sn_kind:    db 0                ; src_next
+sn_r:       db 0
+sn_j:       db 0
+sn_i0:      db 0
+sn_dj:      db 0
+sn_best:    db 0
+sn_bi:      db 0
+sn_bj:      db 0
 hn_x:       db 0                ; hud_num
 hn_c:       db 0
 hn_d:       ds 4
@@ -436,7 +501,8 @@ s_key:      dw 0
 s_y:        db 0
 
 set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
-spr_tab:    dw spr_z0, spr_z1, spr_z2
+            dw SPR_BASE + 3 * SPR_STRIDE
+spr_tab:    dw spr_z0, spr_z1, spr_z2, spr_z3
 
 ; ------------------------------------------------------------ γραφικά
 ; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη: το byte του χάρτη
@@ -446,12 +512,11 @@ tile_gfx:
         incbin "../data/terrain.bin"
 TILE_PAGE   equ tile_gfx >> 8
         assert $ - tile_gfx == 256, 'terrain.bin must be exactly one page'
-cursor_gfx:                     ; κέρσορας, σημάδι επιλογής, γωνία -> C5
-        incbin "../data/cursor.bin"
-        align 128
-res_gfx:                        ; στοιχισμένο στα 128 (το blit το χρειάζεται)
-        assert (res_gfx & 127) == 0, 'res_gfx must be 128-aligned'
-        incbin "../data/resources.bin"
+
+; Οι πόροι (και τα κτίρια, M7) ζουν στην τράπεζα C6 (RAM_RES): res_gfx =
+; #4000. Οι ρουτίνες που ζωγραφίζουν πόρους τρέχουν με την C6 μέσα
+; (render, scroll_h, scroll_v, col_redraw).
+res_gfx     equ #4000
 
 ; Ως εδώ ό,τι χρειάζεται το παιχνίδι ΟΣΟ ΤΡΕΧΕΙ: πριν το παράθυρο τράπεζας.
 code_end:
@@ -487,6 +552,23 @@ spr_z1:
 spr_z2:
         lzx0
         incbin "../data/archer.bin"
+        lzclose
+; Η τράπεζα C6: πόροι και κτίρια (src/make_bank6.py).
+res_z:
+        lzx0
+        incbin "../data/bank6.bin"
+        lzclose
+; Κέρσορας, σημάδι επιλογής, γωνία -> C5 (μέσω της οθόνης).
+cursor_gfx:
+        incbin "../data/cursor.bin"
+; Τα μεταγλωττισμένα sprites (src/make_compiled.py) -> τράπεζα C7.
+cmp_z:
+        lzx0
+        incbin "../data/compiled.bin"
+        lzclose
+spr_z3:
+        lzx0
+        incbin "../data/villager_carry.bin"
         lzclose
 
 ; ΤΙΠΟΤΑ ΜΕ `align` ΜΕΤΑ ΑΠΟ ΜΠΛΟΚ LZX0: ο rasm στοιχίζει με τη διεύθυνση

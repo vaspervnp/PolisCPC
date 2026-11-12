@@ -10,8 +10,8 @@
 2. ΕΝΤΟΛΗ. Ο κέρσορας αλλού, RETURN: οι 6 περπατάνε, φτάνουν και
    ΣΤΑΜΑΤΑΝΕ ακριβώς στις θέσεις του σχηματισμού, με την όψη του τελευταίου
    τους βήματος (όπως το παρατηρεί ο έλεγχος καρέ προς καρέ).
-3. ΟΙ ΑΛΛΕΣ. Στο ίδιο διάστημα, ≥ 100 από τις υπόλοιπες έχουν κινηθεί
-   εκτός οθόνης (περιπλάνηση, τεμαχισμένη απόφαση).
+3. ΟΙ ΑΛΛΕΣ. Στο ίδιο διάστημα, ≥ 85% όσων περιπλανιούνται (104· οι 12
+   τελευταίες θέσεις είναι ελεύθερες από το M7) έχουν κινηθεί εκτός οθόνης.
 4. ΧΡΟΝΟΣ. Κάθε καρέ μονάδων όσο γίνονται όλα αυτά < 40 ms.
 5. ΣΥΝΘΕΣΗ. Ανάμεσα σε καρέ, η οθόνη είναι pixel προς pixel το φόντο με
    τις μονάδες του ORDER, τις αγκύλες των επιλεγμένων και τον κέρσορα· και
@@ -38,7 +38,7 @@ class Game:
         self.shots = shots
         self.sym = M.symbols()
         grd, res = M.mockup.make_map()
-        self.world = M.mockup.render_world(grd, res, towns=False)
+        self.world = M.game_world(grd, res)
         self.c = CPC()
         self.c.run_frames(5)
         assert self.c.quickload(os.path.join(M.BUILD, 'polis.sna'))
@@ -139,7 +139,7 @@ def main():
     # περιμένουμε είναι αυτή του ΤΕΛΕΥΤΑΙΟΥ βήματος που παρατηρήθηκε.
     pos = {i: (us[i]['wx'], us[i]['wy']) for i in want}
     faces = {i: us[i]['face'] for i in want}
-    for k in range(200):
+    for k in range(300):
         g.tick(1)
         for i in want:
             u = S.unit(c, i)
@@ -166,8 +166,10 @@ def main():
               if (us[i]['wx'], us[i]['wy']) != (before[i]['wx'],
                                                 before[i]['wy'])]
     offscreen = [i for i in others if us[i]['sy'] == 255]
-    g.report('οι άλλες', len(offscreen) >= 100,
-             '%d κινήθηκαν εκτός οθόνης στο ίδιο διάστημα' % len(offscreen))
+    wander = [i for i in range(12, S.UNITS) if us[i]['fl'] & S.F_WANDER]
+    g.report('οι άλλες', len(offscreen) >= 0.85 * len(wander),
+             '%d από τις %d που περιπλανιούνται κινήθηκαν εκτός οθόνης στο '
+             'ίδιο διάστημα' % (len(offscreen), len(wander)))
     g.report('σύνθεση', g.compose('arrived'), 'μετά την άφιξη')
 
     # ------------------------------------------------------ 6. κλικ

@@ -45,7 +45,9 @@ draw_resources:
         add a,2
         ld (rows_left),a
 
-.row:   ; k = r + h + clip_x0/2. Το πρώτο πλακίδιο που ακουμπάει το παράθυρο
+.row:   ld hl,(var_r)           ; τα κτίρια πίσω από αυτή τη σειρά
+        call row_flush
+        ; k = r + h + clip_x0/2. Το πρώτο πλακίδιο που ακουμπάει το παράθυρο
         ; είναι το i = k >> 1, στο X οθόνης clip_x0 - 2*(k AND 1).
         ld hl,(var_r)
         ld de,(cam_h)
@@ -201,6 +203,8 @@ draw_resources:
 
 ; Πόρος A στο πλακίδιο του σαρωτή: X από το IXL. Κρατάει BC, DE, HL, IX.
 res_here:
+        cp BLD_RES              ; πλακίδιο κτιρίου (M7): κανένα sprite
+        ret z
         push bc
         push de
         push hl
