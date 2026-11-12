@@ -351,7 +351,20 @@ hud_init:
 ; Γύρω από το Κέντρο Πόλης (17 x 17) και από κάθε μονάδα του παίκτη. Το
 ; FD_TAB ελεύθερο ΜΕΤΑ: η πρώτη σχεδίαση τα ζωγραφίζει όλα.
 fog_init:
-        ld a,(fog_on)           ; χωρίς ομίχλη: όλα εξερευνημένα
+        ld hl,SVM_AT            ; η αποθήκευση (savegame.asm) στις κρυφές
+        ld de,SVM_STORE         ; σειρές της σελίδας του HUD (M12)
+        ld bc,SVM_LEN
+        ldir
+        ld a,(load_req)         ; το μενού διάλεξε φόρτωμα: όλα από τη
+        or a                    ; δισκέτα — αν βρεθεί παρτίδα
+        jr z,.new
+        ld hl,SVM_AT
+        ld de,SVM
+        ld bc,SVM_LEN
+        ldir
+        call mod_load
+        jr nc,load_cont
+.new:   ld a,(fog_on)           ; χωρίς ομίχλη: όλα εξερευνημένα
         or a
         jr nz,.on
         ld a,RAM_RES
@@ -395,4 +408,40 @@ fog_init:
 .f:     ld (hl),255
         inc hl
         djnz .f
+        ret
+
+; Μετά το φόρτωμα της παρτίδας (M12): οι εικόνες της εποχής της και ο
+; οπλίτης ξανά από τη δισκέτα, όπως στο παιχνίδι (age_load: η εποχή
+; ανεβαίνει από τη 2 — και ο πίνακας bld_types, που δεν σώζεται).
+load_cont:
+        ld a,(hud_val + 10)
+        cp 3
+        ret c
+        ld hl,(hud_dirty)       ; ό,τι γράφει το age_apply πέρα από τις
+        push hl                 ; εικόνες: όπως ήταν στην παρτίδα (αλλιώς
+        ld hl,(occ_dirty)       ; ξαναζωγραφίζει κτίρια, και η παρτίδα δεν
+        push hl                 ; συνεχίζει ίδια)
+        ld hl,(age_q)
+        push hl
+        push af
+        ld a,2
+        ld (hud_val + 10),a
+        ld a,3
+        ld (age_req),a
+        call age_load
+        pop af
+        cp 4
+        jr c,.back
+        ld a,4
+        ld (age_req),a
+        call age_load
+.back:  pop hl
+        ld a,l
+        ld (age_q),a
+        pop hl
+        ld a,l
+        ld (occ_dirty),a
+        pop hl
+        ld a,l
+        ld (hud_dirty),a
         ret

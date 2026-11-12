@@ -36,6 +36,18 @@ print('POLIS.BIN: %d bytes, #0040-#%04X· κώδικας ως #%04X (ελεύθ�
       '#4000: %d)' % (size, end - 1, code - 1, 0x4000 - code))
 assert code <= 0x4000, 'ο κώδικας μπαίνει στο παράθυρο τράπεζας #4000'
 assert end <= 0x8000, 'τα δεδομένα εκκίνησης φτάνουν στον χάρτη #8000'
-assert end <= 0x7A30, 'το POLIS.BIN φτάνει στο BOOT (#7A30, main.asm), όπου αντιγράφεται η εκκίνηση'
+# το map_z, όπως το βλέπει ο κώδικας: το «ld hl,map_z» στην αρχή του start
+# (di, ld sp,nn, ld hl,nn) — το .sym έχει τις ασυμπίεστες θέσεις μετά από LZX0
+body = d[128:]
+assert body[0] == 0xF3 and body[1] == 0x31 and body[4] == 0x21, 'start'
+map_z = body[5] | body[6] << 8
+assert map_z <= 0x7A30, 'το POLIS.BIN φτάνει στο BOOT (#7A30, main.asm) πριν από τον χάρτη (map_z, ο τελευταίος: αποσυμπιέζεται πριν αντιγραφεί το BOOT)'
+print('ως τον χάρτη: #%04X (ελεύθερα ώς το BOOT: %d· ως το #8000: %d)' % (map_z - 1, 0x7A30 - map_z, 0x8000 - end))
 PY
+# Τα αρχεία χωρίς κεφαλίδα AMSDOS (M12, src/dsk.py): οι εποχές ανά
+# πολιτισμό και ο οπλίτης.
+python3 src/dsk.py build/polis.dsk \
+    $(for c in E G B A R P F K; do echo AGE3$c.BIN data/age3$c.bin AGE4$c.BIN data/age4$c.bin; done) \
+    HOPL.BIN data/c5_slot3.bin \
+    --empty SAVE.BIN 43008
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

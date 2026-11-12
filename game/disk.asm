@@ -5,18 +5,21 @@
 ; τομέας #C1: οι 16 πρώτες εγγραφές) και τα blocks ενός αρχείου, σε μορφή
 ; DATA (40 τροχιές x 9 τομείς #C1-#C9 των 512 bytes· block b = οι λογικοί
 ; τομείς 2b, 2b + 1· λογικός τομέας L = τροχιά L / 9, τομέας #C1 + L mod 9).
-; Ένα extent (ως 16 KB), blocks < 128.
+; Ένα extent (ως 16 KB).
 ;
-; Στη ζώνη LOAD_AT της C6 (IMG0 - 128): το αρχείο ΜΑΖΙ με την κεφαλίδα
-; AMSDOS (128 bytes), ώστε τα δεδομένα να πέφτουν στο IMG0. Κάθε block
-; ολόκληρο: το αρχείο πρέπει να χωράει ως το CMP_RED μαζί με την ουρά.
+; Στη ζώνη LOAD_AT της C6 (#4A00): τα αρχεία των εποχών και του οπλίτη
+; είναι ΧΩΡΙΣ κεφαλίδα AMSDOS (src/dsk.py, M12). Κάθε block ολόκληρο: το
+; αρχείο πρέπει να χωράει ως το CMP_RED μαζί με την ουρά — και η ουρά
+; σβήνει την αρχή της ομίχλης (FOG), που το age_load κρατάει στην άκρη.
 ;
 ; Χωρίς διακοπές όσο διαβάζεται ένας τομέας (~16 ms, 32 µs ανά byte): το
 ; split του HUD χάνει κάποια καρέ — είναι το φόρτωμα της νέας εποχής.
 
+        include "../data/age3.asm"      ; AGE_AT, AGE_TAB_LEN, cult_let
+
 FDC_MSR     equ #FB7E           ; κατάσταση (με το B = #FB)
 MOTOR       equ #FA7E
-LOAD_AT     equ IMG0 - 128
+LOAD_AT     equ AGE_AT          ; (M12: τα αρχεία χωρίς κεφαλίδα, src/dsk.py)
 
         assert LOAD_AT + 6 * 1024 <= CMP_RED, 'AGE3.BIN: 6 blocks'
 
@@ -47,12 +50,18 @@ disk_load:
         xor a
         call fdc_out
         call fdc_sense
-        ld de,#00C1             ; ο κατάλογος
-        ld hl,LOAD_AT
+        ld de,#00C1             ; ο κατάλογος: 4 τομείς, 64 εγγραφές (M12:
+        ld hl,LOAD_AT           ; 16 αρχεία εποχών, το SAVE.BIN)
+.dir:   push de
         call fdc_read
+        pop de
+        inc e
+        ld a,e
+        cp #C5
+        jr c,.dir
         pop de                  ; DE = το όνομα
         ld hl,LOAD_AT
-        ld b,16
+        ld b,64
 .e:     push bc
         push de
         push hl
@@ -95,9 +104,9 @@ disk_load:
 .b:     ld a,(ix+0)
         or a
         jr z,.ok
-        add a,a                 ; L = 2 b
+        ld c,0                  ; L = 2 b, 2 b + 1
         call .sec
-        inc a
+        inc c
         call .sec
         inc ix
         djnz .b
@@ -112,17 +121,31 @@ disk_load:
         pop af
         ei
         ret
-.sec:   push af                 ; ο λογικός τομέας A -> HL, HL += 512
-        push bc
-        ld d,-1
-.dv:    inc d
-        sub 9
-        jr nc,.dv
-        add a,#C1 + 9
-        ld e,a
+.sec:   push af                 ; ο λογικός τομέας 2 A + C -> HL, HL += 512
+        push bc                 ; (16 bits: τα blocks φτάνουν ως το 179, M12)
+        push hl
+        ld l,a
+        ld h,0
+        add hl,hl
+        ld b,h
+        add hl,bc
+        call l_ts
+        pop hl
         call fdc_read
         pop bc
         pop af
+        ret
+
+; HL = λογικός τομέας (< 360) -> D = τροχιά, E = τομέας (#C1-#C9).
+l_ts:   ld de,-9
+        ld b,-1
+.dv:    inc b
+        add hl,de
+        jr c,.dv
+        ld a,l
+        add a,#C1 + 9
+        ld e,a
+        ld d,b
         ret
 
 ; A -> το FDC (φάση εντολής). Κρατάει όλα εκτός από τις σημαίες.
@@ -240,6 +263,8 @@ fdc_rd1:
         ei
         ret
 
-age3_name:  db "AGE3    BIN"
+; Τα ονόματα: το 5ο γράμμα του AGE3/AGE4 είναι ο πολιτισμός (το μενού το
+; αλλάζει, M12· και σώζεται με την παρτίδα).
+age3_name:  db "AGE3G   BIN"
 hopl_name:  db "HOPL    BIN"
-age4_name:  db "AGE4    BIN"
+age4_name:  db "AGE4G   BIN"

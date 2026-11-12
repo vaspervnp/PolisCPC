@@ -138,13 +138,18 @@ def painted(u, spr):
     return spr
 
 
-def bank6(age=None):
-    """Η C6 όπως είναι στην εποχή: από τη Χαλκού (3) με το AGE3.BIN / AGE4.BIN
-    στο IMG0."""
+CULTURE = 'G'                   # το γράμμα του πολιτισμού (M12, make_bank6)
+
+
+def bank6(age=None, culture=None):
+    """Η C6 όπως είναι στην εποχή: από τη Χαλκού (3) με το αρχείο της εποχής
+    του πολιτισμού (AGE3G.BIN κλπ., χωρίς κεφαλίδα) στο AGE_AT (M12)."""
     if age not in (3, 4):
         return BANK6
-    a3 = open(os.path.join(M.ROOT, 'data', 'age%d.bin' % age), 'rb').read()
-    k = MB.IMG0 - 0x4000
+    a3 = open(os.path.join(M.ROOT, 'data', 'age%d%s.bin'
+                           % (age, culture or CULTURE)),
+              'rb').read()
+    k = MB.AGE_AT - 0x4000
     return BANK6[:k] + a3 + BANK6[k + len(a3):]
 
 

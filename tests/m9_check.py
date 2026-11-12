@@ -184,7 +184,7 @@ def main():
     off = 0
     addr = {}
     for key, *_ in MB.TYPES:
-        addr[key] = MB.IMG0 + off
+        addr[key] = MB.AGE_AT + 4 * len(MB.TYPES) + off   # (M12: μετά τον πίνακα)
         off += len(MB.encode(a3[key]))
     for k, (key, *_) in enumerate(MB.TYPES):
         row = sym['BLD_TYPES'] + k * 18

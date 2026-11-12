@@ -14,8 +14,6 @@
 
         include "../data/minimap.asm"
 MM_T        equ 5               ; 1/300 s από την αρχή του καρέ: ως εκεί
-        assert (mm_f & 255) <= 256 - MM_N && (mm_penl & 255) <= 240, 'minimap tables: one page'
-        assert (mm_ter & 255) <= 240 && (mm_res & 255) <= 240, 'minimap tables: one page'
 
 ; Από το units_tick, με την C0.
 mm_line:
@@ -141,8 +139,10 @@ mm_pl:  push hl
         pop hl
         ret
 
-; HL = πίνακας (μέσα σε μία σελίδα), A = δείκτης -> A = το στοιχείο.
+; HL = πίνακας, A = δείκτης -> A = το στοιχείο.
 mm_tab: add a,l
         ld l,a
-        ld a,(hl)
+        jr nc,.n
+        inc h
+.n:     ld a,(hl)
         ret

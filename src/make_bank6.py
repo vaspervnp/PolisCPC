@@ -39,8 +39,18 @@ DATA = os.path.join(gfx.OUT, 'data')
 ORG = 0x4000
 MASK_PG = 0x4900                # η σελίδα μάσκας των κτιρίων
 IMG0 = 0x4A80                   # οι εικόνες (και πριν, 128 bytes κεφαλίδα)
-CULTURE = 'greek'
+CULTURE = 'greek'               # των εικόνων της εκκίνησης και των ελέγχων
 START_AGE = 2
+# Οι πολιτισμοί του μενού (M12), με το γράμμα των αρχείων τους στη δισκέτα
+# (AGE3<γράμμα>.BIN, AGE4<γράμμα>.BIN). Στις δύο πρώτες εποχές όλοι μοιάζουν
+# (graphics.md): ο πολιτισμός φαίνεται από τη Χαλκού.
+CULTURES = [('egypt', 'E'), ('greek', 'G'), ('babylon', 'B'), ('asia', 'A'),
+            ('rome', 'R'), ('persia', 'P'), ('phoenicia', 'F'), ('celt', 'K')]
+# Τα αρχεία των εποχών (χωρίς κεφαλίδα, src/dsk.py) πέφτουν στο AGE_AT της
+# C6: πρώτα ο πίνακας (ανά τύπο: ύψος, εικόνα dw, άλλαξε), μετά οι εικόνες,
+# ως το FOG (game/fog.asm).
+AGE_AT = 0x4A00
+FOG = 0x5F80
 INFO = {b['key']: b for b in json.load(open(os.path.join(
     gfx.OUT, 'buildings.json')))['buildings']}
 
@@ -84,7 +94,8 @@ TRAIN_KEY = 'T'
 UNITS = {'villager_m': ((50, 0, 0, 0), 200),
          'swordsman':  ((35, 0, 15, 0), 250),
          'archer':     ((40, 20, 0, 0), 250),
-         'hoplite':    ((60, 0, 40, 0), 300)}
+         'hoplite':    ((60, 0, 40, 0), 250)}  # (ένα byte: ως 255 — ήταν 300, M12)
+assert all(t <= 255 for _, t in UNITS.values()), 'καρέ εκπαίδευσης: ένα byte'
 
 
 def min_age(key):
@@ -149,17 +160,6 @@ def main():
     blob += bytes(IMG0 - ORG - len(blob))
     start = age_images(START_AGE)
     bronze = age_images(3)
-    ages = {}                               # οι εποχές 3, 4: όλοι οι τύποι,
-    for age in (3, 4):                      # από το IMG0, και ποιοι άλλαξαν
-        now, before = age_images(age), age_images(age - 1)
-        blob_a, rows_a = bytearray(), []
-        for key, *_ in TYPES:
-            img = now[key]
-            rows_a.append((len(img), IMG0 + len(blob_a),
-                           int(before.get(key) != img)))
-            blob_a += encode(img)
-        ages[age] = (blob_a, rows_a)
-    a3, a3rows = ages[3]
     rows = []
     for k, (key, hot, pre, cost, pts, unit) in enumerate(TYPES):
         img = start.get(key) or bronze[key]     # (ναός κλπ: χωρίς εικόνα ως
@@ -184,23 +184,18 @@ def main():
     red = open(os.path.join(DATA, 'compiled_red.bin'), 'rb').read()
     free = cj['red_org'] - ORG - len(blob)
     assert free >= 0, 'η C6 δεν χωράει τους κόκκινους: %d' % free
-    for age, (blob_a, rows_a) in ages.items():
-        assert IMG0 + len(blob_a) + 1024 <= cj['red_org'], \
-            'η εποχή %d δεν χωράει: %d' % (age, len(blob_a))
-        with open(os.path.join(DATA, 'age%d.bin' % age), 'wb') as f:
-            f.write(blob_a)
+    sizes = age_files()
     with open(os.path.join(DATA, 'age3.asm'), 'w') as f:
-        f.write('; age3.asm — ΠΑΡΑΓΕΤΑΙ από src/make_bank6.py. Οι εποχές 3 '
-                '(Χαλκού) και 4\n; (Σιδήρου), M9: ανά τύπο το ύψος, η εικόνα '
-                '(στην C6, από το AGE3.BIN /\n; AGE4.BIN) και αν άλλαξε από '
-                'την προηγούμενη εποχή (1: ξαναζωγραφίζεται).\n\n')
-        for age, (blob_a, rows_a) in ages.items():
-            f.write('AGE%d_LEN    equ %d\nage%d_tab:\n%s'
-                    % (age, len(blob_a), age,
-                       ''.join('        db %d\n        dw #%04X\n        db %d'
-                               '                    ; %s\n'
-                               % (h, a, ch, t[0]) for (h, a, ch), t
-                               in zip(rows_a, TYPES))))
+        f.write('; age3.asm — ΠΑΡΑΓΕΤΑΙ από src/make_bank6.py. Τα αρχεία των '
+                'εποχών 3 (Χαλκού)\n; και 4 (Σιδήρου), M9/M12: ένα ανά '
+                'πολιτισμό, χωρίς κεφαλίδα, στο AGE_AT\n; της C6 — ο πίνακας '
+                '(ανά τύπο: ύψος, εικόνα, άλλαξε) και μετά οι εικόνες.\n\n'
+                'AGE_AT      equ #%04X\nAGE_TAB_LEN equ %d\nAGE_MAX     equ %d'
+                '             ; το μεγαλύτερο αρχείο\n'
+                'cult_let:   db "%s"         ; τα γράμματα των αρχείων, με τη '
+                'σειρά του μενού\n'
+                % (AGE_AT, 4 * len(TYPES), max(sizes),
+                   ''.join(l for _, l in CULTURES)))
     blob += bytes(free) + red
     assert len(blob) <= 0x4000
     with open(os.path.join(DATA, 'bank6.bin'), 'wb') as f:
@@ -237,10 +232,37 @@ def main():
     print('data/bank6.bin  %d bytes (πόροι %d + %d τύποι κτιρίων, %d ελεύθερα, '
           'οι κόκκινοι στο #%04X)' % (len(blob), len(res), len(TYPES), free,
                                       cj['red_org']))
-    for age, (blob_a, rows_a) in ages.items():
-        print('data/age%d.bin   %d bytes, IMG0 #%04X ως #%04X· αλλάζουν %s'
-              % (age, len(blob_a), IMG0, IMG0 + len(blob_a),
-                 [t[0] for (h, a, ch), t in zip(rows_a, TYPES) if ch]))
+    print('data/age[34]?.bin  %d πολιτισμοί x 2, ως %d bytes (ως το #%04X)'
+          % (len(CULTURES), max(sizes), AGE_AT + max(sizes)))
+
+
+def age_files():
+    """data/age3<γράμμα>.bin, age4<γράμμα>.bin για κάθε πολιτισμό -> τα
+    μεγέθη τους."""
+    global CULTURE
+    keep, sizes = CULTURE, []
+    for culture, letter in CULTURES:
+        CULTURE = culture
+        for age in (3, 4):
+            now, before = age_images(age), age_images(age - 1)
+            tab, imgs = bytearray(), bytearray()
+            at = AGE_AT + 4 * len(TYPES)
+            for key, *_ in TYPES:
+                img = now[key]
+                a = at + len(imgs)
+                tab += bytes([len(img), a & 255, a >> 8,
+                              int(before.get(key) != img)])
+                imgs += encode(img)
+            data = tab + imgs
+            assert AGE_AT + len(data) <= FOG, \
+                '%s εποχή %d: %d bytes, πέρα από το FOG' % (culture, age,
+                                                           len(data))
+            with open(os.path.join(DATA, 'age%d%s.bin' % (age, letter)),
+                      'wb') as f:
+                f.write(data)
+            sizes.append(len(data))
+    CULTURE = keep
+    return sizes
 
 
 if __name__ == '__main__':

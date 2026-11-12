@@ -46,6 +46,8 @@ CRTC_DAT    equ #BD
 HW_BLACK    equ #54
 HW_RED      equ #4C             ; firmware 6, bright red
 HW_GREEN    equ #52             ; firmware 18, bright green
+HW_YELLOW   equ #4A             ; firmware 24, bright yellow
+BD_DISK     equ HW_YELLOW       ; το περιθώριο όσο σώζεται / φορτώνεται (M12)
 
         ifdef SNA
         buildsna                ; ο τύπος εξόδου: snapshot αντί για .bin
@@ -57,6 +59,11 @@ HW_GREEN    equ #52             ; firmware 18, bright green
 start:
         di
         ld sp,STACK_TOP
+        ifndef BARS
+        ld hl,map_z             ; ο χάρτης στη θέση του (#8000), ΠΡΩΤΟΣ: είναι
+        ld de,MAP               ; το τελευταίο του POLIS.BIN, και μπορεί να
+        call dzx0               ; περνάει πάνω από το BOOT (M12)
+        endif
         ld hl,boot_phys         ; οι ρουτίνες της εκκίνησης στο BOOT (boot.asm)
         ld de,BOOT
         ld bc,BOOT_LEN
@@ -82,13 +89,15 @@ start:
         ; ΤΑ ΣΥΜΠΙΕΣΜΕΝΑ ΖΟΥΝ ΜΕΤΑ ΤΟΝ ΚΩΔΙΚΑ, ακόμα και πέρα από το #4000
         ; (κύρια RAM): διαβάζονται ΜΟΝΟ εδώ, με την C0, και πριν το HUD
         ; γράψει πάνω τους. Η οθόνη (#C000) είναι ο ενδιάμεσος χώρος.
-        ld hl,map_z             ; ο χάρτης στη θέση του (#8000)
-        ld de,MAP
-        call dzx0
+        ld hl,ugfx_phys         ; (ugfx.asm: μόνο εδώ, στο #B000)
+        ld de,UGFX
+        ld bc,UGFX_LEN
+        ldir
         call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
+        call menu               ; πολιτισμός ή φόρτωμα (menu.asm, M12)
         ld hl,init_phys         ; οι ρουτίνες της εκκίνησης στην οθόνη
-        ld de,INIT              ; (init.asm, M11)
-        ld bc,INIT_LEN
+        ld de,INIT              ; (init.asm, M11), και πίσω τους η
+        ld bc,INIT_LEN + SVM_LEN        ; αποθήκευση (savegame.asm, M12)
         ldir
         call hud_init           ; το HUD -> #4000, μέσω της οθόνης
         ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
@@ -146,6 +155,9 @@ frame:
         ld a,3
         ld (uphase),a           ; 3 = τρέχει το καρέ μονάδων (tests/m3_check.py)
         call units_tick
+        ld a,(save_req)         ; V (bank7.asm, snd_tick): η παρτίδα στη
+        or a                    ; δισκέτα, στο τέλος του καρέ (M12)
+        call nz,save_go
         ld a,4
         ld (uphase),a
         ld a,(bd_idle)
@@ -155,6 +167,20 @@ frame:
 ; Η δουλειά του καρέ. Στο M0 είναι άδεια: η κόκκινη λωρίδα δείχνει μόνο το
 ; κόστος του ίδιου του μετρητή. Τα επόμενα milestones μπαίνουν εδώ.
 frame_work:
+        ret
+
+; Η αποθήκευση (savegame.asm): από τις κρυφές σειρές της σελίδας του HUD
+; στην οθόνη, εκεί τρέχει, και μετά η οθόνη από την αρχή.
+save_go:
+        xor a
+        ld (save_req),a
+        ld hl,SVM_STORE
+        ld de,SVM
+        ld bc,SVM_LEN
+        ldir
+        call mod_save
+        ld a,1
+        ld (redraw),a
         ret
 
 ; Το παράθυρο χάρτη από το μηδέν: έδαφος, μετά οι πόροι από πάνω.
@@ -284,6 +310,8 @@ cam_x:      dw 98               ; bytes κόσμου, ζυγό — η πόλη �
 cam_y:      dw 303              ; γραμμές κόσμου, ≡ 3 (mod 4)
 cam_h:      dw 0                ; (cam_x - XOFF) / 2
 redraw:     db 0
+save_req:   db 0                ; 1: σώσε την παρτίδα (V, M12)
+load_req:   db 0                ; 1: το μενού διάλεξε φόρτωμα (M12)
 phase:      db 0
 scr:        dw 0
 ptype:      db 0
@@ -573,6 +601,7 @@ boot_end:
         org boot_phys + boot_end - BOOT
 BOOT_LEN    equ boot_end - BOOT
         assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
+        assert boot_phys + BOOT_LEN <= BOOT, 'boot_phys overlaps BOOT'
 
 ; Οι ρουτίνες της εκκίνησης (init.asm, M11): στη μνήμη της οθόνης, πάνω από
 ; ό,τι χρησιμοποιεί ως ενδιάμεσο χώρο το hud_init.
@@ -585,11 +614,37 @@ init_end:
 INIT_LEN    equ init_end - INIT
         assert SCREEN + 8 * HUD_ROWS * 80 + DIGITS_LEN <= INIT, 'hud_init temp over INIT'
 
-; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB).
-map_z:
-        lzx0
-        incbin "../data/map96.bin"
-        lzclose
+; Η αποθήκευση (savegame.asm, M12): τρέχει στην οθόνη (SVM), ταξιδεύει
+; ΑΜΕΣΩΣ μετά το INIT (αντιγράφονται μαζί, στο SVM_AT), και το fog_init τη
+; φυλάει στο SVM_STORE.
+SVM         equ #C000
+SVM_BUF     equ #C800           ; ο κατάλογος (2 KB), μετά ο τομέας (512)
+mod_phys:
+        org SVM,mod_phys
+        include "savegame.asm"
+mod_end:
+        org mod_phys + mod_end - SVM
+SVM_LEN     equ mod_end - SVM
+SVM_AT      equ INIT + INIT_LEN
+        assert SVM_AT + SVM_LEN <= #FFFF && SVM + SVM_LEN <= SVM_BUF, 'SVM'
+        assert SVM_BUF + 2048 + 512 <= INIT, 'SVM_BUF over INIT'
+        assert SVM_STORE + SVM_LEN <= BKT0, 'SVM_STORE'
+
+; Το μενού έναρξης (menu.asm, M12): τρέχει στη θέση του, πριν από το BOOT.
+        include "menu.asm"
+menu_end:
+        assert menu_end <= BOOT, 'menu over BOOT'
+
+; Τα γραφικά των μονάδων στις τράπεζες (ugfx.asm, M12): στο #B000, στις
+; εγγραφές των μονάδων, πριν τις γράψει το units_init.
+UGFX        equ #B000
+ugfx_phys:
+        org UGFX,ugfx_phys
+        include "ugfx.asm"
+ugfx_end:
+        org ugfx_phys + ugfx_end - UGFX
+UGFX_LEN    equ ugfx_end - UGFX
+        assert UGFX >= UNIT_TAB && UGFX + UGFX_LEN <= BLD_TAB2, 'UGFX'
 
 ; Το HUD: οι 7 σειρές του (560 bytes) από καθεμία από τις 8 οκτάδες της
 ; σελίδας #4000 — τα υπόλοιπα είναι μηδενικά.
@@ -636,6 +691,14 @@ cmp_z:
         incbin "../data/compiled.bin"
         lzclose
 
+; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB). ΤΕΛΕΥΤΑΙΟΣ:
+; αποσυμπιέζεται πριν από οτιδήποτε, άρα μπορεί να περνάει πάνω από το BOOT
+; (#7A30) ως το #8000 — όλα τα άλλα όχι (build.sh).
+map_z:
+        lzx0
+        incbin "../data/map96.bin"
+        lzclose
+
 ; ΤΙΠΟΤΑ ΜΕ `align` ΜΕΤΑ ΑΠΟ ΜΠΛΟΚ LZX0: ο rasm στοιχίζει με τη διεύθυνση
 ; ΠΡΙΝ τη συμπίεση, και μετά τη συμπίεση η ετικέτα μετακινείται σε μη
 ; στοιχισμένη θέση. Ό,τι θέλει στοίχιση μπαίνει πριν ή ζει εκτός binary.
@@ -656,25 +719,5 @@ end:
         save 'POLIS.BIN',start,end-start,DSK,'build/polis.dsk'
         endif
 
-        assert IMG0 + AGE3_LEN <= FOG && IMG0 + AGE4_LEN <= FOG, 'age images over FOG (M11)'
-
-; Η Εποχή του Χαλκού (M9): οι εικόνες των κτιρίων, ένα δεύτερο αρχείο στην
-; ίδια δισκέτα, που το φορτώνει το game/disk.asm στην C6 (IMG0 - 128: η
-; κεφαλίδα AMSDOS πριν από το IMG0). Σε δικό του χώρο μνήμης του rasm.
-        ifndef SNA
-        bank
-        org IMG0
-age3_file:
-        incbin "../data/age3.bin"
-        save 'AGE3.BIN',age3_file,AGE3_LEN,DSK,'build/polis.dsk'
-        bank
-        org IMG0
-age4_file:
-        incbin "../data/age4.bin"
-        save 'AGE4.BIN',age4_file,AGE4_LEN,DSK,'build/polis.dsk'
-        bank
-        org #4000
-hopl_file:                      ; ο οπλίτης: η θέση 3 της C5 (make_edges.py)
-        incbin "../data/c5_slot3.bin"
-        save 'HOPL.BIN',hopl_file,SPR_STRIDE,DSK,'build/polis.dsk'
-        endif
+; Τα αρχεία των εποχών (ένα ανά πολιτισμό) και του οπλίτη μπαίνουν στη
+; δισκέτα από το game/build.sh (src/dsk.py), χωρίς κεφαλίδα AMSDOS (M12).

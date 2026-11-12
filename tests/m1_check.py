@@ -23,7 +23,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(ROOT, 'src'))
 sys.path.insert(0, os.environ.get('CPCEMU', os.path.expanduser('~/cpcemu')))
 
-from cpc import CPC                             # noqa: E402
+from cpc import CPC, KEY_RETURN                             # noqa: E402
 import mockup                                   # noqa: E402
 
 BUILD = os.path.join(ROOT, 'build')
@@ -153,6 +153,8 @@ def main():
     c.run_frames(150)
     c.insert_disc(os.path.join(BUILD, 'polis.dsk'))
     c.type_text('RUN"POLIS\n')
+    c.run_frames(250)                   # το μενού (M12): οι Έλληνες
+    c.tap_key(KEY_RETURN)
     wait_phase(c, sym, 2, limit_ms=8000)
     import scene                        # από τη δισκέτα: με την ομίχλη (M11)
     fogw = game_world(grd, res, seen=scene.fog_seen(c))
