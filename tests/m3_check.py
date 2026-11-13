@@ -59,6 +59,11 @@ def setup(c, sym):
         put16(c, a + 6, ty)
         fl = c.peek(a + 11)               # περπατάει, όχι περιπλάνηση
         c.poke(a + 11, (fl & ~S.F_WANDER) | S.F_MOVE)  # (τα άλλα bits μένουν)
+        if c.peek(a + 13) != 255:           # φαινόταν: το SX / SY προχωράει
+            c.poke(a + 12, x - 98)          # με το βήμα (units.asm, .pos)·
+            c.poke(a + 13, y - 303)         # αλλιώς μένει άλλο από το WX / WY
+                                            # (και η κρυμμένη, occlude.asm,
+                                            # κρίνεται αλλιώς από το scene.py)
         c.poke(S.ACT_TAB + i, 1)
         c.poke(NT + i, 1)                   # καμία μάχη (M8): μέτρηση βαδίσματος
 

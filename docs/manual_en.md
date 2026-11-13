@@ -85,8 +85,8 @@ The top of the screen is the world. The panel at the bottom is the HUD.
   digit shows the progress of the current unit, of the construction, or of
   the research.
 
-The colour of the **border** tells you the result of the game: **green**
-means you won and **red** means you lost.
+When the game ends, the card shows the result: a **red flag** means you won
+and a **skull** means you lost.
 
 ## 6. Controls
 
@@ -102,7 +102,7 @@ means you won and **red** means you lost.
 | **ESC** | cancel the placement |
 | **T** | with a building selected: train a unit |
 | **U** | with a building selected: research its next technology |
-| **V** | save the game to disc (the border turns yellow for about 2 seconds) |
+| **V** | save the game to disc (about 2 seconds) |
 
 ### What RETURN does
 
@@ -198,8 +198,8 @@ and sends them against your Town Center in waves. When one of your units is
 struck, you hear a warning, at most once every ten seconds.
 
 You **lose** when you have no units and no Town Center left. The enemy loses
-the same way. When the game ends, it stops and the border turns green or
-red.
+the same way. When the game ends, it stops, and the card next to the mini
+map shows a red flag (victory) or a skull (defeat).
 
 ![Battle](img/battle.png)
 

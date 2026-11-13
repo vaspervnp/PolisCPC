@@ -19,8 +19,6 @@
 εχθρός, η μάχη. Ό,τι δεν πετύχει (π.χ. κλικ που πιάνει άλλη μονάδα)
 γράφεται και το σενάριο συνεχίζει.
 
-Η λωρίδα χρόνου του καρέ μονάδων (το κόκκινο περιθώριο, bd_busy) σβήνει
-στη μνήμη για το βίντεο: είναι όργανο μέτρησης, όχι μέρος του παιχνιδιού.
 --dry: χωρίς εικόνα/ήχο, μόνο στιγμιότυπα (build/video_*.png) — για να
 δοκιμάζεται γρήγορα το σενάριο.
 """
@@ -60,7 +58,6 @@ BARRACKS = (35, 67)             # το κέντρο της κάτοψης (34-36
 HOUSE = (27, 63)
 AI_TC = (59, 28)
 VILLAGERS = (0, 3, 6)           # η αρχή: 3 χωρικοί
-HW_BLACK = 0x54
 SELLIST = 0xA840                # game/input.asm (equ)
 
 
@@ -150,8 +147,6 @@ class Rec:
             if self.n >= self.limit:
                 raise Done()
             self._raw(1)
-            if self.in_game and not self.c.peek(self.sym['GAME_END']):
-                self.c.poke(self.sym['BD_BUSY'], HW_BLACK)
             self.n += 1
             k = self.lib.cpcemu_audio_take(self.c._h, self.abuf, 8192)
             self.audio.write(bytes(self.abuf)[:4 * k])

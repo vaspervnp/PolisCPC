@@ -1193,20 +1193,10 @@ scan_enemy:
         ld a,(hl)
         jr .l
 
-; Για τη μέτρηση της στόχευσης (tests/m5_check.py): όλες οι 128, μία φορά.
-bench_targets:
-        ld a,1
-        ld (bphase),a
-        xor a
-.u:     push af
-        call idx_ix
-        call find_nearest
-        pop af
-        inc a
-        cp UNITS
-        jr nz,.u
-        ld a,2
-        ld (bphase),a
-        xor a
-        ld (bench_req),a
+; Από την C7 (call0, seek): E = δείκτης -> A = NT[E] (bit 0: όχι στόχος).
+nt_get: ld a,e
+        or 128
+        ld l,a
+        ld h,NT >> 8
+        ld a,(hl)
         ret

@@ -47,7 +47,8 @@ HW_BLACK    equ #54
 HW_RED      equ #4C             ; firmware 6, bright red
 HW_GREEN    equ #52             ; firmware 18, bright green
 HW_YELLOW   equ #4A             ; firmware 24, bright yellow
-BD_DISK     equ HW_YELLOW       ; το περιθώριο όσο σώζεται / φορτώνεται (M12)
+BD_DISK     equ HW_BLACK        ; το περιθώριο όσο σώζεται / φορτώνεται: μαύρο,
+                                ; όπως πάντα (ως το M14 κίτρινο)
 
         ifdef SNA
         buildsna                ; ο τύπος εξόδου: snapshot αντί για .bin
@@ -151,14 +152,11 @@ frame:
         cp 6
         jr nz,frame             ; όχι πριν τον καθρέφτη
         ld a,(tut_on)           ; το tutorial (tutor.asm, στην C6): με το
-        or a                    ; παράθυρο ανοιχτό, το παιχνίδι περιμένει
-        jr z,.nt
-        ld hl,tut_go
-        call far6
-        ld a,(tut_win)
-        or a
-        jr nz,frame
-.nt:    ld a,(bd_busy)          ; η λωρίδα του χρόνου (το τέλος της παρτίδας,
+        or a                    ; παράθυρο ανοιχτό (carry), το παιχνίδι
+        ld hl,tut_go            ; περιμένει
+        call nz,far6
+        jr c,frame
+        ld a,(bd_busy)          ; η λωρίδα του χρόνου (το τέλος της παρτίδας,
         call border             ; M10: ένα χρώμα και στα δύο)
         ld a,3
         ld (uphase),a           ; 3 = τρέχει το καρέ μονάδων (tests/m3_check.py)
@@ -224,6 +222,47 @@ border:
         ld bc,GA*256+#10
         out (c),c
         out (c),a
+        ret
+
+; Το τέλος της παρτίδας (ai_end, με call0): στην κάρτα του HUD η σημαία
+; (νίκη) ή η νεκροκεφαλή (ήττα) από το πάνελ των εντολών, πάνω από το
+; ψηφίο της. Το περιθώριο μένει μαύρο.
+END_Y       equ 36              ; γραμμή του HUD: η 2η σειρά των εντολών
+END_WIN_X   equ 57              ; rally (η σημαία), byte
+END_LOSE_X  equ 64              ; delete (η νεκροκεφαλή)
+END_TOP     equ 19              ; η κάρτα: 4 bytes x 16 γραμμές από εδώ
+hud_end:
+        ld a,(game_end)
+        ld hl,HUD_PAGE + (END_Y & 7) * #800 + (END_Y >> 3) * 80 + END_WIN_X
+        dec a
+        jr z,.s
+        ld hl,HUD_PAGE + (END_Y & 7) * #800 + (END_Y >> 3) * 80 + END_LOSE_X
+.s:     ld de,HUD_PAGE + (END_TOP & 7) * #800 + (END_TOP >> 3) * 80 + CARD_X
+        ld b,16
+.l:     push bc
+        push hl
+        push de
+        ld bc,4
+        ldir
+        pop hl
+        call .nl
+        ex de,hl
+        pop hl
+        call .nl
+        pop bc
+        djnz .l
+        ret
+.nl:    ld a,h                  ; η γραμμή από κάτω (όπως το next_line,
+        add a,#08               ; που υπάρχει μόνο στο BARS)
+        ld h,a
+        and #38
+        ret nz
+        ld a,l
+        add a,80
+        ld l,a
+        ld a,h
+        adc a,#C0
+        ld h,a
         ret
 
         ifdef BARS            ; μόνο στην οθόνη ελέγχου του M0
@@ -465,7 +504,11 @@ fog_on:     db 1                ; 0: όλα εξερευνημένα (tests M1-M
 mm_my:      db 0                ; minimap.asm: η γραμμή του καρέ
 mm_buf:     ds MM_N             ; τα pens της
 game_end:   db 0                ; 1 νίκη, 2 ήττα (bank7.asm: ai_end)
-bd_busy:    db HW_RED           ; το περιθώριο στο καρέ μονάδων, και μετά
+        ifdef BARS              ; η λωρίδα του χρόνου: μόνο στην οθόνη
+bd_busy:    db HW_RED           ; ελέγχου του M0 — στο παιχνίδι το
+        else                    ; περιθώριο είναι πάντα μαύρο (το τέλος
+bd_busy:    db HW_BLACK         ; της παρτίδας στο HUD: hud_end)
+        endif
 bd_idle:    db HW_BLACK
 hud_dirty:  db 0                ; bits 0-5: ποιοι αριθμοί της μπάρας άλλαξαν
 u_rescan:   db 0                ; units_forget: όλες οι ενεργές, στο επόμενο καρέ

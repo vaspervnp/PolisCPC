@@ -177,8 +177,12 @@ combat_think:
         jr .in
 .auto:  ld a,(ix+U_TGT)
         cp 255
-        jr z,.none
-        call idx_iy
+        jr nz,.tg
+        call seek               ; κανένας στους 9 κάδους: πιο μακριά
+        cp 255
+        jp z,.none
+        ld (ix+U_TGT),a
+.tg:    call idx_iy
         bit F_WANDER,(iy+U_FL)
         jr nz,.none
         ld a,(iy+U_TEAM)
@@ -204,8 +208,8 @@ combat_think:
         pop hl
         or a
         sbc hl,de
-        jr c,attack
-        jr z,attack
+        jp c,attack
+        jp z,attack
         bit F_MOVE,(ix+U_FL)    ; με εντολή του παίκτη ακόμα στον δρόμο της
         jr z,.ch                ; (flow field ως τον στόχο) και μακριά (πέρα
         ld a,(ix+U_FIELD)       ; από το SIGHT): τον ακολουθεί
@@ -233,6 +237,118 @@ combat_think:
         ld (ix+U_STUCK),0
         set F_MOVE,(ix+U_FL)
 .none:  ret
+
+; ΚΑΝΕΝΑΣ ΣΤΟΥΣ 9 ΚΑΔΟΥΣ (find_nearest). Σε πλακίδια η απόσταση 2 |dx| + |dy|
+; είναι 8 max(|di|, |dj|): οι κάδοι γύρω εγγυώνται μόνο 8 πλακίδια (64), ενώ
+; το SIGHT είναι 15. Χωρίς αυτό, δύο στρατιώτες στα 70-120 έμεναν για πάντα
+; ακίνητοι (M8). Όσοι στέκονται ψάχνουν στις ΕΓΓΡΑΦΕΣ, με την ακριβή
+; απόσταση (16 bits: χωρίς την αναδίπλωση των low bytes των κάδων). Για τον
+; χρόνο: το πολύ μία φορά στο καρέ, και κάθε φορά ένα ψευδοτυχαίο τέταρτο (32
+; εγγραφές, ~0,5 ms)· οι περιπλανώμενες απορρίπτονται αμέσως (F_WANDER), και
+; το NT (στη σελίδα του HUD: call0) μόνο για καλύτερη υποψήφια.
+; IX -> A = ο κοντινότερος εχθρός του τετάρτου μέσα στο SIGHT, ή 255.
+seek:   bit F_MOVE,(ix+U_FL)
+        jr nz,.no
+        ld a,(t0)               ; ένα ανά καρέ (t0: η αρχή του, units_tick)
+        ld hl,sk_t
+        cp (hl)
+        jr z,.no
+        ld (hl),a
+        ld hl,SIGHT + 1
+        ld (sk_d),hl
+        ld a,255
+        ld (sk_i),a
+        ld a,(ix+U_TEAM)        ; η άλλη ομάδα (νεκρές, βέλη, ελεύθερες: >= 2)
+        xor 1
+        ld c,a
+        ld a,(sk_q)             ; το τέταρτο: τα 2 πάνω bits του q = 5 q + 1
+        ld b,a                  ; (όχι το R: ο ίδιος κώδικας σε κάθε καρέ
+        add a,a                 ; το έδινε ίδιο)
+        add a,a
+        add a,b
+        inc a
+        ld (sk_q),a
+        rlca
+        rlca
+        and 3                   ; x 4: 32 εγγραφές x 32 = #400
+        add a,a
+        add a,a
+        add a,(UNIT_TAB + U_TEAM) >> 8
+        ld h,a
+        ld l,(UNIT_TAB + U_TEAM) & 255
+        ld de,U_SIZE
+        ld b,UNITS / 4
+.l:     ld a,(hl)
+        cp c
+        jr z,.e
+.n:     add hl,de
+        djnz .l
+        ld a,(sk_i)
+        ret
+.no:    ld a,255
+        ret
+.e:     ld a,l                  ; περιπλανιέται: όχι στόχος
+        sub U_TEAM - U_FL
+        ld l,a
+        bit F_WANDER,(hl)
+        ld a,l
+        jr z,.ok
+        add a,U_TEAM - U_FL
+        ld l,a
+        jr .n
+.ok:    add a,U_TEAM - U_FL
+        ld l,a
+        push bc
+        push de
+        push hl
+        ld de,-U_TEAM
+        add hl,de
+        push hl
+        pop iy
+        call c_dist
+        ld de,(sk_d)
+        or a
+        sbc hl,de
+        jr nc,.x
+        add hl,de
+        push hl
+        ld e,(iy+U_IDX)         ; όχι στόχος (NT, π.χ. ουδέτερες των τεστ)
+        ld hl,nt_get
+        call call0
+        pop hl
+        rrca
+        jr c,.x
+        ld (sk_d),hl
+        ld a,(iy+U_IDX)
+        ld (sk_i),a
+.x:     pop hl
+        pop de
+        pop bc
+        jr .n
+sk_d:   dw 0
+sk_i:   db 0
+sk_t:   db 0
+sk_q:   db 0
+
+; Για τη μέτρηση της στόχευσης (tests/m5_check.py): το find_nearest (κύριος
+; κώδικας: οι κάδοι στη σελίδα του HUD) για όλες τις 128, μία φορά.
+bench_targets:
+        ld a,1
+        ld (bphase),a
+        xor a
+.u:     push af
+        call idx_ix
+        ld hl,find_nearest
+        call call0
+        pop af
+        inc a
+        cp UNITS
+        jr nz,.u
+        ld a,2
+        ld (bphase),a
+        xor a
+        ld (bench_req),a
+        ret
 
 ; Χτυπάει (IX, IY = ο στόχος, c_dx / c_dy). Όποια πέθανε: στο dq.
 attack: call atk_pose
@@ -2009,14 +2125,8 @@ ai_end: ld a,(rq_n)
 .end:   ld (game_end),a
         ld a,1
         ld (paused),a
-        ld a,(game_end)
-        dec a
-        ld a,HW_GREEN
-        jr z,.c
-        ld a,HW_RED
-.c:     ld (bd_busy),a          ; το περιθώριο (ο κύριος βρόχος)
-        ld (bd_idle),a
-        ret
+        ld hl,hud_end           ; στο HUD η νίκη ή η ήττα (main.asm)· το
+        jp call0                ; περιθώριο μένει μαύρο
 
 ; -> A = πόσες χωράνε ακόμα (με πρόσημο): POP_BASE + POP_HOUSE x σπίτια -
 ; (ζωντανές + στις ουρές). Carry αν καμία.

@@ -23,8 +23,16 @@
 
         include "../data/tutor.asm"
 
-; Από τον κύριο βρόχο (far6), με την C6 στο #4000.
+; Από τον κύριο βρόχο (far6), με την C6 στο #4000. Carry όσο το παράθυρο
+; είναι (ή θα γίνει) ανοιχτό: το καρέ μονάδων δεν τρέχει.
 tut_go:
+        call tut_run
+        ld a,(tut_win)
+        cp 1
+        ccf
+        ret
+
+tut_run:
         ld a,(hud_val + 10)     ; άλλη εποχή: τα δεδομένα δεν είναι πια εδώ
         cp START_AGE
         jr nz,tut_off

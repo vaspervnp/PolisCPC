@@ -208,11 +208,12 @@ def main():
         c.screenshot(os.path.join(M4.M.BUILD, 'm8_after.png'), aspect=True)
     ok = g.ok
     ok &= orders('--shots' in sys.argv)
+    print('\nM8: %s' % ('OK' if ok else 'ΑΠΟΤΥΧΙΑ'))
+    sys.exit(0 if ok else 1)
 
 
 def only_orders():
     sys.exit(0 if orders(False) else 1)
-    sys.exit(0 if ok else 1)
 
 
 def colours(g):

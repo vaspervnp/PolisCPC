@@ -118,7 +118,7 @@ far7:   ld a,RAM_CMP
         ret
 .go:    jp (hl)
 
-; Όπως το far7, με την C6 (το tutorial, tutor.asm).
+; Όπως το far7, με την C6 (το tutorial, tutor.asm). Κρατάει τα flags.
 far6:   ld a,RAM_RES
         call setram
         call far7.go
@@ -257,7 +257,8 @@ units_tick:
         call far7
         ld a,(bench_req)
         or a
-        call nz,bench_targets
+        ld hl,bench_targets     ; (bank7.asm)
+        call nz,far7
         ld a,(erase_req)
         or a
         jp nz,units_erase

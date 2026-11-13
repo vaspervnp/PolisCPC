@@ -18,8 +18,8 @@
 6. ΚΑΤΕΔΑΦΙΣΗ. Το Κέντρο Πόλης του παίκτη χτυπιέται (BDMG) και πέφτει: η
    θέση ελεύθερη, η κάτοψη όχι πια κτίριο στον χάρτη.
 7. ΗΤΤΑ. Χωρίς μονάδες και Κέντρο: game_end = 2, το παιχνίδι σταματά (καμία
-   μονάδα δεν αλλάζει πια), ο πληθυσμός της μπάρας 0, και το περιθώριο
-   κόκκινο.
+   μονάδα δεν αλλάζει πια), ο πληθυσμός της μπάρας 0, το περιθώριο μαύρο
+   (πάντα), και στην κάρτα του HUD η νεκροκεφαλή του πάνελ.
 8. ΧΡΟΝΟΣ. Τυπώνεται ως μέτρηση (όπως στο M3 και στο M8): 20 s από το κύμα
    και μετά — και χωριστά τα καρέ όπου σκέφτεται ο αντίπαλος.
 
@@ -31,7 +31,8 @@
 10. ΕΝΤΟΛΗ ΣΕ ΚΤΙΡΙΟ. RETURN πάνω του με τους 8 επιλεγμένους: όλοι το έχουν
     στόχο, το ρίχνουν, η ζημιά του σβήνει, και η οθόνη μετά = ο κόσμος χωρίς
     αυτό, pixel προς pixel.
-11. ΝΙΚΗ. game_end = 1, και το περιθώριο πράσινο.
+11. ΝΙΚΗ. game_end = 1, το περιθώριο μαύρο, και στην κάρτα του HUD η
+    σημαία (στην ήττα η νεκροκεφαλή).
 """
 import os
 import sys
@@ -79,7 +80,39 @@ def foot_free(c, i0, j0, n):
 
 
 def border(c):
-    return c.image(full_framebuffer=True).getpixel((4, 4))
+    """Το χρώμα του περιθωρίου σε 3 καρέ, σε μια στήλη όλου του framebuffer:
+    το σύνολο των χρωμάτων (πάντα μαύρο: καμία λωρίδα, κανένα χρώμα τέλους)."""
+    cols = set()
+    for _ in range(3):
+        c.run_frames(1)
+        im = c.image(full_framebuffer=True)
+        cols |= {im.getpixel((4, y)) for y in range(0, 272, 4)}  # ορατές
+    return cols
+
+
+def black(c):
+    return c.palette()[0x54 & 0x1F]             # HW_BLACK
+
+
+# Το τέλος στο HUD (main.asm, hud_end): στην κάρτα (4 bytes x 16 γραμμές από
+# τη γραμμή END_TOP) η σημαία (νίκη) ή η νεκροκεφαλή (ήττα) του πάνελ.
+END_Y, END_WIN_X, END_LOSE_X, END_TOP = 36, 57, 64, 19
+
+
+def hud_block(c, y0, x):
+    from cpc import _lib
+    p = _lib.cpcemu_ram_ptr(c._h, 1)            # η κύρια RAM #4000-#7FFF
+    return [bytes(p[(y & 7) * 0x800 + (y >> 3) * 80 + x + k]
+                  for k in range(4)) for y in range(y0, y0 + 16)]
+
+
+def hud_end(c):
+    """-> 'win', 'lose' ή None: τι δείχνει η κάρτα του HUD."""
+    card = hud_block(c, END_TOP, M6.MM.CARD_X)
+    for name, x in (('win', END_WIN_X), ('lose', END_LOSE_X)):
+        if card == hud_block(c, END_Y, x):
+            return name
+    return None
 
 
 def defeat(shots):
@@ -164,14 +197,14 @@ def defeat(shots):
     c.run_frames(150)
     frozen = c.read_ram(S.UNIT_TAB, S.UNITS * S.U_SIZE) == before
     alive0 = [u for u in S.units(c) if u['team'] == 0]
-    r, gg, b = border(c)
+    bd, ic = border(c), hud_end(c)
     g.report('ήττα', end == 2 and c.peek(sym['PAUSED']) == 1 and frozen and
              not alive0 and word(c, sym['HUD_VAL'] + 8) == 0 and
-             r > 150 and gg < 100,
+             bd == {black(c)} and ic == 'lose',
              'game_end %d στα %d s, σταματημένο %s, του παίκτη ζωντανές %d, '
-             'πληθυσμός %d, περιθώριο %s' % (end, s, frozen, len(alive0),
-                                            word(c, sym['HUD_VAL'] + 8),
-                                            (r, gg, b)))
+             'πληθυσμός %d, περιθώριο %s, στο HUD %s'
+             % (end, s, frozen, len(alive0), word(c, sym['HUD_VAL'] + 8),
+                sorted(bd), ic))
     if shots:
         path = os.path.join(M4.M.BUILD, 'm10_defeat.png')
         c.screenshot(path, full_framebuffer=True)
@@ -247,10 +280,10 @@ def victory(shots):
              'καρέ (ζημιά ως %d, μετά %d)· η οθόνη = ο κόσμος χωρίς αυτό'
              % (ordered, fell, dmg_max, d[0] | d[1] << 8))
     end = c.peek(sym['GAME_END'])
-    c.run_frames(10)                            # (το καρέ του τέλους ήταν
-    r, gg, b = border(c)                        # ακόμα με τη λωρίδα του χρόνου)
-    g.report('νίκη', end == 1 and gg > 150 and r < 100,
-             'game_end %d, περιθώριο %s' % (end, (r, gg, b)))
+    c.run_frames(10)
+    bd, ic = border(c), hud_end(c)
+    g.report('νίκη', end == 1 and bd == {black(c)} and ic == 'win',
+             'game_end %d, περιθώριο %s, στο HUD %s' % (end, sorted(bd), ic))
     if shots:
         path = os.path.join(M4.M.BUILD, 'm10_victory.png')
         c.screenshot(path, full_framebuffer=True)
