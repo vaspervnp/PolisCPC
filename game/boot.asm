@@ -683,7 +683,8 @@ bld_job:
         ld (iy+B_PROG),0
         ld a,1                  ; και μπορεί να κρύβει μονάδες (occlude.asm)
         ld (occ_dirty),a
-        call bld_redraw
+        ld hl,bld_fin           ; (bank7.asm: το χωράφι γίνεται χωράφια)
+        call far7
         jp job_idle
 
 

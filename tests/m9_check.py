@@ -7,13 +7,16 @@
 2. ΚΤΙΡΙΑ. Οι χωρικοί χτίζουν χωράφι και σπίτι δίπλα στο Κέντρο Πόλης (η
    αγορά, που θέλει το χωράφι, και ο στάβλος της ακαδημίας: εγγραφές έξω
    από τον χάρτη, όπως στο M7).
+   ΧΩΡΑΦΙ (M14): έτοιμο, δεν είναι πια κτίριο· τα 9 πλακίδια της κάτοψης
+   έχουν τον πόρο farm_plot (14). Ένας χωρικός, RETURN πάνω του: δουλειά
+   τροφής, και η τροφή της μπάρας ανεβαίνει με το πρώτο άδειασμα.
 3. ΕΡΕΥΝΑ. Κλικ στο Κέντρο Πόλης, U: 800 τροφή, και η μπάρα της κάρτας
    γεμίζει. Ξανά U: τίποτα (ερευνά ήδη).
 4. ΕΠΟΧΗ. Στο τέλος: το AGE3.BIN από τη δισκέτα (game/disk.asm) στην C6, η
    εποχή 3 στη μπάρα, ύψος και εικόνα της Χαλκού στο bld_types και στα
-   κτίρια. Ξαναζωγραφίζονται ΜΟΝΟ όσα άλλαξαν (Κέντρο Πόλης, σπίτι), ένα-ένα
-   — όχι το χωράφι (ίδια εικόνα). Η οθόνη μετά = ο κόσμος με τις εικόνες
-   της Χαλκού, pixel προς pixel.
+   κτίρια. Ξαναζωγραφίζονται ΜΟΝΟ όσα άλλαξαν (Κέντρο Πόλης, σπίτι), ένα-ένα.
+   Η οθόνη μετά = ο κόσμος με τις εικόνες της Χαλκού (και τα πλακίδια του
+   χωραφιού), pixel προς pixel.
 5. ΞΕΚΛΕΙΔΩΜΑ. N, K, D ανοίγουν τοποθέτηση.
 6. ΤΕΧΝΟΛΟΓΙΕΣ. U στη σιταποθήκη (Εξημέρωση: ο χωρικός κουβαλάει 15
    τροφή) και στην αποθήκη (Εργαλειοποιία: ζημιά σπαθοφόρου 8 -> 10, μόνο
@@ -21,8 +24,8 @@
 7. ΟΠΛΙΤΗΣ. T στην ακαδημία: μια μονάδα σετ 4, με το σχέδιο του HOPL.BIN
    (στη θέση 3 της C5: διαβάζεται στο τέλος), στην οθόνη pixel προς pixel.
 8. ΕΠΟΧΗ ΤΟΥ ΣΙΔΗΡΟΥ. Ξανά U στο Κέντρο Πόλης (1000 τροφή, 800 χρυσό): το
-   AGE4.BIN, εποχή 4, ξαναζωγραφίζεται μόνο το Κέντρο Πόλης (όχι σπίτι,
-   χωράφι), και η οθόνη με τις εικόνες του Σιδήρου.
+   AGE4.BIN, εποχή 4, ξαναζωγραφίζεται μόνο το Κέντρο Πόλης (όχι το
+   σπίτι), και η οθόνη με τις εικόνες του Σιδήρου.
 9. ΧΡΟΝΟΣ. Τυπώνεται ως μέτρηση (όπως στο M3 και στο M8): τα καρέ χωρίς
    κύλιση μαζί με την επανασχεδίαση των εποχών (μισή στήλη ανά καρέ), και
    χωριστά τα καρέ του φορτώματος (~0,7 s).
@@ -45,6 +48,7 @@ M3.wait_uphase.__defaults__ = (10000,)          # το καρέ του φορτ�
 
 FARM = (37, 61)                 # το κέντρο της κάτοψης 3 x 3 (όπως ο στρατώνας του M7)
 HOUSE = (31, 72)                # 2 x 2 (όπως η αποθήκη του M7)
+FARM_RES, MAP = 14, 0x8000      # bank7.asm (bld_fin): η κάτοψη -> farm_plot
 DUMP = 0xA8C0                   # 64 bytes ελεύθερα (μετά το MOVERS)
 B_H, B_IMG = 11, 12
 
@@ -78,8 +82,9 @@ def build(g, key, tile, typ):
     assert b, 'δεν τοποθετήθηκε %s' % typ
     for k in range(2000):
         g.tick(1)
-        if M7.blds(c)[[x['slot'] for x in M7.blds(c)].index(b[0]['slot'])][
-                'st'] == 1 and c.peek(sym['RQ_N']) == 255:
+        now = [x for x in M7.blds(c) if x['slot'] == b[0]['slot']]
+        if (not now or now[0]['st'] == 1) and \
+                c.peek(sym['RQ_N']) == 255:     # (το χωράφι: όχι πια κτίριο)
             break
     return b[0], k
 
@@ -140,6 +145,42 @@ def main():
     g.report('κτίρια', True, 'χωράφι στο (%d, %d) σε %d καρέ, σπίτι στο '
              '(%d, %d) σε %d' % (farm['i0'], farm['j0'], kf, house['i0'],
                                  house['j0'], kh))
+    plots = [(i, j) for j in range(farm['j0'], farm['j0'] + 3)
+             for i in range(farm['i0'], farm['i0'] + 3)]
+    nib = {c.peek(MAP + j * 96 + i) & 15 for i, j in plots}
+    gone = not [b for b in M7.blds(c) if b['type'] == 'farm']
+    M8.click(g, S.unit(c, 0))               # (ή όποιος χωρικός είναι από
+    v = [u['idx'] for u in S.units(c)       # πάνω του)
+         if u['fl'] & S.F_SEL][0]
+    g.move_cursor(*M6.tile_cursor(g, *FARM))
+    M7.press(g, CPCMOD.KEY_RETURN, 1)
+    food0 = M6.hud_vals(c, sym)[0]
+    job, rose = set(), None
+    for k in range(3000):
+        g.tick(1)
+        if (c.peek(M6.J_SI + v), c.peek(M6.J_SJ + v)) in plots:
+            job.add((c.peek(S.UNIT_TAB + v * S.U_SIZE + M6.U_JOB),
+                     c.peek(M6.J_KIND + v)))
+        if M6.hud_vals(c, sym)[0] > food0:
+            rose = k
+            break
+    left = sum(1 for i, j in plots
+               if c.peek(MAP + j * 96 + i) & 15 == FARM_RES)
+    M6.command(g, (34, 66))                 # ο χωρικός φεύγει (όχι άλλα
+    g.tick(30)                              # αδειάσματα στην έρευνα)
+    g.report('χωράφι', gone and nib == {FARM_RES} and rose is not None and
+             (2, 0) in job,
+             'έτοιμο: όχι κτίριο %s, τα 9 πλακίδια farm_plot %s· RETURN πάνω '
+             'του (χωρικός %d): μαζεύει τροφή από το χωράφι %s, η τροφή %d -> '
+             '%d σε %s καρέ (%d πλακίδια δεν άδειασαν)'
+             % (gone, nib == {FARM_RES}, v, (2, 0) in job, food0,
+                M6.hud_vals(c, sym)[0], rose, left))
+    res = [list(r) for r in res]            # ο κόσμος: χώμα και farm_plot
+    for i, j in plots:
+        if c.peek(MAP + j * 96 + i) & 15 == FARM_RES:
+            res[j][i] = 'farm_plot'
+        else:
+            res[j][i] = None
 
     # ------------------------------------------------- 3. έρευνα
     tc = click_bld(g, (32, 60))
@@ -194,7 +235,7 @@ def main():
         r = M7.BLD_SLOTS[b['slot']]
         rec_ok &= c.peek(r + B_H) == len(a3[b['type']]) and \
             word(c, r + B_IMG) == addr[b['type']]
-    slots = {k: bs[k]['slot'] for k in ('town_center', 'house', 'farm')}
+    slots = {k: bs[k]['slot'] for k in ('town_center', 'house')}
     changed = sorted(k for k in slots if a3[k] != a2[k])
     who = sorted(k for k in slots if slots[k] in redrawn)
     g.report('εποχή', loaded is not None and tab_ok and rec_ok and
@@ -203,16 +244,15 @@ def main():
              'εικόνα της Χαλκού στους %d τύπους και σε όλα τα κτίρια: %s'
              % (loaded, M6.hud_vals(c, sym)[5], len(MB.TYPES),
                 tab_ok and rec_ok))
-    g.report('μόνο όσα', who == changed and 'farm' not in who,
-             'άλλαξαν εικόνα %s· ξαναζωγραφίστηκαν %s, ένα-ένα (όχι το '
-             'χωράφι)' % (changed, who))
+    g.report('μόνο όσα', who == changed,
+             'άλλαξαν εικόνα %s· ξαναζωγραφίστηκαν %s, ένα-ένα'
+             % (changed, who))
     g.tick(2)
-    blist = M4.M.GAME_BLDS + [('farm', farm['i0'], farm['j0']),
-                              ('house', house['i0'], house['j0'])]
+    blist = M4.M.GAME_BLDS + [('house', house['i0'], house['j0'])]
     g.world = M4.M.game_world(grd, res, blds=blist, age=3, found=[
         ('farm', farm['i0'], farm['j0']), ('house', house['i0'], house['j0'])])
     g.report('σύνθεση', g.compose('bronze'), 'η οθόνη με τις εικόνες της '
-             'Χαλκού (Κέντρο Πόλης, σπίτι) και το ίδιο χωράφι')
+             'Χαλκού (Κέντρο Πόλης, σπίτι) και τα πλακίδια του χωραφιού')
 
     # ------------------------------------------------- 5. ξεκλείδωμα
     M8.click(g, S.unit(c, 0))               # ένας χωρικός ξανά (το κλικ στο
@@ -236,7 +276,7 @@ def main():
 
     # ------------------------------------------------- 7. οπλίτης
     free = [k for k in range(M7.BLD_MAX)
-            if c.peek(M7.BLD_SLOTS[k]) == 255][0]   # (όχι πάνω στο χωράφι)
+            if c.peek(M7.BLD_SLOTS[k]) == 255][0]
     M7.fake_bld(c, sym, free, 'academy')
     c.poke(sym['SEL_BLD'], free)
     pop0 = M6.hud_vals(c, sym)[4]

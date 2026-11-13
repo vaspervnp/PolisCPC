@@ -35,6 +35,9 @@
 C7_HP       equ #7E00           ; 128: η υγεία ανά μονάδα
 C7_ANIM     equ #7E80           ; 128: ο μετρητής της πόζας
 C7_ORD      equ #7F00           ; 128: ο στόχος της εντολής (255 κανένας)
+CH_D        equ #7D80           ; 128: η απόσταση του κυνηγιού στην προηγούμενη απόφαση
+CH_WALK     equ FIELD_WALK + 1  ; το κυνήγι γύρω από τοίχο: σαν το FIELD_WALK
+                                ; (pathing.asm: ίσια, ακολούθηση τοίχου), όχι εντολή
 
 ARROWS      equ #A5E0           ; PR_N x (x dw, y dw, στόχος (255 κανείς),
 PR_N        equ 4               ; ο τοξότης, sx, sy (255: δεν ζωγραφίστηκε))
@@ -184,15 +187,17 @@ combat_think:
         ld (ix+U_TGT),a
 .tg:    call idx_iy
         bit F_WANDER,(iy+U_FL)
-        jr nz,.none
+        jp nz,.none
         ld a,(iy+U_TEAM)
         cp 2
-        jr nc,.none
-        bit F_MOVE,(ix+U_FL)    ; εκτελεί εντολή του παίκτη: όχι
-        jr z,.go
-        ld a,(ix+U_FIELD)
+        jp nc,.none
+        bit F_MOVE,(ix+U_FL)    ; εκτελεί εντολή του παίκτη: όχι (το
+        jr z,.go                ; κυνήγι γύρω από τοίχο, CH_WALK, δεν είναι
+        ld a,(ix+U_FIELD)       ; εντολή: η εμβέλεια ελέγχεται)
         or a
-        jr nz,.none
+        jr z,.go
+        cp CH_WALK
+        jp nz,.none
 .go:    call c_dist             ; HL = 2 |dx| + |dy|
         ld de,SIGHT + 1
         or a
@@ -233,8 +238,26 @@ combat_think:
         ld h,(iy+U_WY+1)
         ld (ix+U_TY),l
         ld (ix+U_TY+1),h
-        ld (ix+U_FIELD),0
-        ld (ix+U_STUCK),0
+        call c_dist             ; ΔΕΝ πλησίασε από την προηγούμενη απόφαση
+        ld a,h                  ; (π.χ. ένα κτίριο ανάμεσα: το κύμα πάνω
+        or a                    ; στο Κέντρο, ο χωρικός πίσω του, και
+        ld a,l                  ; ταλαντευόταν εκεί για πάντα — το U_STUCK
+        jr z,.c8                ; μηδενιζόταν): γύρω, με ακολούθηση τοίχου
+        ld a,255                ; (όπως στα κτίρια, bld_fight)
+.c8:    ld l,(ix+U_IDX)
+        ld h,CH_D >> 8
+        set 7,l
+        cp (hl)
+        ld (hl),a
+        jr c,.cs
+        ld a,(ix+U_FIELD)
+        cp CH_WALK
+        jr z,.cw
+        ld (ix+U_FIELD),CH_WALK
+        ld (ix+U_WF),0
+        jr .cw
+.cs:    ld (ix+U_FIELD),0       ; αλλιώς ίσια
+.cw:    ld (ix+U_STUCK),0
         set F_MOVE,(ix+U_FL)
 .none:  ret
 
@@ -1719,6 +1742,42 @@ bld_hit:
         jr z,bld_kill
         ret nc
 
+; IY = κτίριο που μόλις ετοιμάστηκε (boot.asm): η εικόνα του — ή, το
+; ΧΩΡΑΦΙ (M14): το κτίριο φεύγει (bld_kill) και η κάτοψή του γίνεται 3 x 3
+; πλακίδια με τον πόρο farm_plot (FARM_N τροφή το καθένα, data/gather.asm).
+; Από εκεί και πέρα είναι πηγή σαν τους θάμνους: οι χωρικοί μαζεύουν (RETURN
+; πάνω του), περνούν μόνοι τους στο διπλανό πλακίδιο (src_next), και όταν
+; αδειάσει μένει χώμα — εκεί χτίζεται ξανά.
+FARM_RES    equ 14              ; res_farm_plot (data/resources.asm)
+bld_fin:
+        ld a,(iy+B_TYPE)
+        cp BTY_FARM
+        jr z,.farm
+        ld hl,bld_redraw
+        jp call0
+.farm:  push iy
+        call bld_kill
+        pop iy
+        ld e,(iy+B_J)
+        ld c,3                  ; (η κάτοψη του χωραφιού: data/bld.asm)
+.r:     ld d,(iy+B_I)
+        push de
+        push bc
+        call map_ptr
+        pop bc
+        pop de
+        ld b,3
+.t:     ld a,(hl)
+        and #F0
+        or FARM_RES
+        ld (hl),a
+        inc hl
+        djnz .t
+        inc e
+        dec c
+        jr nz,.r
+        ret
+
 ; IY = κτίριο: κατεδαφίζεται. Οι στήλες του ξαναζωγραφίζονται (bld_redraw,
 ; με την C0), η κάτοψη γίνεται έδαφος (το χώμα του θεμελίου μένει), και ό,τι
 ; είχε (ουρά, έρευνα, επιλογή, ζημιά) σβήνει.
@@ -1802,7 +1861,8 @@ bld_kill:
 ;               ai_cool: κύμα — στο Κέντρο Πόλης του παίκτη (αλλιώς σε
 ;               κτίριο, αλλιώς σε μονάδα του), από τα σημεία ai_route.
 ;               Όσοι του κύματος μείνουν χωρίς στόχο παίρνουν τον επόμενο.
-;               Μετά από κάθε κύμα: ai_cool = AI_GAP, και το κύμα +2
+;               Μετά από κάθε κύμα: ai_cool = AI_GAP, και το κύμα +2.
+;               Ο στρατώνας εκπαιδεύει μόνο ως το ai_wave αδρανείς (M14)
 ;   ΤΕΛΟΣ       ομάδα χωρίς μονάδες και χωρίς Κέντρο Πόλης: game_end (1 νίκη,
 ;               2 ήττα), το παιχνίδι σταματά, και το περιθώριο γίνεται
 ;               πράσινο ή κόκκινο
@@ -2386,6 +2446,11 @@ ai_army:
         ld a,(iy+B_ST)
         or a
         jr z,.att
+        ld a,(ai_wave)          ; όχι πάνω από το επόμενο κύμα (M14: ως
+        ld c,a                  ; τότε μάζευε ό,τι χωρούσε — 13 στο πρώτο
+        ld a,(an_idle)          ; κύμα, στα 180 s, απέναντι σε 3 χωρικούς)
+        cp c
+        jr nc,.att
         ld a,(iy+B_QN)
         cp 2
         jr nc,.att

@@ -566,7 +566,7 @@ RESOURCES = [
     ('whale',       'φάλαινα',       WHALE,       'τροφή', 450),
     ('gazelle',     'γαζέλα',        GAZELLE,     'τροφή', 100),
     ('reeds',       'καλάμια',       REEDS,       None,   0),
-    ('farm_plot',   'χωράφι',        FARM_PLOT,   'τροφή', 250),
+    ('farm_plot',   'χωράφι',        FARM_PLOT,   'τροφή', 40),
     ('ruins',       'ερείπια',       RUINS,       None,   0),
 ]
 assert len(RESOURCES) == 16, 'τα άλλα 4 bits χωράνε ακριβώς 16'

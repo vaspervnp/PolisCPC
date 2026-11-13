@@ -614,7 +614,6 @@ s_y:        db 0
 set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
             dw SPR_BASE                         ; 3: με φορτίο = ο χωρικός + δέμα
             dw SPR_BASE + 3 * SPR_STRIDE        ; 4: ο οπλίτης (HOPL.BIN, M9)
-spr_tab:    dw spr_z0, spr_z1, spr_z2
 
 ; ------------------------------------------------------------ γραφικά
 ; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη, στην τράπεζα C6
@@ -707,16 +706,11 @@ k = k + 1
         assert digits >= PORTAL + 256 && digits + DIGITS_LEN <= HUD_PAGE + #800, 'digits'
 
 ; Τα σετ των μονάδων, συμπιεσμένα· αποσυμπιέζονται στην τράπεζα C5.
-spr_z0:
+; Ένα μπλοκ και για τα τρία (M14: κοινό λεξικό, για χώρο).
+spr_z:
         lzx0
         incbin "../data/c5_set0.bin"    ; (το καρέ 12: το W της επίθεσης)
-        lzclose
-spr_z1:
-        lzx0
         incbin "../data/c5_set1.bin"
-        lzclose
-spr_z2:
-        lzx0
         incbin "../data/c5_set2.bin"
         lzclose
 ; Η τράπεζα C6: πόροι και κτίρια (src/make_bank6.py).
@@ -818,7 +812,7 @@ tut_end     equ TUT_AT + 1      ; έβαζε στο #4000 της C6, πάνω σ
         include "bank7.asm"
 c7_end:
 C7_LEN      equ c7_end - C7_CODE
-        assert C7_CODE + C7_LEN <= C7_HP, 'C7 code past tables'
+        assert C7_CODE + C7_LEN <= CH_D, 'C7 code past tables'
         ifndef SNA
         ifdef C7RAW
         save 'build/c7.bin',C7_CODE,C7_LEN      ; -> c7_z (το δεύτερο πέρασμα)

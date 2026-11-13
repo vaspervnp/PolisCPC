@@ -297,6 +297,9 @@ sv_open:
         add hl,de
         pop bc
         djnz .e
+        ld a,c                  ; όχι το πρώτο extent: όσα έχει, ως το
+        or a                    ; ζητούμενο (το mod_camp: το POLIS.BIN 2 ή 3,
+        ret nz                  ; το μήκος από την κεφαλίδα AMSDOS)
         call sv_close           ; δεν βρέθηκε
         scf
         ret
@@ -398,9 +401,9 @@ mod_camp:
         call sv_put
 .boot:  ld hl,#FB + #C9 * 256   ; ei / ret στο #0038
         ld (#0038),hl
-        ld hl,sv_polis
-        ld a,2
-        call .open
+        ld hl,sv_polis          ; ως 3 extents (16 KB το καθένα, με την
+        ld a,SV_EXT             ; κεφαλίδα AMSDOS: ήταν σταθερά 2, και όταν
+        call .open              ; πέρασε τα 32 KB το τέλος ήταν σκουπίδια)
         jr c,$                  ; (η δισκέτα χωρίς το παιχνίδι)
         call sv_get             ; ο πρώτος: η κεφαλίδα AMSDOS (128 bytes)
         ld hl,(SVM_BUF + 2048 + 24)     ; το μήκος -> πόσοι τομείς ακόμα

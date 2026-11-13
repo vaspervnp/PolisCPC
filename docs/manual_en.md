@@ -37,7 +37,7 @@ written to it.
 Choose **TUTORIAL** in the menu if you are new to Polis. Herodotus, the
 father of history, appears in a window in the middle of the screen and
 explains the next step. The game waits while he speaks. Press **RETURN**
-to close the window, then do what he asked. When you have done it, he
+(Enter on a PC) to close the window, then do what he asked. When you have done it, he
 explains the next step:
 
 1. select a villager;
@@ -95,14 +95,17 @@ and a **skull** means you lost.
 | **Q A O P** or joystick | move the cursor (at the edge of the screen the map scrolls) |
 | **cursor keys** | scroll the map |
 | **SPACE** or fire | select: a click picks the unit under the cursor; hold and drag for a box |
-| **RETURN**, **COPY** or fire 2 | command the selected units (see below) |
+| **RETURN**, **ENTER**, **COPY** or fire 2 | command the selected units (see below) |
 | **C H B G S M R L F W** | with villagers selected: choose a building to place |
 | **N K D** | the same, for the Bronze Age buildings |
-| **RETURN** | while placing: build here |
+| **RETURN** or **ENTER** | while placing: build here |
 | **ESC** | cancel the placement |
 | **T** | with a building selected: train a unit |
 | **U** | with a building selected: research its next technology |
 | **V** | save the game to disc (about 2 seconds) |
+
+On a PC emulator, **RETURN** is the main **Enter** key. The CPC's **ENTER**
+(on the numeric keypad) is the keypad Enter, and does the same everywhere.
 
 ### What RETURN does
 
@@ -140,7 +143,7 @@ When the building is finished, you hear a tone.
 | M | Market | 150 wood | Granary | the gathering technologies |
 | R | Archery Range | 150 wood | Barracks | archers; Archery, Composite Bow |
 | L | Stable | 150 wood | Barracks | needed for the Academy |
-| F | Farm | 75 wood | Market | |
+| F | Farm | 75 wood | Market | when built, 3 × 3 field plots, 40 food each |
 | W | Tower | 150 stone | Granary | |
 | N | Temple | 200 wood | Bronze Age | Medicine |
 | K | Government Center | 200 wood | Bronze Age, Market | |
@@ -194,7 +197,9 @@ you can have now. The bar of the card shows the progress.
 ## 10. The enemy, victory and defeat
 
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
-and sends them against your Town Center in waves. When one of your units is
+and sends them against your Town Center in waves. In a single game (PLAY)
+the first wave of 6 soldiers comes after 5 minutes; every next one is two
+soldiers bigger, a minute apart at least. When one of your units is
 struck, you hear a warning, at most once every ten seconds.
 
 You **lose** when you have no units and no Town Center left. The enemy loses

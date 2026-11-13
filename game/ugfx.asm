@@ -9,23 +9,17 @@
 ; E με καθρέφτισμα, και τα sprites του κέρσορα.
 units_gfx:
         call make_swap
-        ld ix,spr_tab
+        ld hl,spr_z             ; και τα τρία σετ μαζί στην οθόνη
+        ld de,SCREEN
+        call dzx0
+        ld hl,SCREEN
         ld de,SPR_BASE
         ld b,SPR_SETS - 1
 .set:   push bc
-        push de
-        ld l,(ix+0)
-        ld h,(ix+1)
-        inc ix
-        inc ix
-        ld de,SCREEN
-        call dzx0
         ld a,RAM_SPR
         call setram
-        pop de
         push de
-        ld hl,SCREEN
-        ld bc,SPR_WEST          ; 21 καρέ x 128
+        ld bc,SPR_WEST          ; 21 καρέ x 128 (το επόμενο σετ αμέσως μετά)
         ldir
         pop de
         push hl
