@@ -56,6 +56,7 @@ python3 src/dsk.py build/polis.dsk \
     --zx0 HOPL.BIN data/c5_slot3.bin \
     $(for c in G E; do for n in 1 2 3 4; do echo --zx0 L$c$n.BIN data/l$(echo $c | tr GE ge)$n.bin; done; done) \
     --zx0 TITLE.BIN data/title.bin \
+    --zx0 TUTOR.BIN build/tutor.bin \
     --empty PROG.BIN 1024 \
     --empty SAVE.BIN 43008
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

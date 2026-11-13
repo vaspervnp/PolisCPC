@@ -22,6 +22,7 @@
         include "../data/menu.asm"
         include "../data/title.asm"     ; TITLE_Z
 
+TUT_COOL    equ 900             ; s: το πρώτο κύμα στο tutorial
 LV_FLAG     equ UNIT_TAB        ; #A5, #5A, εκστρατεία, πίστα (το units_init
                                 ; το σβήνει)
 
@@ -62,11 +63,11 @@ menu:
         jr z,.k
         ld a,(keyrows + 0)
         rra
-        jr c,.up
+        jp c,.up
         rra
         jr c,.right
         rra
-        jr c,.down
+        jp c,.down
         ld a,(keyrows + 1)
         rra
         jr c,.left
@@ -74,9 +75,11 @@ menu:
         ld a,(mn_sel)           ; επιλογή
         cp MENU_N - 1
         jr z,.load
+        cp MENU_TUT
+        jr z,.tut
         or a
         jr nz,.camp
-        ld a,(mn_cul)           ; παιχνίδι: ο πολιτισμός
+.play:  ld a,(mn_cul)           ; παιχνίδι: ο πολιτισμός
         ld hl,cult_let
         add a,l
         ld l,a
@@ -92,12 +95,41 @@ menu:
 .load:  ld a,1
         ld (load_req),a
         ret
+
+; Το tutorial: το TUTOR.BIN στην C6 (tutor.asm), και η παρτίδα του χάρτη της
+; εκκίνησης με το πρώτο κύμα του αντιπάλου στα TUT_COOL s. Χωρίς το αρχείο:
+; η παρτίδα όπως είναι.
+.tut:   ld hl,tut_name
+        call disk_load
+        di
+        jr c,.play
+        ld hl,LOAD_AT           ; (αποσυμπιεσμένο στο TITLE_AT: ο κώδικας
+        ld de,TITLE_AT          ; του μενού είναι στο #4000-#7FFF, άρα όχι
+        call dzx0               ; με την C6 μέσα — το rst 8 στο #0008)
+        ld hl,tut_cp            ; και από εκεί στην C6, με έναν αντιγραφέα
+        ld de,TUT_CP_AT         ; έξω από το παράθυρο (το rst 8 δεν
+        ld bc,TUT_CP_LEN        ; υπάρχει ακόμα: hp_init)
+        ldir
+        call TUT_CP_AT
+        ld hl,init_phys + lv_def - INIT ; η κεφαλίδα (lv_init), με άλλο
+        ld de,LV_HDR                    ; πρώτο κύμα
+        ld bc,H_TEXT
+        ldir
+        ld hl,TUT_COOL
+        ld (LV_HDR + H_COOL),hl
+        ld a,1
+        ld (tut_on),a
+        inc a
+        ld (tut_win),a
+        xor a
+        ld (tut_step),a
+        jr .play
 .right: ld c,1                  ; ο πολιτισμός (μόνο στο PLAY AS)
         jr .cul
 .left:  ld c,MENU_CULT - 1
 .cul:   ld a,(mn_sel)
         or a
-        jr nz,.k
+        jp nz,.k
         ld a,(mn_cul)
         add a,c
         cp MENU_CULT
@@ -105,7 +137,7 @@ menu:
         sub MENU_CULT
 .c:     ld (mn_cul),a
         call mn_cult
-        jr .k
+        jp .k
 .up:    ld a,MG_BLANK
         call mn_mark
         ld a,(mn_sel)
@@ -124,6 +156,19 @@ menu:
         xor a
 .d:     ld (mn_sel),a
         jp .mark
+
+; Ο αντιγραφέας του tutorial (χωρίς απόλυτα άλματα: τρέχει στο TUT_CP_AT).
+TUT_CP_AT   equ TITLE_AT + #800
+tut_cp: ld bc,#7F00 + RAM_RES
+        out (c),c
+        ld hl,TITLE_AT
+        ld de,TUT_AT
+        ld bc,tut_end - TUT_AT
+        ldir
+        ld bc,#7F00 + RAM_BASE
+        out (c),c
+        ret
+TUT_CP_LEN  equ $ - tut_cp
 
 ; Η εικόνα του μενού (TITLE.BIN, src/make_title.py): συμπιεσμένη στην οθόνη
 ; (με τα χρώματα σβηστά όσο φορτώνει), από εκεί στο TITLE_AT και
@@ -410,6 +455,7 @@ mn_held:    db 0
 mn_camp:    db 0
 mn_cul:     db 0                ; ο πολιτισμός του PLAY AS
 title_name: db "TITLE   BIN"
+tut_name:   db "TUTOR   BIN"
 mn_num:     db 0
 mn_prog:    dw 0
 prog_name:  db "PROG    BIN"

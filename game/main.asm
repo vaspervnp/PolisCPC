@@ -150,7 +150,15 @@ frame:
         ld a,(phase)
         cp 6
         jr nz,frame             ; όχι πριν τον καθρέφτη
-        ld a,(bd_busy)          ; η λωρίδα του χρόνου (το τέλος της παρτίδας,
+        ld a,(tut_on)           ; το tutorial (tutor.asm, στην C6): με το
+        or a                    ; παράθυρο ανοιχτό, το παιχνίδι περιμένει
+        jr z,.nt
+        ld hl,tut_go
+        call far6
+        ld a,(tut_win)
+        or a
+        jr nz,frame
+.nt:    ld a,(bd_busy)          ; η λωρίδα του χρόνου (το τέλος της παρτίδας,
         call border             ; M10: ένα χρώμα και στα δύο)
         ld a,3
         ld (uphase),a           ; 3 = τρέχει το καρέ μονάδων (tests/m3_check.py)
@@ -440,6 +448,9 @@ hud_val:    dw 200, 200, 100, 200, START_VIL, START_AGE ; η μπάρα: τρο�
                                 ; χρυσό, πέτρα, πληθυσμός, εποχή (gather.asm)
 ai_val:     dw 200, 200, 100, 200 ; ο αντίπαλος (M10): τροφή, ξύλο, χρυσό, πέτρα
 ai_on:      db 1                ; 0: ο αντίπαλος δεν σκέφτεται (tests M0-M9)
+tut_on:     db 0                ; το tutorial τρέχει (menu.asm, tutor.asm)
+tut_win:    db 0                ; 2 να ζωγραφιστεί, 1 ανοιχτό, 0 κλειστό
+tut_step:   db 0                ; το βήμα
 town_full:  db 0                ; 1: η αρχή με 12 + 12 μονάδες της πόλης
                                 ; (tests M1-M11: το M4.Game το γράφει στο .sna)
 fr_j:       db 0                ; fog_reveal (fog.asm, M11)
@@ -730,6 +741,24 @@ end:
 
 ; Τα αρχεία των εποχών (ένα ανά πολιτισμό) και του οπλίτη μπαίνουν στη
 ; δισκέτα από το game/build.sh (src/dsk.py), χωρίς κεφαλίδα AMSDOS (M12).
+
+; ------------------------------------------------------------ το tutorial
+; Στην C6 (game/tutor.asm), σε δικό του χώρο του rasm: build/tutor.bin, και
+; το build.sh το βάζει στη δισκέτα ως TUTOR.BIN. Το φορτώνει το μενού.
+TUT_AT      equ #5700           ; μετά τις εικόνες της Εποχής των Εργαλείων
+        ifdef SNA               ; στο snapshot των ελέγχων (χωρίς μενού) δεν
+tut_go      equ TUT_AT          ; χρειάζεται: μόνο τα σύμβολα — ο rasm θα το
+tut_end     equ TUT_AT + 1      ; έβαζε στο #4000 της C6, πάνω στους πόρους
+        else
+        bank
+        org TUT_AT
+        include "tutor.asm"
+        assert tut_end <= FOG, 'tutorial past FOG (C6)'
+        assert tut_end - TUT_AT <= #800, 'tutor past TUT_CP_AT (menu.asm)'
+        ifndef C7RAW
+        save 'build/tutor.bin',TUT_AT,tut_end - TUT_AT
+        endif
+        endif
 
 ; ------------------------------------------------------------ η C7 (M8)
 ; Ο κώδικας της τράπεζας C7 (bank7.asm), συναρμολογημένος για το C7_CODE, σε

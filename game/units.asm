@@ -118,6 +118,13 @@ far7:   ld a,RAM_CMP
         ret
 .go:    jp (hl)
 
+; Όπως το far7, με την C6 (το tutorial, tutor.asm).
+far6:   ld a,RAM_RES
+        call setram
+        call far7.go
+        ld a,RAM_BASE
+        jp setram
+
 ; Το αντίστροφο, από την C7 (M10: ο αντίπαλος): HL = ρουτίνα της κύριας
 ; RAM — και της σελίδας του HUD (boot.asm) — με την C0, και πίσω στην C7.
 call0:  ld a,RAM_BASE
@@ -599,9 +606,28 @@ units_move:
         ld a,(ord_n)
         or a
         jr z,.scr
-        ld b,a
+        ld b,a                  ; η αρχή γυρίζει (utick mod ord_n): όσες
+        ld a,(utick)            ; κόβει το όριο χρόνου του unit_update δεν
+.md:    sub b                   ; είναι πάντα οι ίδιες — αλλιώς, σε βαριά
+        jr nc,.md               ; καρέ, οι τελευταίες του ORDER δεν
+        add a,b                 ; προχωρούσαν ποτέ (tests/m7_check.py)
+        ld c,a                  ; C = s
+        ld l,a
+        ld h,0
+        add hl,hl
+        ld de,ORDER
+        add hl,de
+        ld a,b
+        sub c
+        ld b,a                  ; από το s ως το τέλος
+        call .run
+        ld b,c                  ; και από την αρχή ως το s
         ld hl,ORDER
-.o:     push bc
+        inc b
+        dec b
+        call nz,.run
+        jr .mv
+.run:   push bc
         ld e,(hl)
         inc hl
         ld d,(hl)
@@ -612,8 +638,9 @@ units_move:
         call unit_update
         pop hl
         pop bc
-        djnz .o
-        ld a,(mv_n)             ; όσες έχουν εντολή και δεν φαίνονται
+        djnz .run
+        ret
+.mv:    ld a,(mv_n)             ; όσες έχουν εντολή και δεν φαίνονται
         or a
         jr z,.scr
         ld b,a

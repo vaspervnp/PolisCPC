@@ -30,7 +30,28 @@ The game needs a CPC 6128, or another CPC with 128 KB. The disc must
 **not** be write-protected, because saved games and campaign progress are
 written to it.
 
-## 3. The main menu
+## 3. The tutorial
+
+![Herodotus explains the next step](img/tutorial.png)
+
+Choose **TUTORIAL** in the menu if you are new to Polis. Herodotus, the
+father of history, appears in a window in the middle of the screen and
+explains the next step. The game waits while he speaks. Press **RETURN**
+to close the window, then do what he asked. When you have done it, he
+explains the next step:
+
+1. select a villager;
+2. gather berries;
+3. build a House;
+4. train a villager at the Town Center;
+5. build Barracks;
+6. train a swordsman;
+7. march on the enemy city.
+
+The enemy plays normally during the tutorial, but its first wave comes
+only after 15 minutes.
+
+## 4. The main menu
 
 | key | action |
 |---|---|
@@ -40,7 +61,8 @@ written to it.
 
 * **PLAY AS ‹culture›** starts a free game against the computer.
 * **GREEK CAMPAIGN** and **EGYPTIAN CAMPAIGN** each have four levels (see
-  section 10).
+  section 11).
+* **TUTORIAL** teaches you the game step by step (see section 3).
 * **LOAD GAME** continues the game you saved with **V**. If there is no saved
   game, a new one starts.
 
@@ -48,7 +70,7 @@ There are eight cultures: Egyptians, Greeks (the default), Babylonians,
 Asians, Romans, Persians, Phoenicians and Celts. They play the same way.
 From the Bronze Age on, each culture's buildings have their own look.
 
-## 4. The screen
+## 5. The screen
 
 ![The town at the start](img/town.png)
 
@@ -66,7 +88,7 @@ The top of the screen is the world. The panel at the bottom is the HUD.
 The colour of the **border** tells you the result of the game: **green**
 means you won and **red** means you lost.
 
-## 5. Controls
+## 6. Controls
 
 | key | action |
 |---|---|
@@ -101,7 +123,7 @@ Villagers carry their load to the nearest drop site:
 Swordsmen and archers attack any enemy that comes near, as long as they are
 not carrying out an order of yours. A villager who is attacked fights back.
 
-## 6. Buildings
+## 7. Buildings
 
 To build, select one or more villagers, press the building's key, move the
 corner of the cursor to the spot, and press **RETURN**. The cost is paid at
@@ -130,7 +152,7 @@ key.
 
 **Population:** you can have up to 15 people, plus 5 for each House.
 
-## 7. Units
+## 8. Units
 
 | unit | from | cost | health | attack | |
 |---|---|---|---|---|---|
@@ -142,7 +164,7 @@ key.
 A unit standing behind a building is shown as an outline in its team's
 colour, so you never lose sight of it.
 
-## 8. Ages and technologies
+## 9. Ages and technologies
 
 The game starts in the **Tool Age**. Select the Town Center and press **U**
 to advance:
@@ -169,7 +191,7 @@ you can have now. The bar of the card shows the progress.
 | Temple | Medicine | 120 food, 60 gold | villager health +10 |
 | Academy | Phalanx | 150 food, 100 gold | hoplite health +20 |
 
-## 9. The enemy, victory and defeat
+## 10. The enemy, victory and defeat
 
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
 and sends them against your Town Center in waves. When one of your units is
@@ -181,7 +203,7 @@ red.
 
 ![Battle](img/battle.png)
 
-## 10. The campaigns
+## 11. The campaigns
 
 ![Before each level](img/briefing.png)
 
@@ -203,7 +225,7 @@ Before each level, a screen shows its goal. Press a key to start.
 
 You also win any level if you destroy the enemy completely.
 
-## 11. Tips
+## 12. Tips
 
 * Put the three villagers to work at once: two on berries, one on wood.
   Have the Town Center train more right away.

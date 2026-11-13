@@ -68,13 +68,14 @@ NAMES = {'egypt': 'EGYPTIANS', 'greek': 'GREEKS', 'babylon': 'BABYLONIANS',
          'asia': 'ASIANS', 'rome': 'ROMANS', 'persia': 'PERSIANS',
          'phoenicia': 'PHOENICIANS', 'celt': 'CELTS'}
 LOAD = 'LOAD GAME'
+TUTORIAL = 'TUTORIAL'                  # το tutorial (game/tutor.asm)
 PLAY = 'PLAY AS '                       # + <πολιτισμός>: αριστερά / δεξιά
 # Οι εκστρατείες (M13): (γράμμα των αρχείων LG1.BIN..., κείμενο του μενού)
 CAMPAIGNS = [('G', 'GREEK CAMPAIGN'), ('E', 'EGYPTIAN CAMPAIGN')]
 PEN_TEXT, PEN_HI = 9, 10                # λευκό, κίτρινο (palette.asm)
 CELL = 3                                # bytes ανά γράμμα (6 pixels)
 # οι επιλογές (bytes, γραμμές): κάτω από τη σκηνή της εικόνας (make_title)
-ITEM_X, ITEM_Y0, ITEM_DY = 12, 122, 15
+ITEM_X, ITEM_Y0, ITEM_DY = 12, 110, 15
 DEFAULT = 1                             # οι Έλληνες (οι εικόνες της εκκίνησης)
 SEL0 = 0                                # η επιλογή με το βέλος στην αρχή
 CULT_X = ITEM_X + CELL * len(PLAY)      # το πεδίο του πολιτισμού
@@ -95,9 +96,10 @@ def cult_field(k):
 
 
 def items(cult=DEFAULT):
-    """Οι επιλογές με τη σειρά: παιχνίδι, οι εκστρατείες, το φόρτωμα."""
+    """Οι επιλογές με τη σειρά: παιχνίδι, οι εκστρατείες, το tutorial, το
+    φόρτωμα."""
     return [PLAY + cult_field(cult).rstrip()] + [t for _, t in CAMPAIGNS] + \
-        [LOAD]
+        [TUTORIAL, LOAD]
 
 
 def lines(cult=DEFAULT):
@@ -106,8 +108,9 @@ def lines(cult=DEFAULT):
            (ITEM_Y0, CULT_X, PEN_HI, cult_field(cult))]
     for k, (_, t) in enumerate(CAMPAIGNS):
         out.append((ITEM_Y0 + (k + 1) * ITEM_DY, ITEM_X, PEN_TEXT, t))
-    out.append((ITEM_Y0 + (len(CAMPAIGNS) + 1) * ITEM_DY, ITEM_X, PEN_TEXT,
-                LOAD))
+    for k, t in enumerate((TUTORIAL, LOAD)):
+        out.append((ITEM_Y0 + (len(CAMPAIGNS) + 1 + k) * ITEM_DY, ITEM_X,
+                    PEN_TEXT, t))
     return out
 
 
@@ -135,9 +138,11 @@ def main():
     out = ['; menu.asm — ΠΑΡΑΓΕΤΑΙ από src/make_menu.py — μην το πειράζεις με '
            'το χέρι.\n\n',
            'MENU_N      equ %d             ; επιλογές: παιχνίδι, οι '
-           'εκστρατείες, το φόρτωμα\n' % len(its),
+           'εκστρατείες, το tutorial, το φόρτωμα\n' % len(its),
            'MENU_CULT   equ %d             ; πολιτισμοί\n' % len(MB.CULTURES),
            'MENU_CAMP   equ %d\n' % len(CAMPAIGNS),
+           'MENU_TUT    equ %d             ; το tutorial\n'
+           % (len(CAMPAIGNS) + 1),
            'MENU_DEF    equ %d             ; ο πολιτισμός στην αρχή\n' % DEFAULT,
            'MENU_SEL0   equ %d\n' % SEL0,
            'MENU_X      equ %d             ; το βέλος: byte\n' % (ITEM_X - 2 * CELL),
