@@ -199,7 +199,8 @@ you can have now. The bar of the card shows the progress.
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
 and sends them against your Town Center in waves. In a single game (PLAY)
 the first wave of 6 soldiers comes after 5 minutes; every next one is two
-soldiers bigger, a minute apart at least. When one of your units is
+soldiers bigger, two minutes apart at least. When its berries run out it
+builds Farms too. When one of your units is
 struck, you hear a warning, at most once every ten seconds.
 
 You **lose** when you have no units and no Town Center left. The enemy loses

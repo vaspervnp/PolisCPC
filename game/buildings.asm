@@ -580,7 +580,8 @@ rg_full:
 ; IY = κτίριο.
 bld_redraw:
         push iy                 ; (το rq_free ζωγραφίζει: αλλάζει το IY)
-        call rq_free
+        ld hl,rq_free           ; (bank7.asm, M14)
+        call far7
         pop iy
         ld l,(iy+B_WX)
         ld h,(iy+B_WX+1)
@@ -608,19 +609,12 @@ bld_redraw:
 RQ_ROWS     equ 12              ; γραμμές ανά καρέ (πολλαπλάσιο του 4)
         assert RQ_ROWS == 12, 'rq_step: 3k x 4'
 
-; Μία επανασχεδίαση τη φορά: αν υπάρχει άλλη στη μέση, τελειώνει τώρα.
-rq_free:
-        ld a,(rq_n)
-        inc a
-        ret z
-        call rq_step
-        jr rq_free
-
 ; HL = x, DE = y (κόσμος) της γωνίας ενός sprite πόρου 4 x 16: οι 2 στήλες
 ; του, στο rq.
 rq_set: push hl
         push de
-        call rq_free
+        ld hl,rq_free           ; (bank7.asm, M14)
+        call far7
         pop de
         pop hl
         ld (rq_x),hl
@@ -633,85 +627,18 @@ rq_set: push hl
         ld (rq_n),a
         ret
 
-rq_step:
-        ld a,(rq_n)
-        inc a
-        ret z                   ; καμία
-        ld b,1
-.c:     push bc
-        ld hl,(rq_x)            ; η στήλη στην οθόνη
-        ld de,(cam_x)
-        or a
-        sbc hl,de
-        ld a,h
-        or a
-        jr nz,.skip
-        ld a,l
-        cp 80 - 1
-        jr nc,.skip
-        push af
-        ld hl,(rq_yb)           ; κάτω, πάνω (στο 0..VIEW_H, πολλαπλάσια του 4)
-        ld de,(cam_y)
-        or a
-        sbc hl,de
-        push hl
-        ld c,VIEW_H
-        call clamp_c
-        add a,3
-        and #FC
-        ld (col_y1),a
-        pop hl
-        ld a,(rq_h)
-        ld e,a
-        ld d,0
-        or a
-        sbc hl,de
-        call clamp_c
-        and #FC
-        ld (col_y0),a
-        ld hl,col_y1
-        cp (hl)
-        pop bc                  ; B = η στήλη
-        jr nc,.skip
-        ld a,(rq_half)          ; ΣΕ ΚΟΜΜΑΤΙΑ ΤΩΝ RQ_ROWS ΓΡΑΜΜΩΝ (M9), ένα
-        ld c,a                  ; ανά καρέ: μία στήλη ψηλού κτιρίου με τις
-        add a,a                 ; μονάδες γύρω ξεπερνούσε τα 40 ms.
-        add a,c                 ; y0 += RQ_ROWS x κομμάτι
-        add a,a
-        add a,a
-        ld c,a
-        ld a,(col_y0)
-        add a,c
-        ld (col_y0),a
-        cp (hl)
-        jr nc,.skip             ; (τίποτα άλλο σε αυτή τη στήλη)
-        add a,RQ_ROWS
-        cp (hl)
-        jr nc,.last
-        ld (hl),a               ; όχι το τελευταίο: ως εκεί, και η ίδια
-        ld a,b                  ; στήλη στο επόμενο καρέ
-        call col_redraw
-        ld hl,rq_half
-        inc (hl)
-        pop bc
+; Από την C7 (ai_place, M14): D, E = το κέντρο του νέου χωραφιού του
+; αντιπάλου -> εκεί ψάχνουν τροφή οι χωρικοί του (ai_seed, boot.asm).
+ai_fseed:
+        ld a,d
+        ld (ai_seed),a
+        ld a,e
+        ld (ai_seed + 1),a
         ret
-.last:  ld a,b
-        call col_redraw
-.skip:  xor a
-        ld (rq_half),a
-        ld hl,(rq_x)
-        inc hl
-        inc hl
-        ld (rq_x),hl
-        ld hl,rq_n
-        dec (hl)
-        pop bc
-        jr z,.done
-        dec b
-        jp nz,.c
-        ret
-.done:  ld (hl),255
-        ret
+
+; Από την C7 (rq_step, call0): η στήλη rq_col.
+rq_colw: ld a,(rq_col)
+        jp col_redraw
 
 ; Τα πλήκτρα, η τοποθέτηση, η ανέγερση και η κάρτα του HUD: στο
 ; game/boot.asm (M11: χώρος για την ομίχλη).
@@ -738,7 +665,8 @@ bld_ring:
 ; οι ουρές των έτοιμων κτιρίων. Όταν μια μονάδα είναι έτοιμη, βγαίνει στο
 ; ελεύθερο πλακίδιο δίπλα στο κτίριο πιο κοντά στη μπροστινή του γωνία.
 bld_tick:
-        call rq_step
+        ld hl,rq_step           ; (bank7.asm, M14)
+        call far7
         ld hl,fog_step          ; τα νέα πλακίδια που φαίνονται (M11)
         call far7
         call age_step

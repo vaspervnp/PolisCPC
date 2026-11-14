@@ -53,6 +53,7 @@ BDMG = 0x7FC0                   # RES_P + BLD_MAX + 4
 MAP, MAPW, BLD_RES = 0x8000, 96, 13
 U_JOB, U_TEAM = 27, 28
 AI_TC = (58, 27)
+MB_TC = 0                       # BTY_TOWN_CENTER (data/bld.asm)
 WAVE_AT = 40                    # s
 LIMIT = 900                     # s (M13: η ήττα ενός αδρανούς παίκτη είναι
                                 # χαοτική — 318 s στο M12, 688 s στο M13)
@@ -162,7 +163,9 @@ def defeat(shots):
         dmg = S.c7_read(c, BDMG + 2 * ptc['slot'], 2)
         if dmg[0] | dmg[1]:
             seen.setdefault('dmg', s)
-        if 'gone' not in seen and c.peek(M7.BLD_SLOTS[ptc['slot']]) == 255:
+        bs = c.read_ram(M7.BLD_SLOTS[ptc['slot']], 2)    # ελεύθερη — ή ήδη
+        if 'gone' not in seen and (bs[0] == 255 or bs[1] != 0 or   # άλλο
+                                   bs[0] != MB_TC):   # κτίριο (το χωράφι του)
             seen['gone'] = (s, foot_free(c, ptc['i0'], ptc['j0'], 4))
         if 'wave' in seen and not times:        # 20 s μέτρηση από το κύμα
             for _ in range(25 * 20):

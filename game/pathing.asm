@@ -378,6 +378,7 @@ tile_cell:
 BFS_N       equ 96
 field_build:
         ld (n_cell),a
+field_bld2:                     ; (bank7.asm, bld_fight: με το n_cell έτοιμο)
         ld a,1
         ld (nphase),a           ; για τη μέτρηση (tests/m5_check.py)
         ld a,(field_rr)         ; το επόμενο πεδίο, κυκλικά

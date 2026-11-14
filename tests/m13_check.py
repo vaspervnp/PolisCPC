@@ -236,7 +236,8 @@ def next_level(c, sym, camp, n, how, nxt, shots, tag=''):
 def campaign(c, sym, camp, shots, tag=''):
     """Από το μενού: η εκστρατεία camp -> η πίστα της προόδου."""
     idx = MN.items().index(dict(MN.CAMPAIGNS)[camp])
-    for _ in range(idx - MN.SEL0):
+    c.run_frames(25)                    # (το μενού μόλις φάνηκε: ένα πάτημα
+    for _ in range(idx - MN.SEL0):      # τόσο νωρίς χανόταν)
         c.tap_key(CP.KEY_DOWN)
         c.run_frames(4)
     c.tap_key(CP.KEY_RETURN)

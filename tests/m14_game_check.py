@@ -46,10 +46,12 @@ WANT = {0: 6, 1: 2, 2: 3}       # χωρικοί ανά πόρο (το ξύλο:
 BARRACKS = [(35, 67), (36, 63), (33, 70), (38, 66), (28, 68), (39, 62)]
 HOUSES = [(27, 63), (25, 60), (27, 66), (24, 63), (28, 53), (25, 56),
           (22, 60), (30, 66), (22, 64), (33, 53)]
-RALLY = (39, 60)
+STORE = [(44, 52), (48, 53), (43, 48), (49, 47)]   # αποθήκη δίπλα στον χρυσό
+RALLY = (36, 57)                # στον δρόμο των κυμάτων (από το (44, 56))
 ECON = [(24, 54), (22, 58), (26, 69), (22, 66), (34, 71), (30, 70),
         (21, 62), (37, 70), (24, 72), (19, 58), (28, 74), (33, 74)]
-ARMY = 8                        # σπαθοφόροι για την επίθεση
+ARMY = 12                       # σπαθοφόροι για την επίθεση (ο αμυνόμενος
+                                # πλεονεκτεί: χτυπάει πρώτος)
 FIRST = 330                     # s: μετά το πρώτο κύμα (στα 300)
 VIL_MAX = 10
 LIMIT = 2400                    # s της πίστας
@@ -92,8 +94,10 @@ class Bot:
         g.c, g.sym, g.shots, g.times, g.scrolled, g.ok = c, sym, False, [], \
             [], True
         self.g, self.c, self.sym = g, c, sym
+        g.tick = self.tick              # (και ο κέρσορας: μετά το τέλος, καρέ)
         self.house_i = 0
         self.bar_i = 0
+        self.store_i = 0
         self.econ_i = 0
         self.ordered = 0
         self.attacking = False
@@ -181,10 +185,19 @@ class Bot:
     def cursor_tile(self, i, j):
         self.cam_to(i, j)
         try:
-            self.g.move_cursor(*M6.tile_cursor(self.g, i, j))
+            self.move(*M6.tile_cursor(self.g, i, j))
             return True
         except AssertionError:
             return False
+
+    def move(self, x, y):
+        """Ο κέρσορας ως το (x, y)· αν δεν φτάνει, τα Q A O P αφήνονται (αλλιώς
+        ένα πατημένο σπρώχνει την κάμερα στην άκρη για πάντα)."""
+        try:
+            self.g.move_cursor(x, y)
+        finally:
+            for k in 'qaop':
+                self.c.key_up(k)
 
     def press(self, key, n=2):
         self.c.key_down(key)
@@ -203,6 +216,9 @@ class Bot:
             sel = M6.click_unit(self.g, u['idx'])
         except AssertionError:
             return False
+        finally:
+            for k in 'qaop ':
+                self.c.key_up(k)
         return u['idx'] in sel
 
     def select_box(self, i, j, w=14, h=44):
@@ -217,10 +233,10 @@ class Bot:
              min(112, fy - cy + h) // 6 * 6 + y0 % 6)
         b = (min(b[0], 76 - (76 - b[0]) % 2), b[1])
         try:
-            self.g.move_cursor(*a)
+            self.move(*a)
             self.c.key_down(' ')
             self.tick(2)
-            self.g.move_cursor(*b)
+            self.move(*b)
         except AssertionError:
             self.c.key_up(' ')
             self.tick(2)
@@ -309,6 +325,17 @@ class Bot:
                 pop + queued < cap:
             if self.train(rb[0]):
                 return
+        # αποθήκη δίπλα στον χρυσό (τα ταξίδια ως το Κέντρο είναι 15 πλακίδια)
+        if rb and wood >= 120 and not found and self.store_i < len(STORE) \
+                and not any(b['type'] == 'storage_pit' for b in blds):
+            v = min(vils, key=lambda u: max(abs(a - b) for a, b in
+                                            zip(M3_feet(u), STORE[0])))
+            r = self.build(v, 's', STORE[self.store_i])
+            if r:
+                log(self.sec(), 's: αποθήκη στο', STORE[self.store_i])
+            elif r is False:
+                self.store_i += 1
+            return
         # τροφή: όταν δεν μένει κοντινή, σιταποθήκη -> αγορά -> χωράφια
         if self.food_build(blds, ready, found, wood, vils):
             return
@@ -337,12 +364,14 @@ class Bot:
             for k in sorted(want, key=lambda k: have[k] - want[k]):
                 t = self.source(k)      # (ο πόρος που λείπει, αλλιώς ο
                 if t:                   # επόμενος που υπάρχει)
-                    if self.select_unit(idle[0]):
-                        self.command(*t)
-                        return
+                    for v in idle[:4]:  # (ένας πίσω από το Κέντρο δεν
+                        if self.select_unit(v):     # επιλέγεται: ο επόμενος)
+                            self.command(*t)
+                            return
                     break
         # εχθρικοί στρατιώτες κοντά στην πόλη: οι δικοί μας πολεμούν μόνοι
-        # τους (μια εντολή θα τους έβγαζε από τη μάχη)
+        # τους, από τη θέση τους (μια εντολή θα τους έβγαζε από τη μάχη· και
+        # όποιος πλησιάζει χάνει: ο ακίνητος χτυπάει πρώτος)
         near = [u for u in self.enemies() if u['set'] in (1, 2) and
                 max(abs(a - b) for a, b in zip(M3_feet(u), TC)) < 20]
         if near and not self.attacking:

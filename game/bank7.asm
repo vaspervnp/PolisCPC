@@ -1606,16 +1606,26 @@ bld_fight:
         jp nc,bld_hit
         bit F_MOVE,(ix+U_FL)
         jr z,.go
-        ld a,(ix+U_TEAM)        ; του παίκτη, και περπατάει ίσια: μήπως
-        or a                    ; ετοιμάστηκε το πεδίο της εντολής του;
-        ret nz
-        ld a,(ix+U_FIELD)
-        cp FIELD_WALK
-        ret nz
+        ld a,(ix+U_FIELD)       ; κυνηγούσε μονάδα (που ίσως πέθανε): πίσω
+        cp CH_WALK              ; στο κτίριο — αλλιώς ως το παλιό σημείο, ή
+        jr z,.go                ; για πάντα αν δεν φτάνει (M14)
+        ld a,(ix+U_TEAM)        ; του παίκτη: το πεδίο του κελιού της εντολής
+        or a                    ; του, αν υπάρχει (ετοιμάστηκε, ή δύο νέες
+        ret nz                  ; εντολές έγραψαν τα FIELDS πάνω του)
         call fld_of
-        ret z
+        jr z,.nof
         ld (ix+U_FIELD),a
         ret
+.nof:   ld a,(ix+U_STUCK)       ; κανένα, και κόλλησε σε τοίχο (θύλακας του
+        cp 24                   ; δάσους, M14): νέο BFS για το κελί του, αν
+        ret c                   ; δεν τρέχει άλλο
+        ld a,(n_busy)
+        or a
+        ret nz
+        ld a,(ix+U_TCELL)
+        ld (n_cell),a
+        ld hl,field_bld2
+        jp call0
 .go:    ld a,(ix+U_TEAM)        ; ο αντίπαλος: πρώτα τα σημεία της
         dec a                   ; διαδρομής (ai_route), με δείκτη το U_TCELL
         jr nz,.ring
@@ -1737,10 +1747,135 @@ bld_hit:
         ld h,0
         add hl,hl
         add hl,hl
+        scf                     ; υγεία - ζημιά - 1: carry αν ζημιά >= υγεία
+        sbc hl,de
+        ret nc                  ; (ως εδώ έπεφτε μέσα στο bld_kill που
+        jp bld_kill             ; ακολουθούσε· M14: ό,τι μπήκε ανάμεσα
+                                ; έκανε τα κτίρια σχεδόν άτρωτα)
+
+; ------------------------------------------------------------ επανασχεδίαση
+; (από το buildings.asm, M14.) ΜΙΑ επανασχεδίαση φόντου τη φορά (rq_*), σε
+; κομμάτια των RQ_ROWS γραμμών, ένα ανά καρέ (bld_tick). Ως τώρα, μια νέα
+; (π.χ. ένας θάμνος που άδειασε) ενώ η προηγούμενη ήταν στη μέση (το θεμέλιο
+; ενός σπιτιού) την τελείωνε ΟΛΗ στο ίδιο καρέ: 146 ms. Τώρα η τρέχουσα
+; περιμένει στο rqp (με το κομμάτι της), η νέα γίνεται, και μετά συνεχίζει
+; η παλιά. Μόνο αν περιμένει ήδη μία, όπως πριν.
+rqp_x:      dw 0                ; = rq_x, rq_yb, rq_h, rq_n, rq_half
+            dw 0
+            db 0
+rqp_n:      db 255
+            db 0
+rq_free:
+        ld a,(rq_n)
+        inc a
+        ret z
+        ld a,(rqp_n)
+        inc a
+        jr nz,.sync
+        ld hl,rq_x
+        ld de,rqp_x
+        ld bc,RQ_LEN
+        ldir
+        xor a
+        ld (rq_half),a
+        ret
+.sync:  call rq_step
+        jr rq_free
+
+rq_step:
+        ld a,(rq_n)
+        inc a
+        ret z                   ; καμία
+        ld b,1
+.c:     push bc
+        ld hl,(rq_x)            ; η στήλη στην οθόνη
+        ld de,(cam_x)
         or a
         sbc hl,de
-        jr z,bld_kill
-        ret nc
+        ld a,h
+        or a
+        jr nz,.skip
+        ld a,l
+        cp 80 - 1
+        jr nc,.skip
+        push af
+        ld hl,(rq_yb)           ; κάτω, πάνω (στο 0..VIEW_H, πολλαπλάσια του 4)
+        ld de,(cam_y)
+        or a
+        sbc hl,de
+        push hl
+        ld c,VIEW_H
+        call clamp_c
+        add a,3
+        and #FC
+        ld (col_y1),a
+        pop hl
+        ld a,(rq_h)
+        ld e,a
+        ld d,0
+        or a
+        sbc hl,de
+        call clamp_c
+        and #FC
+        ld (col_y0),a
+        ld hl,col_y1
+        cp (hl)
+        pop bc                  ; B = η στήλη
+        jr nc,.skip
+        ld a,(rq_half)          ; ΣΕ ΚΟΜΜΑΤΙΑ ΤΩΝ RQ_ROWS ΓΡΑΜΜΩΝ (M9), ένα
+        ld c,a                  ; ανά καρέ: μία στήλη ψηλού κτιρίου με τις
+        add a,a                 ; μονάδες γύρω ξεπερνούσε τα 40 ms.
+        add a,c                 ; y0 += RQ_ROWS x κομμάτι
+        add a,a
+        add a,a
+        ld c,a
+        ld a,(col_y0)
+        add a,c
+        ld (col_y0),a
+        cp (hl)
+        jr nc,.skip             ; (τίποτα άλλο σε αυτή τη στήλη)
+        add a,RQ_ROWS
+        cp (hl)
+        jr nc,.last
+        ld (hl),a               ; όχι το τελευταίο: ως εκεί, και η ίδια
+        ld a,b                  ; στήλη στο επόμενο καρέ
+        call rq_col7
+        ld hl,rq_half
+        inc (hl)
+        pop bc
+        ret
+.last:  ld a,b
+        call rq_col7
+.skip:  xor a
+        ld (rq_half),a
+        ld hl,(rq_x)
+        inc hl
+        inc hl
+        ld (rq_x),hl
+        ld hl,rq_n
+        dec (hl)
+        pop bc
+        jr z,.done
+        dec b
+        jp nz,.c
+        ret
+.done:  ld (hl),255
+        ld a,(rqp_n)            ; η επανασχεδίαση που περίμενε: συνεχίζει
+        inc a                   ; από εκεί που έμεινε
+        ret z
+        ld hl,rqp_x
+        ld de,rq_x
+        ld bc,RQ_LEN
+        ldir
+        ld a,255
+        ld (rqp_n),a
+        ret
+
+; A = η στήλη -> col_redraw (κύριος κώδικας: αλλάζει τράπεζες), με την C0.
+rq_col7:
+        ld (rq_col),a
+        ld hl,rq_colw
+        jp call0
 
 ; IY = κτίριο που μόλις ετοιμάστηκε (boot.asm): η εικόνα του — ή, το
 ; ΧΩΡΑΦΙ (M14): το κτίριο φεύγει (bld_kill) και η κάτοψή του γίνεται 3 x 3
@@ -1871,7 +2006,9 @@ AI_PER      equ 25              ; καρέ μονάδων ανά σκέψη
 AI_VIL      equ 10
 AI_VIL0     equ 5
 AI_HOUSES   equ 8
-AI_GAP      equ 60
+AI_FOOD     equ 100             ; κάτω από τόση τροφή: χωράφι (M14)
+AI_FGAP     equ 120             ; s ανάμεσα σε δύο χωράφια του
+AI_GAP      equ 120             ; s ανάμεσα στα κύματα (M14: ήταν 60)
 AI_WMAX     equ 16
 HOME_R      equ 18
 
@@ -1896,6 +2033,7 @@ lv_wait:    db 0                ; καρέ μετά το τέλος (lv_after)
 lv_next:    db 0                ; η πίστα που ακολουθεί (0: το μενού)
 
 ai_t:       db 0
+ai_ft:      dw 0                ; lv_sec του τελευταίου χωραφιού του (M14)
 ai_wave:    db 6
 ai_att:     db 0                ; κύμα σε εξέλιξη
 ai_rr:      db 0
@@ -2324,11 +2462,25 @@ ai_build:
         jr ai_place
 .bar:   ld a,(ab_bar)
         inc a
-        ret nz
+        jr nz,.farm
         ld a,(an_vil)
         cp AI_VIL0
         ret c
         ld a,BTY_BARRACKS
+        jr ai_place
+.farm:  ld hl,(lv_sec)          ; ένα το πολύ ανά AI_FGAP s
+        ld de,(ai_ft)
+        or a
+        sbc hl,de
+        ld de,AI_FGAP
+        sbc hl,de
+        ret c
+        ld hl,(ai_val)          ; με στρατώνα, και η τροφή κάτω από AI_FOOD
+        ld de,AI_FOOD           ; (οι θάμνοι τελειώνουν, M14): χωράφι —
+        or a                    ; χωρίς σιταποθήκη και αγορά (ο παίκτης
+        sbc hl,de               ; τα θέλει)
+        ret nc
+        ld a,BTY_FARM
 
 ; A = τύπος: στην πρώτη ελεύθερη θέση του ai_spots, αν πληρώνεται· θεμέλιο,
 ; και οι χτίστες εκεί.
@@ -2367,6 +2519,18 @@ ai_place:
         ret c
         call ai_pay
         ld (iy+B_OWN),1
+        ld a,(ap_t)             ; χωράφι: η τροφή των χωρικών του από εκεί
+        cp BTY_FARM             ; (ai_seed, boot.asm: όταν ετοιμαστεί, οι
+        jr nz,.nf               ; αγροί του)
+        ld d,(iy+B_I)
+        inc d
+        ld e,(iy+B_J)
+        inc e
+        ld hl,ai_fseed
+        call call0
+        ld hl,(lv_sec)
+        ld (ai_ft),hl
+.nf:
         push iy
         ld hl,bld_redraw        ; το θεμέλιο στην οθόνη
         call call0

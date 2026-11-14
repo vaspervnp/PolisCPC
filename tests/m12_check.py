@@ -53,6 +53,7 @@ D = M.BUILD
 SIG = b'POLIS-M12'
 STACK_LOW = 0xBF00
 FOG, FOG_LEN = 0x5F80, 1152
+C7_CODE = 0x67A0                # game/main.asm: ο κώδικας της C7 (M14: ήταν #6800)
 ALERT_GAP = 250                 # καρέ μονάδων (bank7.asm, SND_ALERT)
 ok = True
 
@@ -166,7 +167,7 @@ def segments(sym):
     m0 = sym['AGE3_NAME']
     return [('κύρια', 0, m0, 0x4000 - m0), ('HUD', 0, 0x4000, 0x4000),
             ('#8000', 0, 0x8000, STACK_LOW - 0x8000),
-            ('C7', 7, 0x6800, 0x1800), ('ομίχλη', 6, FOG, FOG_LEN)]
+            ('C7', 7, C7_CODE, 0x8000 - C7_CODE), ('ομίχλη', 6, FOG, FOG_LEN)]
 
 
 def memory(c, bank, addr, n):
