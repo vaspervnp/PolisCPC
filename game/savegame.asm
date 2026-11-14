@@ -442,6 +442,8 @@ sv_seg: db RAM_BASE
         dw SAVE_M0, code_end - SAVE_M0  ; (όχι ως το #4000: το ελεύθερο
                                         ; μετά τον κώδικα δεν χρειάζεται)
         db RAM_BASE
+        dw SQ_N, UNITS          ; οι ομάδες (M15: πάνω από το code_end)
+        db RAM_BASE
         dw HUD_PAGE, #4000
         db RAM_BASE
         dw #8000, STACK_LOW - #8000
@@ -460,6 +462,6 @@ sv_p:       dw 0                ; η θέση στον buffer του τομέα
 sv_k:       db 0                ; ο επόμενος τομέας του αρχείου
 sv_blk:     ds 48               ; τα blocks του αρχείου, 3 extents
 
-SAVE_BYTES  equ SIG_LEN + code_end - SAVE_M0 + #4000 + STACK_LOW - #8000 + #8000 - C7_CODE + FOG_LEN
+SAVE_BYTES  equ SIG_LEN + code_end - SAVE_M0 + UNITS + #4000 + STACK_LOW - #8000 + #8000 - C7_CODE + FOG_LEN
         assert SAVE_BYTES <= SAVE_FILE, 'SAVE.BIN too small'
         assert SAVE_FILE <= SV_EXT * 16384 && SAVE_FILE > (SV_EXT - 1) * 16384, 'SV_EXT'

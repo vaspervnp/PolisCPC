@@ -210,9 +210,13 @@ def expected(c, sym, ref):
                 hidden(u, blds):
             spr = occluded(sprite_of(u, True),
                            RED_HI if u['team'] & 1 else OUTLINE)
+            stamp(img, spr, u['sx'], u['sy'])
         else:
-            spr = painted(u, spr)
-        stamp(img, spr, u['sx'], u['sy'])
+            stamp(img, painted(u, spr), u['sx'], u['sy'])
+            n = c.read_ram(SQ_N + u['idx'], 1)[0] + 1
+            if u['addr'] < ANCHOR_REC and not u['fl'] & F_FIXED and \
+                    u['set'] in (1, 2, 4) and n >= 2:
+                stamp_label(img, n, u['sx'], u['sy'])
         if u['fl'] & F_SEL:
             stamp(img, MARK, u['sx'], u['sy'])
     for sx, sy in arrows(c):               # τα βέλη: XOR #FF, πάνω από όλα
@@ -220,6 +224,30 @@ def expected(c, sym, ref):
             for x in (2 * sx, 2 * sx + 1):
                 img[y][x] ^= 15
     return img
+
+
+# ---------------------------------------------- οι ομάδες (M15)
+SQ_N = 0x3F00                   # το πλήθος - 1 ανά μονάδα (game/main.asm)
+_DIG = open(os.path.join(M.ROOT, 'data', 'digits.bin'), 'rb').read()
+
+
+def _pens(b):
+    return [((b >> 7) & 1) | ((b >> 3) & 1) << 1 | ((b >> 5) & 1) << 2 |
+            ((b >> 1) & 1) << 3,
+            ((b >> 6) & 1) | ((b >> 2) & 1) << 1 | ((b >> 4) & 1) << 2 |
+            (b & 1) << 3]
+
+
+def stamp_label(img, n, x, y):
+    """Ο αριθμός της ομάδας (units.asm, sq_label): τα ψηφία του HUD, οι
+    δεκάδες κενές κάτω από το 10, στις 5 κάτω γραμμές του 4 x 16."""
+    ds = [n // 10 if n >= 10 else 10, n % 10]
+    for r in range(5):
+        row = []
+        for d in ds:
+            for b in _DIG[d * 10 + 2 * r: d * 10 + 2 * r + 2]:
+                row += _pens(b)
+        img[y + 11 + r][x * 2: x * 2 + 8] = row
 
 
 def arrows(c):

@@ -1408,7 +1408,8 @@ units_draw:
 .t:     call blit16t
         jr .ov
 .d0:    call blit16
-.ov:    ld a,(ix+U_SET)         ; με φορτίο: το δέμα από πάνω (bank7.asm)
+.ov:    call sq_label           ; ομάδα: ο αριθμός της στα πόδια (M15)
+        ld a,(ix+U_SET)         ; με φορτίο: το δέμα από πάνω (bank7.asm)
         cp 3
         ld hl,carry_ov
         call z,far7s
@@ -1421,6 +1422,79 @@ units_draw:
         jp nz,.u
         ld a,RAM_BASE
         jp setram
+
+; IX = στρατιώτης (σετ 1, 2, 4) σε ομάδα 2 και πάνω: το πλήθος της (SQ_N), δύο ψηφία
+; του HUD (λευκά σε μπλε, 2 x 2 bytes x 5 γραμμές) στις 5 κάτω γραμμές του
+; ορθογωνίου του — μέσα στο 4 x 16: το σβήσιμο και η επαναφορά τα καλύπτουν.
+; Οι δεκάδες κενές κάτω από το 10.
+sq_label:
+        ld a,(ix+U_SET)
+        dec a
+        cp 2
+        jr c,.y                 ; 1, 2
+        cp 3                    ; 4: ο οπλίτης
+        ret nz
+.y:     ld l,(ix+U_IDX)
+        ld h,SQ_N >> 8
+        ld a,(hl)
+        or a                    ; μόνος του: χωρίς αριθμό (~0,3 ms ανά
+        ret z                   ; σχεδίαση: στη μάχη τα καρέ το πληρώνουν)
+        inc a
+        ld c,-1
+.t:     inc c                   ; C = δεκάδες, A = μονάδες
+        sub 10
+        jr nc,.t
+        add a,10
+        call sq_gl
+        ld (sq_gu),hl
+        ld a,c
+        or a
+        jr nz,.k
+        ld a,10                 ; (το κενό)
+.k:     call sq_gl
+        ld (sq_gt),hl
+        ld a,(ix+U_SY)
+        add a,11
+        ld (sq_y),a
+        ld b,5
+.r:     push bc
+        ld a,(sq_y)
+        ld b,(ix+U_SX)
+        call line_x             ; DE = η γραμμή
+        ld hl,(sq_gt)
+        call .two
+        ld (sq_gt),hl
+        ld hl,(sq_gu)
+        call .two
+        ld (sq_gu),hl
+        ld hl,sq_y
+        inc (hl)
+        pop bc
+        djnz .r
+        ret
+.two:   ld a,(hl)
+        ld (de),a
+        inc hl
+        inc e
+        call z,de_carry
+        ld a,(hl)
+        ld (de),a
+        inc hl
+        inc e
+        jp z,de_carry
+        ret
+
+; A = ψηφίο (10: κενό) -> HL = SQ_FONT + 10 A.
+sq_gl:  ld l,a
+        add a,a
+        add a,a
+        add a,l
+        add a,a
+        ld l,a
+        ld h,0
+        ld de,SQ_FONT
+        add hl,de
+        ret
 
 ; Οι πόζες της επίθεσης των κόκκινων σπαθοφόρων και τοξοτών (καρέ ATK_W, 13,
 ; 15, 17), μεταφρασμένες μία φορά στην εκκίνηση (rpose_init, init.asm) στις

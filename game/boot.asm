@@ -699,6 +699,8 @@ hud_card:
         ld a,(sel_bld)
         cp 255
         jr nz,.on
+        call sq_card            ; μία ομάδα επιλεγμένη (hudc.asm, M15)
+        ret c
         ld hl,card_on
         ld a,(hl)
         or a

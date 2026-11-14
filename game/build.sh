@@ -39,8 +39,8 @@ for line in open('build/polis.sym'):
         sym[p[0]] = int(p[1][1:], 16)
 code = sym['CODE_END']
 print('POLIS.BIN: %d bytes, #0040-#%04X· κώδικας ως #%04X (ελεύθερα ώς το '
-      '#4000: %d)' % (size, end - 1, code - 1, 0x4000 - code))
-assert code <= 0x4000, 'ο κώδικας μπαίνει στο παράθυρο τράπεζας #4000'
+      'SQ_N #3F00: %d)' % (size, end - 1, code - 1, 0x3F00 - code))
+assert code <= 0x3F00, 'ο κώδικας μπαίνει στις ομάδες (SQ_N, #3F00, M15)'
 assert end <= 0x8000, 'τα δεδομένα εκκίνησης φτάνουν στον χάρτη #8000'
 # το map_z, όπως το βλέπει ο κώδικας: το «ld hl,map_z» στην αρχή του start
 # (di, ld sp,nn, ld hl,nn) — το .sym έχει τις ασυμπίεστες θέσεις μετά από LZX0

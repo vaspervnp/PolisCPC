@@ -101,6 +101,7 @@ class Bot:
         self.econ_i = 0
         self.ordered = 0
         self.attacking = False
+        self.tries = {}                 # στρατιώτης -> προσπάθειες συγκέντρωσης
         self.events = []
 
     # ---------------------------------------------------- χρόνος, κατάσταση
@@ -379,12 +380,15 @@ class Bot:
         # οι νέοι σπαθοφόροι: στη συγκέντρωση
         ri, rj = RALLY
         loose = [u for u in sols if not u['fl'] & S.F_MOVE and
-                 max(abs(a - b) for a, b in zip(M3_feet(u), RALLY)) > 4]
+                 max(abs(a - b) for a, b in zip(M3_feet(u), RALLY)) > 4 and
+                 self.tries.get(u['idx'], 0) < 3]
         if loose and not self.attacking:
             # (πολλοί στο ίδιο πλακίδιο, π.χ. βγαλμένοι από τον στρατώνα όσο
             # περιμέναμε το κύμα: το κλικ πιάνει τον πάνω-πάνω, όχι πάντα
-            # αυτόν — τότε με κουτί γύρω του)
+            # αυτόν — τότε με κουτί γύρω του· και όποιος δεν κουνήθηκε μετά
+            # από 3 προσπάθειες, π.χ. κολλημένος δίπλα στον στρατώνα, μένει)
             u = loose[0]
+            self.tries[u['idx']] = self.tries.get(u['idx'], 0) + 1
             if self.select_unit(u) or self.select_box(*M3_feet(u)):
                 self.command(ri, rj)
             return

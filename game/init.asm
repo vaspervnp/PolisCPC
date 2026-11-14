@@ -421,6 +421,16 @@ hud_init:
         jr nz,.k
         ld de,digits            ; και τα ψηφία, στις γραμμές που δεν φαίνονται
         ld bc,DIGITS_LEN
+        push hl
+        ldir
+        pop hl                  ; και στον κύριο κώδικα, για τις ομάδες (M15)
+        ld de,SQ_FONT
+        ld bc,DIGITS_LEN
+        ldir
+        ld hl,SQ_N              ; όλοι μόνοι τους
+        ld de,SQ_N + 1
+        ld bc,UNITS - 1
+        ld (hl),0
         ldir
         ld hl,HIA_AT            ; οι ρουτίνες στις κρυφές σειρές (main.asm)
         ld de,HI_A

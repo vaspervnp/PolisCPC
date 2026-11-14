@@ -91,6 +91,28 @@ tab_a:  add a,l
         ld a,(hl)
         ret
 
+; IX = ομάδα (M15, sq_card): A = η υγεία του μπροστινού της σε pixels της
+; μπάρας της κάρτας, 0..12 (υγεία x 12 / η αρχική του σετ).
+sq_hp:  call st_hl              ; A = η αρχική
+        ld e,a
+        ld d,0
+        call hp_hl
+        ld l,(hl)
+        ld h,d
+        ld b,h
+        ld c,l
+        add hl,hl
+        add hl,bc
+        add hl,hl
+        add hl,hl
+        ld b,-1
+.d:     inc b
+        or a
+        sbc hl,de
+        jr nc,.d
+        ld a,b
+        ret
+
 ; IX -> HL = &HP[idx] (+128: ANIM)
 hp_hl:  ld l,(ix+U_IDX)
         ld h,C7_HP >> 8

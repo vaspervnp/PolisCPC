@@ -165,7 +165,9 @@ def screen_pens(c):
 
 def segments(sym):
     m0 = sym['AGE3_NAME']
-    return [('κύρια', 0, m0, sym['CODE_END'] - m0), ('HUD', 0, 0x4000, 0x4000),
+    return [('κύρια', 0, m0, sym['CODE_END'] - m0),
+            ('ομάδες', 0, 0x3F00, 128),           # SQ_N (M15)
+            ('HUD', 0, 0x4000, 0x4000),
             ('#8000', 0, 0x8000, STACK_LOW - 0x8000),
             ('C7', 7, C7_CODE, 0x8000 - C7_CODE), ('ομίχλη', 6, FOG, FOG_LEN)]
 

@@ -487,3 +487,90 @@ mr_x0:      db 0
 mr_x1:      db 0
 mr_y0:      db 0
 mr_y1:      db 0
+
+; ------------------------------------------------------------ ομάδες (M15)
+
+; Από το hud_card, χωρίς επιλεγμένο κτίριο: ΜΙΑ επιλεγμένη ομάδα στρατιωτών
+; -> στην κάρτα το πλήθος της (δύο ψηφία: οι δεκάδες στο CARD_X - 2) και η
+; υγεία του «μπροστινού» της στη μπάρα· carry. Αλλιώς NC, και αν έδειχνε
+; ομάδα σβήνει τις δεκάδες (τα άλλα τα σβήνει το hud_card: card_on).
+sq_card:
+        ld a,(sel_n)
+        cp 1
+        jr nz,.no
+        push ix
+        ld ix,(SELLIST)
+        ld a,(ix+U_SET)
+        dec a
+        cp 2
+        jr c,.y
+        cp 3
+        jr nz,.no2
+.y:     ld a,1
+        ld (sq_on),a
+        ld (card_on),a
+        ld l,(ix+U_IDX)
+        ld h,SQ_N >> 8
+        ld a,(hl)
+        inc a
+        ld c,-1
+.t:     inc c
+        sub 10
+        jr nc,.t
+        add a,10
+        push bc
+        call card_digit         ; οι μονάδες (boot.asm)
+        pop bc
+        ld a,c
+        or a
+        jr nz,.k
+        ld a,10
+.k:     call sq_tens
+        ld hl,sq_hp             ; (bank7.asm)
+        call far7
+        pop ix
+        call card_bar
+        scf
+        ret
+.no2:   pop ix
+.no:    ld hl,sq_on
+        ld a,(hl)
+        or a
+        ret z
+        ld (hl),0
+        ld a,10
+        call sq_tens
+        or a
+        ret
+
+; A = ψηφίο (10 κενό): στην κάρτα, 2 bytes αριστερά από το card_digit.
+sq_tens:
+        ld l,a
+        add a,a
+        add a,a
+        add a,l
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,digits
+        add hl,de
+        ex de,hl
+        ld hl,card_rows
+        ld b,5
+.l:     ld a,(hl)
+        inc hl
+        push hl
+        ld h,(hl)
+        sub 2
+        ld l,a
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc hl
+        ld a,(de)
+        ld (hl),a
+        inc de
+        pop hl
+        inc hl
+        djnz .l
+        ret
