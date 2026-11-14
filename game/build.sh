@@ -14,13 +14,15 @@ set -e
 cd "$(dirname "$0")/.."
 mkdir -p build
 rm -f build/polis.dsk
-# Πρώτο πέρασμα (M13): μόνο ο κώδικας της C7 στο build/c7.bin, για να μπει
-# συμπιεσμένος στο POLIS.BIN από τα κανονικά περάσματα.
+# Πρώτο πέρασμα (M13): μόνο ο κώδικας της C7 στο build/c7.bin (και, M14, του
+# init_z στο build/init.bin), για να μπουν συμπιεσμένοι στο POLIS.BIN από τα
+# κανονικά περάσματα.
 rasm game/main.asm -DC7RAW=1 -o build/c7raw -sz > /dev/null
 rasm game/main.asm -o build/polis -s -sz
 rasm game/main.asm -DSNA=1 -o build/polis -sz -v2 -ss
 rasm game/main.asm -DSNA=1 -DBARS=1 -o build/m0_bars -sz -v2
 cmp -s build/c7.bin build/c7chk.bin || { echo 'ο κώδικας της C7 άλλαξε ανάμεσα στα περάσματα (build/c7.bin)'; exit 1; }
+cmp -s build/init.bin build/initchk.bin || { echo 'ο κώδικας του init_z άλλαξε ανάμεσα στα περάσματα (build/init.bin)'; exit 1; }
 # Το POLIS.BIN φορτώνεται στο #0040. Ό,τι χρειάζεται το παιχνίδι όσο τρέχει
 # (ως το code_end) πρέπει να τελειώνει πριν το παράθυρο τράπεζας #4000· τα
 # συμπιεσμένα της εκκίνησης ακολουθούν και μπορούν να το περάσουν (κύρια RAM,

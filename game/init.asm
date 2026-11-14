@@ -1,6 +1,6 @@
 ; init.asm — ό,τι τρέχει ΜΙΑ φορά, στην εκκίνηση (M11).
 ;
-; Συναρμολογημένο για το INIT (#F000: η μνήμη της οθόνης). Το `start` το
+; Συναρμολογημένο για το INIT (#E000: η μνήμη της οθόνης). Το `start` το
 ; αντιγράφει εκεί μετά το units_gfx (που χρησιμοποιεί όλη την οθόνη ως
 ; ενδιάμεσο χώρο) και πριν το hud_init (που χρησιμοποιεί μόνο ως το
 ; ~#D200)· το clear_screen (στο BOOT) τρέχει όταν τελειώσουν όλα.
@@ -29,6 +29,12 @@ lv_init:
 .cp:    ld de,lv_h
         ld bc,H_TEXT
         ldir
+        ld a,(tut_on)           ; το tutorial (menu.asm): η παρτίδα του χάρτη
+        or a                    ; της εκκίνησης, με το πρώτο κύμα αργά
+        jr z,.nt
+        ld hl,TUT_COOL
+        ld (lv_h + H_COOL),hl
+.nt:
         xor a
         ld (LV_HDR),a
         ld a,RAM_CMP
@@ -393,9 +399,8 @@ gather_init:
 ; Το HUD στην κύρια RAM #4000 (με τις τράπεζες στη θέση τους): οι 7 σειρές
 ; κάθε οκτάδας αποσυμπιέζονται στην οθόνη και πάνε στη θέση τους· τα
 ; υπόλοιπα μηδέν (οι σειρές 7-20 του καρέ Β φαίνονται: μαύρο).
-HUD_ROWS    equ 7
+; HL = hud_z (το start: μέσα στο init_z ο rasm το υπολογίζει λάθος, M14).
 hud_init:
-        ld hl,hud_z
         ld de,SCREEN
         call dzx0
         ld hl,HUD_PAGE          ; όλη η σελίδα ως το BOOT (main.asm)
@@ -417,7 +422,78 @@ hud_init:
         ld de,digits            ; και τα ψηφία, στις γραμμές που δεν φαίνονται
         ld bc,DIGITS_LEN
         ldir
+        ld hl,HIA_AT            ; οι ρουτίνες στις κρυφές σειρές (main.asm)
+        ld de,HI_A
+        ld bc,HIA_LEN
+        ldir
+        ld de,HI_B
+        ld bc,HIB_LEN
+        ldir
+        ld de,HI_C
+        ld bc,HIC_LEN
+        ldir
+                                ; (πέφτει στο rpose_init)
+
+; Οι πόζες της επίθεσης των κόκκινων (red_pose, units.asm): από τα σετ της
+; C5, με τα δεδομένα μέσα από το TR1 (μάσκα, δεδομένα ανά byte), μέσω της
+; οθόνης, στο RPOSE της σελίδας του HUD.
+rpose_init:
+        ld ix,rp_tab
+        ld de,RPOSE
+        ld b,8
+        call .set
+        ld de,RPOSE2
+        ld b,6
+.set:
+.f:     push bc
+        push de
+        ld l,(ix+0)
+        ld h,(ix+1)
+        inc ix
+        inc ix
+        ld a,RAM_SPR
+        call setram
+        ld de,SCREEN
+        ld b,64
+.b:     ld a,(hl)               ; η μάσκα
+        ld (de),a
+        inc hl
+        inc de
+        ld a,(hl)               ; τα δεδομένα, μεταφρασμένα
+        push hl
+        ld l,a
+        ld h,TR1 >> 8
+        ld a,(hl)
+        pop hl
+        ld (de),a
+        inc hl
+        inc de
+        djnz .b
+        ld a,RAM_BASE
+        call setram
+        pop de
+        ld hl,SCREEN
+        ld bc,128
+        ldir
+        pop bc
+        djnz .f
         ret
+rp_tab:
+rps = 1
+        repeat 2
+        dw SPR_BASE + rps * SPR_STRIDE + ATK_W * 128
+        dw SPR_BASE + rps * SPR_STRIDE + 13 * 128
+        dw SPR_BASE + rps * SPR_STRIDE + 15 * 128
+        dw SPR_BASE + rps * SPR_STRIDE + 17 * 128
+rps = rps + 1
+        rend
+rps = 1                         ; ο θάνατος (RPOSE2)
+        repeat 2
+        dw SPR_BASE + rps * SPR_STRIDE + 18 * 128
+        dw SPR_BASE + rps * SPR_STRIDE + 19 * 128
+        dw SPR_BASE + rps * SPR_STRIDE + 20 * 128
+rps = rps + 1
+        rend
 
 
 ; ---- ο εξερευνημένος χάρτης (M11, fog.asm)

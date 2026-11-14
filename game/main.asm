@@ -96,11 +96,13 @@ start:
         ldir
         call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
         call menu               ; πολιτισμός ή φόρτωμα (menu.asm, M12)
-        ld hl,init_phys         ; οι ρουτίνες της εκκίνησης στην οθόνη
+        ld hl,init_z            ; οι ρουτίνες της εκκίνησης στην οθόνη
         ld de,INIT              ; (init.asm, M11), και πίσω τους η
-        ld bc,INIT_LEN + SVM_LEN        ; αποθήκευση (savegame.asm, M12)
-        ldir
-        call hud_init           ; το HUD -> #4000, μέσω της οθόνης
+        call dzx0               ; αποθήκευση (savegame.asm, M12) και οι
+                                ; ρουτίνες της σελίδας του HUD
+        ld hl,hud_z             ; (από εδώ: ο rasm δίνει λάθος τιμή στις
+        call hud_init           ; ετικέτες των συμπιεσμένων μέσα στο init_z)
+                                ; το HUD -> #4000, μέσω της οθόνης
         ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
         ld b,16
 .z:     ld (hl),0
@@ -113,7 +115,7 @@ start:
         call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
         call gather_init        ; οι πηγές, και οι αριθμοί του HUD
         call fog_init           ; ο εξερευνημένος χάρτης (M11)
-        call clear_screen       ; (και ο κώδικας της εκκίνησης στο #F000)
+        call clear_screen       ; (και ο κώδικας της εκκίνησης στο INIT)
         ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
         call crtc_w
         ld a,1
@@ -325,7 +327,6 @@ pen_pair:
         include "screen.asm"
         include "scroll.asm"
         include "units.asm"
-        include "input.asm"
         include "pathing.asm"
         include "../data/nav.asm"
         include "../data/gather.asm"
@@ -337,6 +338,7 @@ pen_pair:
         include "disk.asm"
         include "fog.asm"
         include "minimap.asm"
+        include "sound.asm"
 
         ifdef BARS
 linebuf:
@@ -476,6 +478,8 @@ n_way:      db 0
 n_in:       db 0
 n_dir:      db 0
 n_page:     db 0
+w_page:     db 0                ; η σελίδα του πεδίου στο way_point (pathing.asm)
+bfs_c:      db 0                ; το κελί-στόχος του BFS σε εξέλιξη (pathing.asm)
 field_rr:   db 0
 field_f:    db 0
 field_tc:   db 255, 255
@@ -543,8 +547,7 @@ rq_yb:      dw 0
 rq_h:       db 0
 rq_n:       db 255
 rq_half:    db 0                ; τα κομμάτια RQ_ROWS της στήλης του rq που έγιναν
-RQ_LEN      equ $ - rq_x        ; (bank7.asm: rq_free, rqp_x)
-rq_col:     db 0                ; η στήλη για το col_r0 (bank7.asm)
+RQ_LEN      equ $ - rq_x        ; (hudc.asm: rq_free, rqp_x)
 bq_tot:     db 0                ; μονάδες σε όλες τις ουρές
 bld_top:    db 1                ; οι βρόχοι των κτιρίων: ως εδώ (bld_new, >= 1)
 DQ_MAX      equ 4
@@ -651,32 +654,6 @@ BOOT_LEN    equ boot_end - BOOT
         assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
         assert boot_phys + BOOT_LEN <= BOOT, 'boot_phys overlaps BOOT'
 
-; Οι ρουτίνες της εκκίνησης (init.asm, M11): στη μνήμη της οθόνης, πάνω από
-; ό,τι χρησιμοποιεί ως ενδιάμεσο χώρο το hud_init.
-INIT        equ #F000
-init_phys:
-        org INIT,init_phys
-        include "init.asm"
-init_end:
-        org init_phys + init_end - INIT
-INIT_LEN    equ init_end - INIT
-        assert SCREEN + 8 * HUD_ROWS * 80 + DIGITS_LEN <= INIT, 'hud_init temp over INIT'
-
-; Η αποθήκευση (savegame.asm, M12): τρέχει στην οθόνη (SVM), ταξιδεύει
-; ΑΜΕΣΩΣ μετά το INIT (αντιγράφονται μαζί, στο SVM_AT), και το fog_init τη
-; φυλάει στο SVM_STORE.
-SVM         equ #C000
-SVM_BUF     equ #C800           ; ο κατάλογος (2 KB), μετά ο τομέας (512)
-mod_phys:
-        org SVM,mod_phys
-        include "savegame.asm"
-mod_end:
-        org mod_phys + mod_end - SVM
-SVM_LEN     equ mod_end - SVM
-SVM_AT      equ INIT + INIT_LEN
-        assert SVM_AT + SVM_LEN <= #FFFF && SVM + SVM_LEN <= SVM_BUF, 'SVM'
-        assert SVM_BUF + 2048 + 512 <= INIT, 'SVM_BUF over INIT'
-        assert SVM_STORE + SVM_LEN <= BKT0, 'SVM_STORE'
 
 ; Το μενού έναρξης (menu.asm, M12): τρέχει στη θέση του, πριν από το BOOT.
         include "menu.asm"
@@ -747,6 +724,21 @@ c7_z:
 c7_z        equ 0
         endif
 
+; Οι ρουτίνες της εκκίνησης, η αποθήκευση και οι ρουτίνες της σελίδας του
+; HUD (M14: συμπιεσμένα, σε ένα μπλοκ, από το build/init.bin του πρώτου
+; περάσματος, όπως η C7). Το start τα αποσυμπιέζει στο INIT μετά το μενού
+; (που ζωγραφίζει στην οθόνη). Ο κώδικάς τους συναρμολογείται πιο κάτω, μετά
+; το end, για τις ετικέτες. ΜΕΤΑ το c7_z: το πρώτο πέρασμα δεν το έχει, και
+; ό,τι είναι πιο πίσω μετακινείται (το init αναφέρεται μόνο στο hud_z).
+        ifndef C7RAW
+init_z:
+        lzx0
+        incbin "../build/init.bin"
+        lzclose
+        else
+init_z      equ 0
+        endif
+
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB). ΤΕΛΕΥΤΑΙΟΣ:
 ; αποσυμπιέζεται πριν από οτιδήποτε, άρα μπορεί να περνάει πάνω από το BOOT
 ; (#7A30) ως το #8000 — όλα τα άλλα όχι (build.sh).
@@ -760,6 +752,7 @@ map_z:
 ; στοιχισμένη θέση. Ό,τι θέλει στοίχιση μπαίνει πριν ή ζει εκτός binary.
 
 end:
+
 
 
 ; Το «end < #4000» ΔΕΝ ελέγχεται εδώ: ο rasm αποτιμά τις ετικέτες μετά από
@@ -780,6 +773,89 @@ end:
 
 ; Τα αρχεία των εποχών (ένα ανά πολιτισμό) και του οπλίτη μπαίνουν στη
 ; δισκέτα από το game/build.sh (src/dsk.py), χωρίς κεφαλίδα AMSDOS (M12).
+
+; ------------------------------------------------------------ το init_z
+; Ο κώδικας του init_z, ΕΞΩ από το POLIS.BIN, σε ΔΙΚΟ ΤΟΥ χώρο μνήμης του
+; rasm (όπως η C7, πιο κάτω): συναρμολογημένος για το INIT, όπου τον
+; αποσυμπιέζει το start. Στο snapshot πέφτει στην C4 (ο καθρέφτης, που τον
+; ξαναζωγραφίζει έτσι κι αλλιώς η πρώτη σχεδίαση).
+        ifdef SNA
+        bank 4
+        else
+        bank
+        endif
+INIT        equ #E000           ; (ως το M14 #F000: δεν χωρούσαν πια ως το
+                                ; #FFFF· ο ενδιάμεσος χώρος της εκκίνησης
+                                ; φτάνει ως το ~#D200)
+        org INIT
+; Οι ρουτίνες της εκκίνησης (init.asm, M11): στη μνήμη της οθόνης, πάνω από
+; ό,τι χρησιμοποιεί ως ενδιάμεσο χώρο το hud_init.
+init_phys:
+        org INIT,init_phys
+        include "init.asm"
+init_end:
+        org init_phys + init_end - INIT
+INIT_LEN    equ init_end - INIT
+        assert SCREEN + 8 * HUD_ROWS * 80 + DIGITS_LEN <= INIT, 'hud_init temp over INIT'
+
+; Η αποθήκευση (savegame.asm, M12): τρέχει στην οθόνη (SVM), ταξιδεύει
+; ΑΜΕΣΩΣ μετά το INIT (αντιγράφονται μαζί, στο SVM_AT), και το fog_init τη
+; φυλάει στο SVM_STORE.
+SVM         equ #C000
+SVM_BUF     equ #C800           ; ο κατάλογος (2 KB), μετά ο τομέας (512)
+mod_phys:
+        org SVM,mod_phys
+        include "savegame.asm"
+mod_end:
+        org mod_phys + mod_end - SVM
+SVM_LEN     equ mod_end - SVM
+SVM_AT      equ INIT + INIT_LEN
+        assert SVM_AT + SVM_LEN <= #FFFF && SVM + SVM_LEN <= SVM_BUF, 'SVM'
+
+; Ρουτίνες του παιχνιδιού στις κρυφές σειρές της σελίδας του HUD (οι 7-24
+; κάθε οκτάδας: σειρές του καρέ Β που δεν φαίνονται από το M11), όπως το
+; BOOT: μόνο με την C0 στο #4000, χωρίς δική τους αλλαγή τράπεζας εκεί, από
+; την C7 με το call0. Ταξιδεύουν ΑΜΕΣΩΣ μετά την αποθήκευση (αντιγράφονται
+; μαζί με το INIT), και το hud_init τις βάζει στη θέση τους αφού καθαρίσει
+; τη σελίδα. Ελεύθερα ακόμα (μετρημένα σε παρτίδα, M14): #5230, #6A30,
+; #7230, από 1.120 ως 1.232 bytes το καθένα.
+HI_A        equ #5A30           ; ο κέρσορας, η επιλογή, η εντολή (input.asm)
+hia_phys:
+        org HI_A,hia_phys
+        include "input.asm"
+hia_end:
+        org hia_phys + hia_end - HI_A
+HIA_LEN     equ hia_end - HI_A
+        assert HI_A + HIA_LEN <= PX, 'HI_A past PX'
+HI_B        equ #6230           ; οι δουλειές των χωρικών (jobs.asm)
+hib_phys:
+        org HI_B,hib_phys
+        include "jobs.asm"
+hib_end:
+        org hib_phys + hib_end - HI_B
+HIB_LEN     equ hib_end - HI_B
+        assert HI_B + HIB_LEN <= PN, 'HI_B past PN'
+HI_C        equ #4230           ; επανασχεδίαση, ομίχλη, μίνι χάρτης (hudc.asm)
+hic_phys:
+        org HI_C,hic_phys
+        include "hudc.asm"
+hic_end:
+        org hic_phys + hic_end - HI_C
+HIC_LEN     equ hic_end - HI_C
+        assert HI_C + HIC_LEN <= PORTAL, 'HI_C past PORTAL'
+HIA_AT      equ SVM_AT + SVM_LEN        ; στην οθόνη, μετά το INIT
+HI_LEN      equ HIA_LEN + HIB_LEN + HIC_LEN
+        assert HIA_AT + HI_LEN <= #FFFF, 'HI past #FFFF'
+        assert SVM_BUF + 2048 + 512 <= INIT, 'SVM_BUF over INIT'
+        assert SVM_STORE + SVM_LEN <= BKT0, 'SVM_STORE'
+INIT_ALL    equ HIA_AT + HI_LEN - INIT
+        ifndef SNA
+        ifdef C7RAW
+        save 'build/init.bin',INIT,INIT_ALL     ; -> init_z (το δεύτερο πέρασμα)
+        else
+        save 'build/initchk.bin',INIT,INIT_ALL  ; (build.sh: ίδιο με το init.bin)
+        endif
+        endif
 
 ; ------------------------------------------------------------ το tutorial
 ; Στην C6 (game/tutor.asm), σε δικό του χώρο του rasm: build/tutor.bin, και

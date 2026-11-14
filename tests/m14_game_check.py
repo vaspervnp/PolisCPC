@@ -381,7 +381,11 @@ class Bot:
         loose = [u for u in sols if not u['fl'] & S.F_MOVE and
                  max(abs(a - b) for a, b in zip(M3_feet(u), RALLY)) > 4]
         if loose and not self.attacking:
-            if self.select_unit(loose[0]):
+            # (πολλοί στο ίδιο πλακίδιο, π.χ. βγαλμένοι από τον στρατώνα όσο
+            # περιμέναμε το κύμα: το κλικ πιάνει τον πάνω-πάνω, όχι πάντα
+            # αυτόν — τότε με κουτί γύρω του)
+            u = loose[0]
+            if self.select_unit(u) or self.select_box(*M3_feet(u)):
                 self.command(ri, rj)
             return
         # επίθεση

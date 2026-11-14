@@ -193,11 +193,12 @@ fog_reveal:
         ld a,(hl)
         or c
         ld (hl),a
-        push bc                 ; νέο: στο FD_TAB (bank7.asm), και πίσω
-        push de                 ; στην C6
+        push bc                 ; νέο: στο FD_TAB (hudc.asm, με την C0), και
+        push de                 ; πίσω στην C6
         push hl
-        ld hl,fog_new
-        call far7
+        ld a,RAM_BASE
+        call setram
+        call fog_new
         ld a,RAM_RES
         call setram
         pop hl

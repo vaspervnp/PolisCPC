@@ -10,7 +10,7 @@
 ; BOOT. Από την C7 με το call0.
 
 ; Οι ρουτίνες της εκκίνησης (units_init, nav_init, hud_init ...) ζούσαν
-; εδώ ως το M10· πήγαν στο game/init.asm (#F000).
+; εδώ ως το M10· πήγαν στο game/init.asm (INIT, στην οθόνη).
 
 ; ---- από το game/units.asm
 

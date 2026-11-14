@@ -580,8 +580,7 @@ rg_full:
 ; IY = κτίριο.
 bld_redraw:
         push iy                 ; (το rq_free ζωγραφίζει: αλλάζει το IY)
-        ld hl,rq_free           ; (bank7.asm, M14)
-        call far7
+        call rq_free            ; (hudc.asm, M14)
         pop iy
         ld l,(iy+B_WX)
         ld h,(iy+B_WX+1)
@@ -613,8 +612,7 @@ RQ_ROWS     equ 12              ; γραμμές ανά καρέ (πολλαπλ
 ; του, στο rq.
 rq_set: push hl
         push de
-        ld hl,rq_free           ; (bank7.asm, M14)
-        call far7
+        call rq_free            ; (hudc.asm, M14)
         pop de
         pop hl
         ld (rq_x),hl
@@ -635,10 +633,6 @@ ai_fseed:
         ld a,e
         ld (ai_seed + 1),a
         ret
-
-; Από την C7 (rq_step, call0): η στήλη rq_col.
-rq_colw: ld a,(rq_col)
-        jp col_redraw
 
 ; Τα πλήκτρα, η τοποθέτηση, η ανέγερση και η κάρτα του HUD: στο
 ; game/boot.asm (M11: χώρος για την ομίχλη).
@@ -665,10 +659,8 @@ bld_ring:
 ; οι ουρές των έτοιμων κτιρίων. Όταν μια μονάδα είναι έτοιμη, βγαίνει στο
 ; ελεύθερο πλακίδιο δίπλα στο κτίριο πιο κοντά στη μπροστινή του γωνία.
 bld_tick:
-        ld hl,rq_step           ; (bank7.asm, M14)
-        call far7
-        ld hl,fog_step          ; τα νέα πλακίδια που φαίνονται (M11)
-        call far7
+        call rq_step            ; (hudc.asm, M14)
+        call fog_step           ; τα νέα πλακίδια που φαίνονται (M11)
         call age_step
         ld hl,ai_tick           ; ο αντίπαλος (bank7.asm, M10)
         call far7

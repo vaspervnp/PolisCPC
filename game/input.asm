@@ -319,31 +319,6 @@ unit_select:
         ld (hl),d
         ret
 
-; HL = |HL|.
-abs_hl: bit 7,h
-        ret z
-        xor a
-        sub l
-        ld l,a
-        sbc a,a
-        sub h
-        ld h,a
-        ret
-
-; HL, DE -> HL = min, DE = max (χωρίς πρόσημο).
-order_hl_de:
-        call cmp_hl_de
-        ret c
-        ex de,hl
-        ret
-
-; Carry αν HL < DE (χωρίς πρόσημο). Κρατάει HL, DE.
-cmp_hl_de:
-        or a
-        sbc hl,de
-        add hl,de
-        ret
-
 ; RETURN: οι επιλεγμένες στον κέρσορα, σε σχηματισμό 4 στηλών (5 bytes)
 ; και σειρών (12 γραμμές), με τον κέρσορα στο κέντρο της πρώτης σειράς.
 ; Πάνω σε πόρο, οι χωρικοί αντί γι' αυτό πάνε να μαζέψουν (gather.asm).

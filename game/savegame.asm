@@ -25,7 +25,7 @@
 
 ; (SVM, SVM_BUF: main.asm, πριν από το org)
 SVM_STORE   equ HUD_PAGE + #800 + 7 * 80    ; οι κρυφές σειρές της 2ης οκτάδας
-SAVE_M0     equ age3_name       ; οι μεταβλητές της κύριας RAM: ως το #4000
+SAVE_M0     equ age3_name       ; οι μεταβλητές της κύριας RAM: ως το code_end
 STACK_LOW   equ #BF00           ; ό,τι είναι πάνω είναι η στοίβα
         assert BLD_TAB2 + (BLD_MAX - BLD_N1) * B_SIZE <= STACK_LOW, 'STACK_LOW'
 SAVE_FILE   equ 43008           ; το SAVE.BIN στη δισκέτα (build.sh): 42 blocks
@@ -439,7 +439,8 @@ mod_camp:
 sv_seg: db RAM_BASE
         dw sv_sig, SIG_LEN
         db RAM_BASE
-        dw SAVE_M0, #4000 - SAVE_M0
+        dw SAVE_M0, code_end - SAVE_M0  ; (όχι ως το #4000: το ελεύθερο
+                                        ; μετά τον κώδικα δεν χρειάζεται)
         db RAM_BASE
         dw HUD_PAGE, #4000
         db RAM_BASE
@@ -459,6 +460,6 @@ sv_p:       dw 0                ; η θέση στον buffer του τομέα
 sv_k:       db 0                ; ο επόμενος τομέας του αρχείου
 sv_blk:     ds 48               ; τα blocks του αρχείου, 3 extents
 
-SAVE_BYTES  equ SIG_LEN + #4000 - SAVE_M0 + #4000 + STACK_LOW - #8000 + #8000 - C7_CODE + FOG_LEN
+SAVE_BYTES  equ SIG_LEN + code_end - SAVE_M0 + #4000 + STACK_LOW - #8000 + #8000 - C7_CODE + FOG_LEN
         assert SAVE_BYTES <= SAVE_FILE, 'SAVE.BIN too small'
         assert SAVE_FILE <= SV_EXT * 16384 && SAVE_FILE > (SV_EXT - 1) * 16384, 'SV_EXT'

@@ -47,7 +47,8 @@ ACT_TAB     equ #A600           ; 128: 1 = ενεργή. ΣΤΟΙΧΙΣΜΕΝΟ:
 ORDER       equ #A680           ; 40 x δείκτης εγγραφής: η σειρά σχεδίασης
 NEWLIST     equ #A6D0           ; 40: όσες φάνηκαν αυτό το καρέ
 RLIST       equ #A720           ; 40: όσες σβήνονται αυτό το καρέ
-RECTS       equ #A780           ; 96 x (x, y)
+RECTS       equ #A780           ; 96 x: τα x (σε μία σελίδα, για το inc l)
+RECTS_Y     equ RECTS + 96      ; 96 y (M14: χωριστά, το hits τα θέλει σπάνια)
 MOVERS      equ #A880           ; 32: όσες πήραν την τελευταία εντολή
 MAX_ORD     equ 38
 
@@ -65,6 +66,7 @@ U_DRAWN     equ 14              ; bit 0: είναι στην οθόνη (το OA
                                 ; bit 1: σβήνεται αυτό το καρέ
                                 ; bit 2: ζωγραφίζεται αυτό το καρέ
 U_WF        equ 15              ; ακολουθεί τοίχο: bit 7 + η κατεύθυνση 0..7
+                                ; (bits 3-6: οι αλλαγές του σημείου πορείας)
 U_FRAME     equ 16              ; dw: το καρέ, μόνο με το F_FIXED
 U_LOOK      equ 16              ; χωρίς F_FIXED: το σετ με το οποίο ζωγραφίστηκε
 U_OADDR     equ 18              ; dw: το byte οθόνης όπου ζωγραφίστηκε
@@ -280,12 +282,6 @@ units_tick:
         call c,units_think
         call bld_tick           ; κτίρια: επανασχεδίαση, ουρές (buildings.asm)
         call hud_card
-        ld a,(t0)               ; μία γραμμή του μίνι χάρτη (M11), ~2 ms:
-        ld b,a                  ; μόνο αν περισσεύει χρόνος (στη μάχη τα
-        ld a,(int_t)            ; καρέ θέλουν τις αποφάσεις, T_LATE)
-        sub b
-        cp MM_T
-        call c,mm_line
         ld a,(hud_dirty)        ; άλλαξε η μπάρα (gather.asm)
         or a
         call nz,hud_update
@@ -296,7 +292,14 @@ units_tick:
         call units_draw
         ld hl,proj_on           ; και τα βέλη, τελευταία, από πάνω
         call far7
-        jp died_flush
+        call died_flush
+        ld a,(t0)               ; μία γραμμή του μίνι χάρτη (M11), ~2 ms:
+        ld b,a                  ; μόνο αν περισσεύει χρόνος. ΣΤΟ ΤΕΛΟΣ (M14):
+        ld a,(int_t)            ; πριν από τη σχεδίαση έτρεχε και σε καρέ
+        sub b                   ; που μετά ξεπερνούσαν τα 40 ms (μάχη)
+        cp MM_T
+        ret nc
+        jp mm_line
 
 ; ΜΟΝΟ Ο,ΤΙ ΑΛΛΑΞΕ — ΚΑΙ ΟΤΑΝ Η ΟΘΟΝΗ ΚΥΛΑΕΙ
 ;
@@ -1194,20 +1197,26 @@ hits:   ld a,(rect_n)
         ret z
         ld e,b                  ; E = y, B = πόσα
         ld b,a
+        ld a,c                  ; D = x - 3
+        sub 3
+        ld d,a
         ld hl,RECTS
-.l:     ld a,(hl)
-        sub c
-        add a,3
+.l:     ld a,(hl)               ; 0 <= rx - x + 3 < 7
+        sub d
         cp 7
         jr c,.x
-.no:    inc hl
-        inc hl
+.no:    inc l
         djnz .l
         or a                    ; carry 0
         ret
-.x:     inc hl
-        ld a,(hl)
-        dec hl
+.x:     push hl                 ; το y του, 96 πιο πέρα
+        ld a,l
+        add a,96
+        ld l,a
+        jr nc,.y
+        inc h
+.y:     ld a,(hl)
+        pop hl
         sub e
         add a,15
         cp 31
@@ -1222,13 +1231,13 @@ add_rect:
         cp 96
         ret nc
         inc (hl)
-        add a,a
         ld l,a
         ld h,0
         ld de,RECTS
         add hl,de
         ld (hl),c
-        inc hl
+        ld de,96
+        add hl,de
         ld (hl),b
         ret
 
@@ -1388,7 +1397,15 @@ units_draw:
         and #7F
         dec a
         jr nz,.d0
-        call blit16t
+        call red_pose           ; η επίθεση των κόκκινων: έτοιμη (M14)
+        jr nc,.t
+        ld a,RAM_BASE
+        call setram
+        call blit16
+        ld a,RAM_SPR
+        call setram
+        jr .ov
+.t:     call blit16t
         jr .ov
 .d0:    call blit16
 .ov:    ld a,(ix+U_SET)         ; με φορτίο: το δέμα από πάνω (bank7.asm)
@@ -1404,6 +1421,59 @@ units_draw:
         jp nz,.u
         ld a,RAM_BASE
         jp setram
+
+; Οι πόζες της επίθεσης των κόκκινων σπαθοφόρων και τοξοτών (καρέ ATK_W, 13,
+; 15, 17), μεταφρασμένες μία φορά στην εκκίνηση (rpose_init, init.asm) στις
+; κρυφές σειρές της σελίδας του HUD: με το blit16 (0,8 ms) αντί για το
+; blit16t (1,3 ms). Στη μάχη είναι το μεγαλύτερο κόστος των αργών καρέ.
+; IX -> carry και HL = το καρέ στη σελίδα του HUD. Κρατάει DE.
+RPOSE       equ #5280           ; 8 x 128 (στοιχισμένα), ως το #567F
+RPOSE2      equ #6A80           ; 6 x 128: ο θάνατος (18, 19, 20), ως το #6D7F
+red_pose:
+        bit 7,(ix+U_FACE)
+        jr z,.no
+        ld a,(ix+U_SET)
+        dec a
+        cp 2
+        jr nc,.no
+        add a,a
+        add a,a
+        ld c,a                  ; (σετ - 1) x 4
+        ld a,(ix+U_STEP)
+        cp ATK_W
+        jr z,.w
+        sub 18                  ; ο θάνατος: 18, 19, 20 -> RPOSE2
+        jr nc,.d
+        add a,18 - 11           ; 13, 15, 17 -> 1, 2, 3 (κάτω από το 11:
+        cp 7                    ; >= 249)
+        jr nc,.no
+        rra
+        jr c,.no
+        jr .k
+.w:     xor a
+.k:     add a,c
+        ld bc,RPOSE
+.a:     ld h,a
+        ld l,0
+        srl h
+        rr l
+        add hl,bc
+        scf
+        ret
+.d:     cp 3
+        jr nc,.no
+        ld b,a                  ; (σετ - 1) x 3 + καρέ
+        ld a,c
+        rrca
+        rrca
+        ld c,a
+        add a,a
+        add a,c
+        add a,b
+        ld bc,RPOSE2
+        jr .a
+.no:    or a
+        ret
 
 ; Ξεεπιλογή: οι γραμμές των αγκυλών πίσω από τον καθρέφτη, και το
 ; ορθογώνιο στα RECTS — όποια ακουμπάει, ξαναζωγραφίζεται (και η ίδια).

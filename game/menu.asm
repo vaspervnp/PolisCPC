@@ -111,13 +111,7 @@ menu:
         ld bc,TUT_CP_LEN        ; υπάρχει ακόμα: hp_init)
         ldir
         call TUT_CP_AT
-        ld hl,init_phys + lv_def - INIT ; η κεφαλίδα (lv_init), με άλλο
-        ld de,LV_HDR                    ; πρώτο κύμα
-        ld bc,H_TEXT
-        ldir
-        ld hl,TUT_COOL
-        ld (LV_HDR + H_COOL),hl
-        ld a,1
+        ld a,1                  ; (το πρώτο κύμα στα TUT_COOL: το lv_init)
         ld (tut_on),a
         inc a
         ld (tut_win),a

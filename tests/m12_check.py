@@ -87,7 +87,7 @@ def sound():
            'SPACE: %s, R0 #%02X, έντασεις %s, περιβάλλουσα %d'
            % (name, r[0], r[8:11], r[11]))
     g.tick(5)
-    S.c7_write(c, sym['SND_NB'], [0])
+    c.write_ram(sym['SND_NB'], [0])        # (sound.asm: κύρια RAM, M14)
     g.tick(2)
     name, r = fx(c)
     report('ΚΤΙΡΙΟ', name == 'κτίριο' and r[4] == 0xA0 and r[10] == 16 and
@@ -101,7 +101,7 @@ def sound():
         name, r = fx(c)
         if name == 'χτύπημα' and r[9] == 16:
             hits += 1
-        al = S.c7_read(c, sym['SND_AL'])[0]
+        al = c.read_ram(sym['SND_AL'], 1)[0]
         if al > prev_al:
             alerts.append(f)
         prev_al = al
@@ -165,7 +165,7 @@ def screen_pens(c):
 
 def segments(sym):
     m0 = sym['AGE3_NAME']
-    return [('κύρια', 0, m0, 0x4000 - m0), ('HUD', 0, 0x4000, 0x4000),
+    return [('κύρια', 0, m0, sym['CODE_END'] - m0), ('HUD', 0, 0x4000, 0x4000),
             ('#8000', 0, 0x8000, STACK_LOW - 0x8000),
             ('C7', 7, C7_CODE, 0x8000 - C7_CODE), ('ομίχλη', 6, FOG, FOG_LEN)]
 

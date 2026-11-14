@@ -403,11 +403,14 @@ field_bld2:                     ; (bank7.asm, bld_fight: με το n_cell έτο
         ld (hl),255
         ld bc,255
         ldir
-        ld h,d
-        ld a,(n_cell)
+        ld a,(n_page)           ; (M14: ΟΧΙ το D, που μετά το ldir δείχνει
+        ld h,a                  ; στην ΕΠΟΜΕΝΗ σελίδα: ο στόχος έπεφτε στο
+        ld a,(n_cell)           ; άλλο πεδίο — ή, για το 2ο, στο FD_TAB — και
+                                ; το κελί του γύριζε σε έναν γείτονα: βρόχος)
         ld l,a
         ld (hl),4               ; ο στόχος
         ld (QUEUE),a
+        ld (bfs_c),a            ; (για το τέλος: το n_cell αλλάζει ενδιάμεσα)
         xor a
         ld (n_rd),a             ; ανάγνωση από την ουρά: n_rd
         inc a
@@ -500,9 +503,9 @@ field_cont:
         ld d,0
         ld hl,field_tc - 1
         add hl,de
-        ld a,(n_cell)
-        ld (hl),a
-        ld a,2
+        ld a,(bfs_c)            ; (M14: όχι το n_cell, που το ξαναγράφει το
+        ld (hl),a               ; way_point σε κάθε βήμα μονάδας όσο το BFS
+        ld a,2                  ; κρατάει: το πεδίο έπαιρνε λάθος στόχο)
         ld (nphase),a
         ret
 
@@ -659,6 +662,8 @@ nav_mv: ld a,(g_x)              ; η κίνηση
 ; 8 κατευθύνσεις, δεξιόστροφα στην οθόνη: 0 E, 1 SE, 2 S, 3 SW, 4 W, 5 NW,
 ; 6 N, 7 NE, με βήμα 1 byte / 2 γραμμές (η ισομετρική διαγώνιος).
 FOLLOW_MAX  equ 250
+WF_CHG      equ 5               ; αλλαγές του σημείου πορείας σε μία ακολούθηση
+                                ; (μονός: ο κύκλος στο όριο σπάει στο ΑΛΛΟ κελί)
 dir_dx:     db 1, 1, 0, -1, -1, -1, 0, 1
 dir_dy:     db 0, 2, 2, 2, 0, -2, -2, -2
 goal_tab:   db 5, 6, 7, 4, 0, 0, 3, 2, 1        ; [(sy+1)*3 + sx+1]
@@ -686,7 +691,7 @@ follow:
         call way_dist
         bit 7,(ix+U_WF)
         jr nz,.on
-        ld a,(g_x)              ; δεν ακολουθεί: το βήμα όπως είναι
+.off:   ld a,(g_x)              ; δεν ακολουθεί: το βήμα όπως είναι
         ld c,a
         ld a,(g_y)
         ld b,a
@@ -706,6 +711,14 @@ follow:
         ld (ix+U_WH),a          ; και κάνει κύκλους γύρω από το εμπόδιο
         ld a,(n_dist)
         ld (ix+U_WD),a
+        ld a,(ix+U_WF)          ; ΟΧΙ ΠΕΡΙΣΣΟΤΕΡΕΣ ΑΠΟ WF_CHG (M14, bits 3-6):
+        add a,8                 ; γύρω από ένα δέντρο πάνω στο όριο δύο
+        ld (ix+U_WF),a          ; κελιών η απόσταση από το σημείο του καθενός
+        and #78                 ; δεν έπεφτε ποτέ κάτω από τη δική του, και
+        cp WF_CHG * 8           ; ο κύκλος δεν τελείωνε. Τότε η ακολούθηση
+        jr c,.same              ; από την αρχή, με το ευθύ βήμα πρώτα. (Να
+        ld (ix+U_WF),0          ; φεύγει σε κάθε αλλαγή δεν γίνεται: συχνά
+        jr .off                 ; το νέο σημείο είναι πίσω, στο παλιό κελί.)
 .same:  ld a,(n_dist)           ; ακολουθεί: φεύγει;
         cp (ix+U_WD)
         jr nc,.keep
@@ -754,7 +767,10 @@ follow:
         ld (g_x),a
         ld a,b
         ld (g_y),a
-        ld a,(n_try)
+        ld a,(ix+U_WF)          ; (ο μετρητής των αλλαγών μένει)
+        and #78
+        ld hl,n_try
+        or (hl)
         or #80
         ld (ix+U_WF),a
 .cnt:   inc (ix+U_STUCK)
@@ -917,7 +933,9 @@ way_point:
         jp nz,.tgt
         ld a,e
         add a,(FIELD_TAB >> 8) - 1
-        ld (n_page),a
+        ld (w_page),a           ; (M14: όχι το n_page, που είναι του BFS σε
+                                ; εξέλιξη — το field_cont συνέχιζε στο
+                                ; πεδίο της τελευταίας μονάδας που βάδισε)
         ld hl,(n_a)             ; το πλακίδιο από τα a, b του nav_step
         call sra3
         ld (n_i),hl
@@ -931,7 +949,7 @@ way_point:
         jp z,.tgt
         ld (n_cell),a
         ld l,a
-        ld a,(n_page)
+        ld a,(w_page)
         ld h,a
         ld a,(hl)
         cp 4
