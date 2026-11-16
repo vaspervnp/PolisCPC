@@ -25,12 +25,15 @@ CPC 6128.
    πληθών των ζωντανών μονάδων του παίκτη.
 8. ΖΗΜΙΑ (φάση 3). Η ομάδα των 5 σπαθοφόρων (υγεία του μπροστινού 10)
    απέναντι σε εχθρική ομάδα 10 σπαθοφόρων (υγεία 60): το πρώτο της χτύπημα
-   παίρνει 5 x 8 = 40 από τον μπροστινό τους (60 -> 20, πλήθος 10).
-9. ΘΑΝΑΤΟΣ ΑΝΑ ΑΝΘΡΩΠΟ. Το πρώτο χτύπημα των εχθρών (8 x όσοι έχουν μείνει
-   εκείνη τη στιγμή): ο μπροστινός (10) πεθαίνει, το υπόλοιπο πάει στον
-   επόμενο με γεμάτη υγεία (60), κι αν τη φτάνει, κι αυτός· ο πληθυσμός -
-   όσοι πέθαναν. (Με 10: πλήθος 5 -> 3, υγεία 50.)
-10. ΤΕΛΟΣ. Η μάχη ως το τέλος: ο πληθυσμός = το άθροισμα των πληθών.
+   παίρνει από τον μπροστινό τους 5 x 8 = 40 x τυχαία 30-98% (12-39).
+9. ΘΑΝΑΤΟΣ ΑΝΑ ΑΝΘΡΩΠΟ. Το πρώτο χτύπημα των εχθρών (8 x όσοι έχουν μείνει,
+   x τυχαία): ο μπροστινός (10) πεθαίνει, το υπόλοιπο πάει στον επόμενο με
+   γεμάτη υγεία (60), κι αν τη φτάνει, κι αυτός· ο πληθυσμός - όσοι πέθαναν.
+10. ΣΕΙΡΑ. Η μικρότερη ομάδα (οι 5) χτυπάει πρώτη.
+11. ΤΕΛΟΣ. Η μάχη ως το τέλος: ο πληθυσμός = το άθροισμα των πληθών.
+12. ΤΡΕΙΣ. Ένας εχθρός μόνος του έρχεται στους 20 που στέκονται: το
+    χτύπημά τους είναι το πολύ 3 x 8 = 24 x τυχαία (7-23), ζει.
+13. ΠΡΩΤΟΣ. Κι ας στέκονται εκείνοι, ο ένας χτυπάει πρώτος.
 """
 import os
 import sys
@@ -177,8 +180,36 @@ def after(n, hp, dmg, full=60):
     return (n, hp - dmg) if dmg < hp else (n, 0)
 
 
+def dmg_range(per, n, target):
+    """Οι δυνατές ζημιές (bank7.asm, sq_dmg): per x min(n, 3 x target), ως
+    255, x f / 256 (f = 77 + 11/16 r, r = 0..255), στρογγυλεμένο, >= 1."""
+    full = min(255, per * min(n, 3 * target))
+    fs = {77 + (r >> 1) + (r >> 3) + (r >> 4) for r in range(256)}
+    return {max(1, (full * f + 128) >> 8) for f in fs}
+
+
 def state(c, k):
     return c.peek(SQ_N + k) + 1, S.c7_read(c, C7_HP + k)[0]
+
+
+def fight(g, a, f, n=600):
+    """Ως το πρώτο χτύπημα και των δύο -> (πρώτη αλλαγή, καρέ) της a, της f,
+    και η f πριν από τη δική της αλλαγή."""
+    c = g.c
+    sa, sf = state(c, a), state(c, f)
+    fa = ff = None
+    foe = sf
+    for t in range(n):
+        if fa is None:
+            foe = state(c, f)
+        g.tick(1)
+        if fa is None and state(c, a) != sa:
+            fa = (state(c, a), t, M6.hud_vals(c, g.sym)[4])
+        if ff is None and state(c, f) != sf:
+            ff = (state(c, f), t)
+        if fa and ff:
+            break
+    return fa, ff, foe
 
 
 def phase3(g, a, quiet):
@@ -198,27 +229,23 @@ def phase3(g, a, quiet):
     c.poke(S.UNIT_TAB + FOE * S.U_SIZE + U_LOOK, 255)
     S.c7_write(c, C7_HP + FOE, [60])
     sa, sf = state(c, a), state(c, FOE)
-    fa = ff = None
-    pa = None
-    foe = sf
-    for t in range(600):
-        if fa is None:
-            foe = state(c, FOE)         # οι εχθροί πριν από το χτύπημα
-        g.tick(1)
-        if fa is None and state(c, a) != sa:
-            fa, pa = state(c, a), M6.hud_vals(c, sym)[4]
-        if ff is None and state(c, FOE) != sf:
-            ff = state(c, FOE)
-        if fa and ff:
-            break
-    g.report('ζημιά', ff == (10, 20),
-             'η ομάδα των %d (υγεία %d) χτυπάει τους %d (υγεία %d): %s'
-             % (sa + sf + (ff,)))
-    want = after(sa[0], sa[1], 8 * foe[0])
-    g.report('θάνατος', fa == want and pa == pop0 - (sa[0] - want[0]),
-             'οι %d (ζημιά %d) χτυπούν τους %d (υγεία %d): πλήθος, υγεία %s '
-             '(αναμενόμενο %s)· πληθυσμός %d -> %s'
-             % (foe[0], 8 * foe[0], sa[0], sa[1], fa, want, pop0, pa))
+    fa, ff, foe = fight(g, a, FOE)
+    ok = fa and ff
+    ds = dmg_range(8, sa[0], sf[0])
+    g.report('ζημιά', ok and ff[0][0] == sf[0] and 60 - ff[0][1] in ds,
+             'η ομάδα των %d χτυπάει τους %d (υγεία %d): %s (ζημιά %d-%d)'
+             % (sa[0], sf[0], sf[1], ff and ff[0], min(ds), max(ds)))
+    ds = dmg_range(8, foe[0], sa[0])
+    wants = {after(sa[0], sa[1], d) for d in ds}
+    g.report('θάνατος', ok and fa[0] in wants and
+             fa[2] == pop0 - (sa[0] - fa[0][0]),
+             'οι %d (ζημιά %d-%d) χτυπούν τους %d (υγεία %d): πλήθος, υγεία '
+             '%s· πληθυσμός %d -> %s'
+             % (foe[0], min(ds), max(ds), sa[0], sa[1], fa and fa[0], pop0,
+                fa and fa[2]))
+    g.report('σειρά', ok and ff[1] <= fa[1],
+             'η μικρότερη (%d) χτυπάει πρώτη: στο καρέ %s, η μεγάλη στο %s'
+             % (sa[0], ff and ff[1], fa and fa[1]))
     for t in range(3000):
         g.tick(1)
         ta = c.peek(S.UNIT_TAB + a * S.U_SIZE + U_TEAM)
@@ -232,6 +259,36 @@ def phase3(g, a, quiet):
     g.report('τέλος', pe == people(c) and (ta != 0 or tf != 1),
              'σε %d καρέ: η ομάδα %s, ο εχθρός %s· πληθυσμός %d, άθροισμα %d'
              % (t + 1, end[0], end[1], pe, people(c)))
+
+    # ένας μόνος του (που έρχεται) απέναντι στους 20 (που στέκονται)
+    k = quiet[0]
+    r = S.UNIT_TAB + k * S.U_SIZE
+    c.poke(r + 11, c.peek(r + 11) & ~(S.F_WANDER | S.F_MOVE) & 255)
+    c.poke(SQ_N + k, SQ_MAX - 1)
+    c.poke(r + U_LOOK, 255)
+    S.c7_write(c, C7_HP + k, [60])
+    f = [i for i in range(128)
+         if c.peek(S.UNIT_TAB + i * S.U_SIZE + U_TEAM) == 255][0]
+    u = S.unit(c, k)
+    M8.enemy(c, f, u['wx'] + 24, u['wy'])
+    c.poke(S.UNIT_TAB + f * S.U_SIZE + 8, 1)            # σπαθοφόρος
+    c.poke(S.UNIT_TAB + f * S.U_SIZE + U_LOOK, 255)
+    c.poke(SQ_N + f, 0)
+    S.c7_write(c, C7_HP + f, [60])
+    pop0 = people(c)
+    c.poke(sym['HUD_VAL'] + 8, pop0 & 255)
+    c.poke(sym['HUD_VAL'] + 9, pop0 >> 8)
+    fk, ff, _ = fight(g, k, f)
+    ok = fk and ff
+    ds = dmg_range(8, SQ_MAX, 1)
+    g.report('τρεις', ok and ff[0][0] == 1 and 60 - ff[0][1] in ds,
+             'οι %d χτυπούν έναν (υγεία 60): %s — όσο 3 το πολύ (ζημιά %d-%d)'
+             % (SQ_MAX, ff and ff[0], min(ds), max(ds)))
+    ds = dmg_range(8, 1, SQ_MAX)
+    g.report('πρώτος', ok and fk[1] <= ff[1] and
+             fk[0] in {after(SQ_MAX, 60, d) for d in ds},
+             'ο ένας χτυπάει πρώτος: στο καρέ %s %s, οι %d στο %s'
+             % (fk and fk[1], fk and fk[0], SQ_MAX, ff and ff[1]))
 
 
 def main():

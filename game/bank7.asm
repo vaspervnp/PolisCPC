@@ -35,6 +35,7 @@
 C7_HP       equ #7E00           ; 128: η υγεία ανά μονάδα
 C7_ANIM     equ #7E80           ; 128: ο μετρητής της πόζας
 C7_ORD      equ #7F00           ; 128: ο στόχος της εντολής (255 κανένας)
+C7_LS       equ #7D00           ; 128: ποιον χτύπησε τελευταία (M15, το πρώτο χτύπημα)
 CH_D        equ #7D80           ; 128: η απόσταση του κυνηγιού στην προηγούμενη απόφαση
 CH_WALK     equ FIELD_WALK + 1  ; το κυνήγι γύρω από τοίχο: σαν το FIELD_WALK
                                 ; (pathing.asm: ίσια, ακολούθηση τοίχου), όχι εντολή
@@ -167,6 +168,8 @@ hp_set: call st_hl
         ld a,(hl)
         call hp_hl
         ld (hl),a
+        ld h,C7_LS >> 8         ; δεν χτύπησε κανέναν
+        ld (hl),255
         ret
 
 ; IX -> HL = &C7_ORD[idx], A = ο στόχος της εντολής (255 κανένας).
@@ -232,20 +235,77 @@ sq_join:
 sj_set: db 0
 sj_w:   db 0
 
-; IX -> B = η ζημιά της ομάδας της: του σετ x το πλήθος, ως 255 (M15).
-; Κρατάει C.
-sq_dmg: call st_hl
+; IX = ο επιτιθέμενος, IY = ο στόχος (μονάδα) -> B = η ζημιά (M15): του σετ
+; x όσοι χτυπάνε — το πλήθος, αλλά το πολύ 3 ανά άνθρωπο του στόχου (ποτέ
+; όλη η ομάδα σε έναν) — ως 255, x τυχαία 30-98%, τουλάχιστον 1. Κρατάει C.
+sq_dmg: call iy_cnt
+        ld b,a
+        add a,a
+        add a,b                 ; 3 x το πλήθος του στόχου
+        db #11                  ; (ld de,nn: προσπερνάει το ld a,255)
+; IX -> B = η ζημιά της σε κτίριο: χωρίς όριο ανά άνθρωπο.
+sq_dmgb:
+        ld a,255
+        ld d,a                  ; το όριο
+        call sq_cnt
+        cp d
+        jr c,.c
+        ld a,d
+.c:     ld b,a
+        call st_hl
         inc hl
         ld e,(hl)
-        call sq_cnt
-        ld b,a
         xor a
 .m:     add a,e
         jr c,.max
         djnz .m
+        db #11                  ; (ld de,nn: προσπερνάει το ld a,255)
+.max:   ld a,255
+        push bc
+        ld d,a                  ; η πλήρης
+        call rnd                ; f = 77 + 11/16 r: 77..250 (/256)
+        srl a
+        ld e,a
+        srl a
+        srl a
         ld b,a
+        srl a
+        add a,b
+        add a,e
+        add a,77
+        ld e,a
+        ld a,d
+        ld hl,0
+        ld d,h
+        ld b,8
+.u:     add hl,hl               ; HL = η πλήρης x f
+        rla
+        jr nc,.v
+        add hl,de
+.v:     djnz .u
+        ld de,128               ; (στρογγύλεμα)
+        add hl,de
+        pop bc
+        ld b,h
+        inc h
+        dec h
+        ret nz
+        inc b
         ret
-.max:   ld b,255
+
+; IY -> A = το πλήθος της ομάδας της (κρατάει IX, BC).
+iy_cnt: push ix
+        push iy
+        pop ix
+        call sq_cnt
+        pop ix
+        ret
+
+; Αλλάζει τις IX, IY.
+ix_iy:  push ix
+        push iy
+        pop ix
+        pop iy
         ret
 
 ; HL = μετρητής += το πλήθος της ομάδας της IX (M15).
@@ -482,7 +542,67 @@ bench_targets:
         ret
 
 ; Χτυπάει (IX, IY = ο στόχος, c_dx / c_dy). Όποια πέθανε: στο dq.
-attack: call atk_pose
+; ΤΟ ΠΡΩΤΟ ΧΤΥΠΗΜΑ (M15): ο στόχος στρατιώτης, μικρότερη ομάδα, που δεν
+; έχει χτυπήσει ακόμα αυτήν (C7_LS) και τη φτάνει από εκεί που στέκεται:
+; χτυπάει εκείνος πρώτος — στη θέση του επόμενου δικού του (bit 7 του
+; C7_LS: το επόμενο χτύπημά του δεν γίνεται).
+attack: ld l,(ix+U_IDX)
+        ld h,C7_LS >> 8
+        ld a,(hl)
+        inc a
+        jr z,.s
+        bit 7,(hl)
+        jr z,.s
+        res 7,(hl)              ; το είχε ήδη χτυπήσει (πρώτο χτύπημα)
+        ret
+.s:     ld a,(iy+U_SET)
+        or a
+        jr z,strike             ; (χωρικός)
+        cp 3
+        jr z,strike
+        call sq_cnt
+        ld b,a
+        call iy_cnt
+        cp b
+        jr nc,strike            ; όχι μικρότερη
+        ld l,(iy+U_IDX)
+        ld h,C7_LS >> 8
+        ld a,(hl)
+        inc a
+        jr z,.p                 ; (255: κανέναν)
+        dec a
+        and 127
+        cp (ix+U_IDX)
+        jr z,strike             ; χτύπησε ήδη
+.p:
+        call ix_iy              ; IX = η μικρότερη
+        ld a,(iy+U_IDX)
+        ld (ix+U_TGT),a         ; (ο στόχος του βέλους)
+        call c_dist
+        push hl
+        call st_hl
+        inc hl
+        inc hl
+        ld e,(hl)               ; η εμβέλειά της
+        ld d,0
+        pop hl
+        or a
+        sbc hl,de
+        jr z,.f
+        jr nc,.b                ; μακριά: όχι
+.f:     call strike
+        ld l,(ix+U_IDX)         ; στη θέση του επόμενου
+        ld h,C7_LS >> 8
+        set 7,(hl)
+.b:     call ix_iy
+        bit 7,(ix+U_TEAM)
+        ret nz                  ; έπεσε η μεγάλη
+        call c_dist             ; (η όψη της)
+strike: ld l,(ix+U_IDX)         ; ποιον χτύπησε
+        ld h,C7_LS >> 8
+        ld a,(iy+U_IDX)
+        ld (hl),a
+        call atk_pose
         call sq_dmg             ; B = η ζημιά (της ομάδας, M15)
         call st_hl
         inc hl
@@ -1868,7 +1988,7 @@ bld_hit:
         call atk_pose
         ld a,(iy+B_OWN)         ; ο ήχος, και η ειδοποίηση (M12)
         call snd_struck
-        call sq_dmg             ; η ζημιά (της ομάδας, M15)
+        call sq_dmgb            ; η ζημιά (της ομάδας, M15)
         ld c,b
         call bidx
         add a,a
