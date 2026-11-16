@@ -1484,6 +1484,13 @@ sq_label:
         jp z,de_carry
         ret
 
+; IX -> A = το πλήθος της ομάδας της (1..SQ_MAX), NC (M15).
+sq_cnt: ld l,(ix+U_IDX)
+        ld h,SQ_N >> 8
+        ld a,(hl)
+        inc a
+        ret
+
 ; A = ψηφίο (10: κενό) -> HL = SQ_FONT + 10 A.
 sq_gl:  ld l,a
         add a,a

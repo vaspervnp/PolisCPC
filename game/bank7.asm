@@ -170,6 +170,76 @@ hp_set: call st_hl
         ret
 
 ; IX -> HL = &C7_ORD[idx], A = ο στόχος της εντολής (255 κανένας).
+; IY = κτίριο, C = το σετ της νέας μονάδας -> Carry αν μπήκε σε ομάδα του
+; ίδιου σετ και της ίδιας ομάδας που στέκεται (χωρίς εντολή, κίνηση, στόχο)
+; ως 3 πλακίδια από το κτίριο, με θέση (M15): το πλήθος της +1 και ξανά
+; σχεδίαση. Οι χωρικοί (σετ 0) ποτέ.
+sq_join:
+        ld a,c
+        or a
+        ret z
+        ld (sj_set),a
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld a,(hl)               ; το μέγεθος
+        add a,6                 ; B_I - 3 .. B_I + μέγεθος + 2
+        ld (sj_w),a
+        xor a
+.l:     push af
+        call idx_ix
+        ld a,(ix+U_TEAM)
+        cp (iy+B_OWN)
+        jr nz,.n
+        ld a,(sj_set)
+        cp (ix+U_SET)
+        jr nz,.n
+        ld a,(ix+U_TGT)
+        inc a
+        jr nz,.n
+        bit F_MOVE,(ix+U_FL)
+        jr nz,.n
+        call ord_get
+        inc a
+        jr nz,.n
+        call sq_cnt
+        cp SQ_MAX
+        jr nc,.n
+        call unit_sp
+        ld hl,sj_w
+        ld a,(sp_ui)
+        sub (iy+B_I)
+        add a,3
+        cp (hl)
+        jr nc,.n
+        ld a,(sp_uj)
+        sub (iy+B_J)
+        add a,3
+        cp (hl)
+        jr nc,.n
+        pop af
+        ld l,(ix+U_IDX)
+        ld h,SQ_N >> 8
+        inc (hl)
+        ld (ix+U_LOOK),255
+        scf
+        ret
+.n:     pop af
+        inc a
+        cp UNITS
+        jr nz,.l
+        or a
+        ret
+sj_set: db 0
+sj_w:   db 0
+
+; HL = μετρητής += το πλήθος της ομάδας της IX (M15).
+sq_add: push hl
+        call sq_cnt
+        pop hl
+        add a,(hl)
+        ld (hl),a
+        ret
+
 ord_get:
         ld l,(ix+U_IDX)
         ld h,C7_ORD >> 8
@@ -489,8 +559,13 @@ hit:    ld a,(iy+U_TEAM)        ; ο ήχος, και η ειδοποίηση (M
         set 7,(iy+U_TEAM)
         or a
         jr nz,.r
-        ld hl,(hud_val + 8)     ; του παίκτη: ο πληθυσμός -1
-        dec hl
+        ld l,(iy+U_IDX)         ; του παίκτη: ο πληθυσμός - η ομάδα (M15)
+        ld h,SQ_N >> 8
+        ld e,(hl)
+        inc e
+        ld d,0
+        ld hl,(hud_val + 8)
+        sbc hl,de               ; (NC από το or a)
         ld (hud_val + 8),hl
         ld hl,hud_dirty
         set 4,(hl)
@@ -2040,7 +2115,7 @@ ai_units:
         ld (an_pu),a
         jr .n
 .ai:    ld hl,an_pop
-        inc (hl)
+        call sq_add
         ld a,(ix+U_SET)
         or a
         jr z,.v
@@ -2050,14 +2125,14 @@ ai_units:
         dec a
         jr nz,.w
         ld hl,an_idle
-        inc (hl)
+        call sq_add
         jr .n
 .w:     dec a
         jr z,.ws
         dec a
         jr nz,.n
         ld hl,an_lost
-        inc (hl)
+        call sq_add
 .ws:    ld hl,an_sol
         inc (hl)
         jr .n

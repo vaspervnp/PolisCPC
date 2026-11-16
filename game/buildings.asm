@@ -796,10 +796,23 @@ age_step:
         ld (age_q),a
         ret
 
-; IY = κτίριο -> μια νέα μονάδα του τύπου του, σε ελεύθερη θέση του πίνακα
+; IY = κτίριο -> μια νέα μονάδα του τύπου του: σε ομάδα του ίδιου είδους
+; που στέκεται κοντά (sq_join, M15), αλλιώς σε ελεύθερη θέση του πίνακα
 ; (ομάδα TEAM_FREE). Carry αν δεν υπάρχει θέση ή πλακίδιο.
 bld_spawn:
-        xor a
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_UNIT
+        add hl,de
+        ld c,(hl)
+        ld hl,sq_join           ; (bank7.asm)
+        call far7
+        jr nc,.slot
+        ld e,1                  ; ένας ακόμα στην ομάδα
+        call sp_pop
+        or a
+        ret
+.slot:  xor a
 .f:     ld c,a
         call idx_ix
         ld a,(ix+U_TEAM)
@@ -861,18 +874,27 @@ bld_spawn:
         call unit_pxy
         call unit_tile
         call bucket_update
-        ld a,(iy+B_OWN)
-        or a
-        jr nz,.vis
-        ld hl,(hud_val + 8)     ; ο πληθυσμός (του παίκτη)
-        inc hl
-        ld (hud_val + 8),hl
-        ld hl,hud_dirty
-        set 4,(hl)
-.vis:   call unit_activity      ; φαίνεται ήδη;
+        ld l,(ix+U_IDX)         ; μόνη της (η θέση ίσως ήταν ομάδας)
+        ld h,SQ_N >> 8
+        ld (hl),0
+        ld e,1
+        call sp_pop
+        call unit_activity      ; φαίνεται ήδη;
         call vis_test
         call z,unit_update
         or a
+        ret
+
+; IY = κτίριο, E = άνθρωποι: του παίκτη -> ο πληθυσμός + E.
+sp_pop: ld a,(iy+B_OWN)
+        or a
+        ret nz
+        ld hl,(hud_val + 8)
+        ld d,a
+        add hl,de
+        ld (hud_val + 8),hl
+        ld hl,hud_dirty
+        set 4,(hl)
         ret
 
 ; IX = η γωνία του κουτιού: όταν δεν σέρνεται κουτί, το σημάδι του
