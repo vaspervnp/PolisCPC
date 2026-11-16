@@ -2246,6 +2246,7 @@ lv_wait:    db 0                ; καρέ μετά το τέλος (lv_after)
 lv_next:    db 0                ; η πίστα που ακολουθεί (0: το μενού)
 
 ai_t:       db 0
+ao_lead:    ds ST_SETS          ; ο πρώτος κάθε σετ στο νέο κύμα (ai_order)
 ai_ft:      dw 0                ; lv_sec του τελευταίου χωραφιού του (M14)
 ai_wave:    db 6
 ai_att:     db 0                ; κύμα σε εξέλιξη
@@ -2862,7 +2863,15 @@ ai_army:
 .o:     ld c,1                  ; οι αδρανείς στο σπίτι
 
 ; C = η κατηγορία (ai_cls): εντολή ai_tgt (1: νέο κύμα, 3: όσοι έμειναν).
+; Νέο κύμα σε ομάδες (M15): μόνο το πρώτο πιόνι κάθε σετ παίρνει τον στόχο·
+; τα άλλα του ίδιου σετ εντολή ένωσης μαζί του (merge: το προλαβαίνουν, ή
+; όταν σταματήσει να πολεμήσει).
 ai_order:
+        ld hl,ao_lead
+        ld b,ST_SETS
+.z:     ld (hl),255
+        inc hl
+        djnz .z
         xor a
 .u:     push af
         push bc
@@ -2889,6 +2898,19 @@ ai_order:
         dec a
         jr nz,.n
         ld (ix+U_TCELL),a
+        push hl
+        ld a,(ix+U_SET)
+        ld hl,ao_lead
+        call tab_a
+        inc a
+        jr nz,.m
+        ld a,(ix+U_IDX)         ; ο πρώτος του σετ: ο στόχος
+        ld (hl),a
+        pop hl
+        jr .n
+.m:     dec a                   ; οι άλλοι: ένωση μαζί του
+        pop hl
+        ld (hl),a
 .n:     pop bc
         pop af
         inc a

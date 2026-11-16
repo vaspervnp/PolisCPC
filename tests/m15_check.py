@@ -42,6 +42,9 @@ CPC 6128.
 16. ΧΩΡΙΣΜΟΣ. Η ομάδα των 20 επιλεγμένη, X: 10 και 10, η νέα στο διπλανό
     πλακίδιο, του ίδιου σετ.
 17. ΠΛΗΘΥΣΜΟΣ. Ούτε η ένωση ούτε ο χωρισμός τον αλλάζουν.
+18. ΚΥΜΑ (φάση 5, νέα παρτίδα με τον αντίπαλο του M10). Το πρώτο κύμα: τον
+    στόχο τον παίρνει ένα πιόνι ανά σετ, οι άλλοι εντολή ένωσης μαζί του.
+19. ΟΜΑΔΑ. Λίγο μετά: ο πρώτος έχει πάνω από 2, τα πιόνια λιγότερα.
 """
 import os
 import sys
@@ -54,6 +57,7 @@ import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
 import m8_check as M8                           # noqa: E402
 import m9_check as M9                           # noqa: E402
+import m10_check as M10                         # noqa: E402
 import make_map as MM                           # noqa: E402
 import m5_check as M5                           # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
@@ -380,6 +384,46 @@ def phase4(g, away):
              'μπάρα / άθροισμα: %s (πριν %d)' % (pops, pop0))
 
 
+def phase5(shots):
+    """Νέα παρτίδα με τον αντίπαλο (όπως το M10): το πρώτο κύμα στα 5 s."""
+    g = M4.Game(shots, ai=True)
+    c, sym = g.c, g.sym
+    S.c7_write(c, sym['AI_COOL'], [5, 0])
+    soldiers = lambda: [u for u in M10.team1(c) if u['set'] in (1, 2, 4)]
+    p0 = sum(cnt(c, u['idx']) for u in soldiers())
+    lead = merge = None
+    for s in range(60):
+        c.run_frames(50)
+        orders = S.c7_read(c, M10.C7_ORD, 128)
+        sol = soldiers()
+        tgt = [u for u in sol if orders[u['idx']] >= 128 and
+               orders[u['idx']] != 255]
+        if tgt:
+            lead = {u['set']: u['idx'] for u in tgt}
+            merge = {u['idx']: orders[u['idx']] for u in sol
+                     if orders[u['idx']] < 128}
+            break
+    sets = sorted(u['set'] for u in tgt) if lead else None
+    g.report('κύμα', lead and sets == sorted(set(sets)) and
+             all(orders[k] in lead.values() and
+                 S.unit(c, k)['set'] == S.unit(c, orders[k])['set']
+                 for k in merge) and len(merge) >= 2,
+             'στα %d s: με στόχο ένας ανά σετ %s, οι άλλοι ένωση %s'
+             % (s + 1, lead, merge))
+    pieces0 = len(soldiers())
+    for s2 in range(90):
+        c.run_frames(50)
+        if lead and max(cnt(c, k) for k in lead.values()) > 2:
+            break
+    sol = soldiers()
+    g.report('ομάδα', lead and max(cnt(c, k) for k in lead.values()) > 2 and
+             len(sol) < pieces0,
+             'σε %d s: οι πρώτοι %s, πιόνια %d -> %d (άνθρωποι στην αρχή %d)'
+             % (s2 + 1, {k: cnt(c, k) for k in (lead or {}).values()},
+                pieces0, len(sol), p0))
+    return g.ok
+
+
 def main():
     g = M4.Game('--shots' in sys.argv)
     c, sym = g.c, g.sym
@@ -416,8 +460,9 @@ def main():
     a, quiet = phase2(g)
     if a is not None:
         phase4(g, phase3(g, a, quiet))
-    print('\nM15 (φάσεις 1-4): %s' % ('OK' if g.ok else 'ΑΠΟΤΥΧΙΑ'))
-    sys.exit(0 if g.ok else 1)
+    ok = phase5('--shots' in sys.argv) and g.ok
+    print('\nM15 (φάσεις 1-5): %s' % ('OK' if ok else 'ΑΠΟΤΥΧΙΑ'))
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == '__main__':
