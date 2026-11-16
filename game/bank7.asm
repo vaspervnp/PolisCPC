@@ -232,6 +232,22 @@ sq_join:
 sj_set: db 0
 sj_w:   db 0
 
+; IX -> B = η ζημιά της ομάδας της: του σετ x το πλήθος, ως 255 (M15).
+; Κρατάει C.
+sq_dmg: call st_hl
+        inc hl
+        ld e,(hl)
+        call sq_cnt
+        ld b,a
+        xor a
+.m:     add a,e
+        jr c,.max
+        djnz .m
+        ld b,a
+        ret
+.max:   ld b,255
+        ret
+
 ; HL = μετρητής += το πλήθος της ομάδας της IX (M15).
 sq_add: push hl
         call sq_cnt
@@ -467,9 +483,9 @@ bench_targets:
 
 ; Χτυπάει (IX, IY = ο στόχος, c_dx / c_dy). Όποια πέθανε: στο dq.
 attack: call atk_pose
+        call sq_dmg             ; B = η ζημιά (της ομάδας, M15)
         call st_hl
         inc hl
-        ld b,(hl)               ; η ζημιά
         inc hl
         inc hl
         ld a,(hl)
@@ -523,14 +539,17 @@ atk_pose:
 
 ; IY = ο στόχος, B = ζημιά, C = ποιος χτυπάει -> A = ο δείκτης του στόχου
 ; αν πέθανε, αλλιώς 255. Χωρικός χωρίς εντολή επίθεσης: απαντάει (C7_ORD).
+; Ομάδα (M15): η υγεία είναι του μπροστινού· όση ζημιά τη φτάνει τον
+; σκοτώνει (το πλήθος -1, ο πληθυσμός -1), και το υπόλοιπο πάει στον
+; επόμενο με γεμάτη υγεία. Ο τελευταίος: ο θάνατος της εγγραφής.
 hit:    ld a,(iy+U_TEAM)        ; ο ήχος, και η ειδοποίηση (M12)
         call snd_struck
         ld l,(iy+U_IDX)
         ld h,C7_HP >> 8
-        ld a,(hl)
+.a:     ld a,(hl)
         sub b
-        jr c,.dead
-        jr z,.dead
+        jr c,.man
+        jr z,.man
         ld (hl),a
         ld a,(iy+U_SET)         ; χωρικός: σετ 0 ή 3
         or a
@@ -545,6 +564,37 @@ hit:    ld a,(iy+U_TEAM)        ; ο ήχος, και η ειδοποίηση (M
         ld (iy+U_JOB),0         ; αφήνει τη δουλειά
 .n:     ld a,255
         ret
+.man:   ld h,SQ_N >> 8          ; ζημιά >= υγεία: ένας λιγότερος
+        ld a,(hl)
+        or a
+        ld h,C7_HP >> 8
+        jr z,.dead              ; ο τελευταίος
+        ld h,SQ_N >> 8
+        dec (hl)
+        ld h,C7_HP >> 8
+        ld a,b                  ; το υπόλοιπο της ζημιάς
+        sub (hl)
+        ld b,a
+        push hl
+        push ix
+        push iy
+        pop ix
+        call st_hl              ; A = η αρχική υγεία
+        pop ix
+        pop hl
+        ld (hl),a
+        ld (iy+U_LOOK),255      ; ο αριθμός ξανά
+        ld a,(iy+U_TEAM)
+        or a
+        jr nz,.a
+        push hl                 ; του παίκτη: ο πληθυσμός -1
+        ld hl,(hud_val + 8)
+        dec hl
+        ld (hud_val + 8),hl
+        ld hl,hud_dirty
+        set 4,(hl)
+        pop hl
+        jr .a
 .dead:  ld (hl),0
         set 7,l
         ld (hl),DIE_T
@@ -661,13 +711,11 @@ pr_one: call idx_iy
         or b
         jr nz,.move
         pop af
-        ld c,(ix+5)             ; ο τοξότης, και η ζημιά του σετ του
+        ld c,(ix+5)             ; ο τοξότης, και η ζημιά της ομάδας του
         push ix
         ld a,c
         call idx_ix
-        call st_hl
-        inc hl
-        ld b,(hl)
+        call sq_dmg
         pop ix
         call hit
         call dq_add
@@ -1820,9 +1868,8 @@ bld_hit:
         call atk_pose
         ld a,(iy+B_OWN)         ; ο ήχος, και η ειδοποίηση (M12)
         call snd_struck
-        call st_hl
-        inc hl
-        ld c,(hl)               ; η ζημιά
+        call sq_dmg             ; η ζημιά (της ομάδας, M15)
+        ld c,b
         call bidx
         add a,a
         add a,BDMG & 255

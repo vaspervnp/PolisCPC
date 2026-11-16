@@ -1,4 +1,5 @@
-"""M15, φάσεις 1-2: οι ομάδες στην οθόνη και η εκπαίδευση — σε headless CPC 6128.
+"""M15, φάσεις 1-3: οι ομάδες στην οθόνη, η εκπαίδευση, η μάχη — σε headless
+CPC 6128.
 
     python3 tests/m15_check.py [--shots]
 
@@ -22,6 +23,14 @@
    στρατώνα): ο επόμενος πάλι νέο πιόνι, όχι μαζί του.
 7. ΠΛΗΘΥΣΜΟΣ. Σε όλη τη διαδρομή ο πληθυσμός της μπάρας = το άθροισμα των
    πληθών των ζωντανών μονάδων του παίκτη.
+8. ΖΗΜΙΑ (φάση 3). Η ομάδα των 5 σπαθοφόρων (υγεία του μπροστινού 10)
+   απέναντι σε εχθρική ομάδα 10 σπαθοφόρων (υγεία 60): το πρώτο της χτύπημα
+   παίρνει 5 x 8 = 40 από τον μπροστινό τους (60 -> 20, πλήθος 10).
+9. ΘΑΝΑΤΟΣ ΑΝΑ ΑΝΘΡΩΠΟ. Το πρώτο χτύπημα των εχθρών (8 x όσοι έχουν μείνει
+   εκείνη τη στιγμή): ο μπροστινός (10) πεθαίνει, το υπόλοιπο πάει στον
+   επόμενο με γεμάτη υγεία (60), κι αν τη φτάνει, κι αυτός· ο πληθυσμός -
+   όσοι πέθαναν. (Με 10: πλήθος 5 -> 3, υγεία 50.)
+10. ΤΕΛΟΣ. Η μάχη ως το τέλος: ο πληθυσμός = το άθροισμα των πληθών.
 """
 import os
 import sys
@@ -154,6 +163,75 @@ def phase2(g):
              '%d -> %d' % (b, far, new3, pop2, pop3))
     g.report('πληθυσμός', all(p == q for p, q in pops),
              'μπάρα / άθροισμα των πληθών: %s' % pops)
+    return a, [k for k in [b] + new3 if k is not None]
+
+
+C7_HP = 0x7E00
+FOE = 43                        # σπαθοφόρος του αντιπάλου (της M4)
+
+
+def after(n, hp, dmg, full=60):
+    """Το πλήθος και η υγεία μετά από χτύπημα dmg (bank7.asm, hit)."""
+    while dmg >= hp and n > 1:
+        dmg, n, hp = dmg - hp, n - 1, full
+    return (n, hp - dmg) if dmg < hp else (n, 0)
+
+
+def state(c, k):
+    return c.peek(SQ_N + k) + 1, S.c7_read(c, C7_HP + k)[0]
+
+
+def phase3(g, a, quiet):
+    c, sym = g.c, g.sym
+    for k in quiet:                 # οι άλλοι του στρατώνα: όχι στη μάχη
+        r = S.UNIT_TAB + k * S.U_SIZE + 11
+        c.poke(r, c.peek(r) | S.F_WANDER)
+    c.poke(SQ_N + a, 4)
+    c.poke(S.UNIT_TAB + a * S.U_SIZE + U_LOOK, 255)
+    S.c7_write(c, C7_HP + a, [10])
+    pop0 = people(c)                # (το 20 -> 5 είναι του τεστ)
+    c.poke(sym['HUD_VAL'] + 8, pop0 & 255)
+    c.poke(sym['HUD_VAL'] + 9, pop0 >> 8)
+    u = S.unit(c, a)
+    M8.enemy(c, FOE, u['wx'] + 6, u['wy'])
+    c.poke(SQ_N + FOE, 9)
+    c.poke(S.UNIT_TAB + FOE * S.U_SIZE + U_LOOK, 255)
+    S.c7_write(c, C7_HP + FOE, [60])
+    sa, sf = state(c, a), state(c, FOE)
+    fa = ff = None
+    pa = None
+    foe = sf
+    for t in range(600):
+        if fa is None:
+            foe = state(c, FOE)         # οι εχθροί πριν από το χτύπημα
+        g.tick(1)
+        if fa is None and state(c, a) != sa:
+            fa, pa = state(c, a), M6.hud_vals(c, sym)[4]
+        if ff is None and state(c, FOE) != sf:
+            ff = state(c, FOE)
+        if fa and ff:
+            break
+    g.report('ζημιά', ff == (10, 20),
+             'η ομάδα των %d (υγεία %d) χτυπάει τους %d (υγεία %d): %s'
+             % (sa + sf + (ff,)))
+    want = after(sa[0], sa[1], 8 * foe[0])
+    g.report('θάνατος', fa == want and pa == pop0 - (sa[0] - want[0]),
+             'οι %d (ζημιά %d) χτυπούν τους %d (υγεία %d): πλήθος, υγεία %s '
+             '(αναμενόμενο %s)· πληθυσμός %d -> %s'
+             % (foe[0], 8 * foe[0], sa[0], sa[1], fa, want, pop0, pa))
+    for t in range(3000):
+        g.tick(1)
+        ta = c.peek(S.UNIT_TAB + a * S.U_SIZE + U_TEAM)
+        tf = c.peek(S.UNIT_TAB + FOE * S.U_SIZE + U_TEAM)
+        if ta != 0 or tf != 1:
+            break
+    g.tick(5)
+    end = (state(c, a) if ta == 0 else 'νεκρή', state(c, FOE) if tf == 1
+           else 'νεκρή')
+    pe = M6.hud_vals(c, sym)[4]
+    g.report('τέλος', pe == people(c) and (ta != 0 or tf != 1),
+             'σε %d καρέ: η ομάδα %s, ο εχθρός %s· πληθυσμός %d, άθροισμα %d'
+             % (t + 1, end[0], end[1], pe, people(c)))
 
 
 def main():
@@ -189,8 +267,10 @@ def main():
              (10, 10) and card_bar(c) == [CARD_EMPTY] * 6,
              'χωρίς επιλογή: στην κάρτα %s %s, μπάρα %s'
              % (tens, ones, [hex(b) for b in card_bar(c)]))
-    phase2(g)
-    print('\nM15 (φάσεις 1-2): %s' % ('OK' if g.ok else 'ΑΠΟΤΥΧΙΑ'))
+    a, quiet = phase2(g)
+    if a is not None:
+        phase3(g, a, quiet)
+    print('\nM15 (φάσεις 1-3): %s' % ('OK' if g.ok else 'ΑΠΟΤΥΧΙΑ'))
     sys.exit(0 if g.ok else 1)
 
 
