@@ -273,7 +273,7 @@ bld_input:
         jr nz,.got
         inc c
         ld a,c
-        cp BT_N + 3
+        cp BT_N + 4
         jr nz,.k
         ld c,255
 .got:   ld hl,bk_prev
@@ -287,6 +287,8 @@ bld_input:
         cp BT_N
         jr c,.type
         jr z,bld_train
+        cp BT_N + 3             ; X: χωρισμός ομάδας (input.asm, M15)
+        jp z,sq_split
         cp BT_N + 2             ; U: έρευνα στο επιλεγμένο κτίριο (bank7.asm)
         jr nz,.esc
         ld hl,res_start

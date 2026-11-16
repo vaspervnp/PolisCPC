@@ -34,6 +34,14 @@ CPC 6128.
 12. ΤΡΕΙΣ. Ένας εχθρός μόνος του έρχεται στους 20 που στέκονται: το
     χτύπημά τους είναι το πολύ 3 x 8 = 24 x τυχαία (7-23), ζει.
 13. ΠΡΩΤΟΣ. Κι ας στέκονται εκείνοι, ο ένας χτυπάει πρώτος.
+14. ΕΝΩΣΗ (φάση 4). Μία ομάδα των 5 επιλεγμένη, RETURN πάνω σε δική μας
+    ομάδα του ίδιου είδους (8): πάει εκεί και μπαίνει όλη (13), η εγγραφή
+    της φεύγει.
+15. ΠΕΡΙΣΣΕΥΟΥΝ. Οι 12 στους 13: μπαίνουν 7 (20), οι 5 μένουν, χωρίς
+    εντολή.
+16. ΧΩΡΙΣΜΟΣ. Η ομάδα των 20 επιλεγμένη, X: 10 και 10, η νέα στο διπλανό
+    πλακίδιο, του ίδιου σετ.
+17. ΠΛΗΘΥΣΜΟΣ. Ούτε η ένωση ούτε ο χωρισμός τον αλλάζουν.
 """
 import os
 import sys
@@ -48,6 +56,7 @@ import m8_check as M8                           # noqa: E402
 import m9_check as M9                           # noqa: E402
 import make_map as MM                           # noqa: E402
 import m5_check as M5                           # noqa: E402
+import cpc as CPCMOD                            # noqa: E402
 import scene as S                               # noqa: E402
 
 SQ_N, SQ_MAX = 0x3F00, 20
@@ -289,6 +298,86 @@ def phase3(g, a, quiet):
              fk[0] in {after(SQ_MAX, 60, d) for d in ds},
              'ο ένας χτυπάει πρώτος: στο καρέ %s %s, οι %d στο %s'
              % (fk and fk[1], fk and fk[0], SQ_MAX, ff and ff[1]))
+    return [FOE, f, k]
+
+
+def team(c, k):
+    return c.peek(S.UNIT_TAB + k * S.U_SIZE + U_TEAM)
+
+
+def cnt(c, k):
+    return c.peek(SQ_N + k) + 1
+
+
+def return_on(g, k):
+    """Ο κέρσορας πάνω στη μονάδα k (όπως το κλικ), και RETURN."""
+    u = S.unit(g.c, k)
+    x0, y0 = g.cursor()
+    g.move_cursor(u['sx'] + (x0 - u['sx']) % 2, u['sy'] + (y0 - u['sy']) % 6)
+    g.c.key_down(CPCMOD.KEY_RETURN)
+    g.tick(1)
+    g.c.key_up(CPCMOD.KEY_RETURN)
+    g.tick(1)
+
+
+def phase4(g, away):
+    c, sym = g.c, g.sym
+    for k in away:                  # η μάχη της φάσης 3: όχι πια
+        r = S.UNIT_TAB + k * S.U_SIZE + 11
+        c.poke(r, c.peek(r) | S.F_WANDER)
+    A, B, C = 1, 4, 7               # σπαθοφόροι (σετ 1)
+    u = S.unit(c, B)
+    for k, n, dx, dy in ((A, 5, -16, 0), (B, 8, 0, 0), (C, 12, 0, 24)):
+        M8.place(c, k, u['wx'] + dx, u['wy'] + dy, u['wx'] + dx + 1)
+        c.poke(SQ_N + k, n - 1)
+        c.poke(S.UNIT_TAB + k * S.U_SIZE + U_LOOK, 255)
+    pop0 = people(c)
+    c.poke(sym['HUD_VAL'] + 8, pop0 & 255)
+    c.poke(sym['HUD_VAL'] + 9, pop0 >> 8)
+    g.tick(20)
+    pops = []
+
+    sel = M6.click_unit(g, A)
+    return_on(g, B)
+    for t in range(600):
+        g.tick(1)
+        if team(c, A) != 0:
+            break
+    g.tick(5)
+    pops.append((M6.hud_vals(c, sym)[4], people(c)))
+    g.report('ένωση', sel == {A} and team(c, A) != 0 and cnt(c, B) == 13,
+             'επιλεγμένη %s (5), RETURN πάνω στην %d (8): σε %d καρέ η %d %s, '
+             'η %d με %d' % (sel, B, t + 1, A, 'έφυγε' if team(c, A) != 0
+                             else 'ακόμα εδώ', B, cnt(c, B)))
+
+    sel = M6.click_unit(g, C)
+    return_on(g, B)
+    for t in range(600):
+        g.tick(1)
+        if cnt(c, B) == SQ_MAX:
+            break
+    g.tick(30)
+    pops.append((M6.hud_vals(c, sym)[4], people(c)))
+    g.report('περισσεύουν', sel == {C} and cnt(c, B) == SQ_MAX and
+             team(c, C) == 0 and cnt(c, C) == 5 and
+             S.c7_read(c, 0x7F00 + C)[0] == 255,
+             'οι 12 στους 13: η %d με %d, η %d με %d (εντολή %d)'
+             % (B, cnt(c, B), C, cnt(c, C), S.c7_read(c, 0x7F00 + C)[0]))
+
+    sel = M6.click_unit(g, B)
+    before = {k for k in range(S.UNITS) if team(c, k) != 255}
+    M7.press(g, 'x')
+    g.tick(5)
+    new = [k for k in range(S.UNITS) if k not in before and team(c, k) == 0]
+    t0, t1 = M5.unit_tile(S.unit(c, B)), new and M5.unit_tile(S.unit(c, new[0]))
+    pops.append((M6.hud_vals(c, sym)[4], people(c)))
+    g.report('χωρισμός', sel == {B} and len(new) == 1 and cnt(c, B) == 10 and
+             cnt(c, new[0]) == 10 and S.unit(c, new[0])['set'] == 1 and
+             max(abs(a - b) for a, b in zip(t0, t1)) <= 1,
+             'X στην %d (20): %d, νέα %s με %s, στο %s (η παλιά στο %s)'
+             % (B, cnt(c, B), new, [cnt(c, k) for k in new], t1, t0))
+    g.report('πληθυσμός', all(p == q == pop0 for p, q in pops),
+             'μπάρα / άθροισμα: %s (πριν %d)' % (pops, pop0))
 
 
 def main():
@@ -326,8 +415,8 @@ def main():
              % (tens, ones, [hex(b) for b in card_bar(c)]))
     a, quiet = phase2(g)
     if a is not None:
-        phase3(g, a, quiet)
-    print('\nM15 (φάσεις 1-3): %s' % ('OK' if g.ok else 'ΑΠΟΤΥΧΙΑ'))
+        phase4(g, phase3(g, a, quiet))
+    print('\nM15 (φάσεις 1-4): %s' % ('OK' if g.ok else 'ΑΠΟΤΥΧΙΑ'))
     sys.exit(0 if g.ok else 1)
 
 

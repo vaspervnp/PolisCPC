@@ -65,10 +65,16 @@ start:
         ld de,MAP               ; το τελευταίο του POLIS.BIN, και μπορεί να
         call dzx0               ; περνάει πάνω από το BOOT (M12)
         endif
+        ifdef BARS
         ld hl,boot_phys         ; οι ρουτίνες της εκκίνησης στο BOOT (boot.asm)
         ld de,BOOT
         ld bc,BOOT_LEN
         ldir
+        else
+        ld hl,boot_z            ; (M15: συμπιεσμένες)
+        ld de,BOOT
+        call dzx0
+        endif
         im 1
         ld a,#C3                ; JP int_handler (screen.asm)
         ld (#0038),a
@@ -654,18 +660,17 @@ code_end:
 C7_CODE     equ #67A0           ; ο κώδικας της C7: αμέσως μετά τα μεταγλωττισμένα
         assert #4000 + CMP_LEN <= C7_CODE, 'compiled past C7_CODE'
 
-; Η εκκίνηση (boot.asm): συναρμολογημένη για το BOOT, αντιγράφεται εκεί από
-; το start. Πριν από τα συμπιεσμένα (ο rasm μετράει τις ετικέτες μετά από
-; LZX0 με το ασυμπίεστο μέγεθος).
+; Η εκκίνηση (boot.asm): συναρμολογημένη για το BOOT σε δικό της χώρο του
+; rasm (πιο κάτω), και συμπιεσμένη (boot_z) — το start την αποσυμπιέζει εκεί.
 BOOT        equ #7A30           ; σειρές της σελίδας του HUD που δεν φαίνονται
-boot_phys:
-        org BOOT,boot_phys
+        ifdef BARS              ; (η οθόνη του M0: ο κύριος κώδικας είναι άλλος,
+boot_phys:                      ; άρα και οι διευθύνσεις του build/boot.bin —
+        org BOOT,boot_phys      ; ασυμπίεστη, όπως ως το M14)
         include "boot.asm"
 boot_end:
         org boot_phys + boot_end - BOOT
 BOOT_LEN    equ boot_end - BOOT
-        assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
-        assert boot_phys + BOOT_LEN <= BOOT, 'boot_phys overlaps BOOT'
+        endif
 
 
 ; Το μενού έναρξης (menu.asm, M12): τρέχει στη θέση του, πριν από το BOOT.
@@ -752,6 +757,20 @@ init_z:
 init_z      equ 0
         endif
 
+; Η εκκίνηση (M15: συμπιεσμένη, από το build/boot.bin του πρώτου
+; περάσματος, όπως η C7). Πριν από τον χάρτη: όσα είναι πιο πίσω
+; μετακινούνται, και κανείς από τη C7 ή το init δεν τα ξέρει.
+        ifndef C7RAW
+        ifndef BARS
+boot_z:
+        lzx0
+        incbin "../build/boot.bin"
+        lzclose
+        endif
+        else
+boot_z      equ 0
+        endif
+
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB). ΤΕΛΕΥΤΑΙΟΣ:
 ; αποσυμπιέζεται πριν από οτιδήποτε, άρα μπορεί να περνάει πάνω από το BOOT
 ; (#7A30) ως το #8000 — όλα τα άλλα όχι (build.sh).
@@ -786,6 +805,30 @@ end:
 
 ; Τα αρχεία των εποχών (ένα ανά πολιτισμό) και του οπλίτη μπαίνουν στη
 ; δισκέτα από το game/build.sh (src/dsk.py), χωρίς κεφαλίδα AMSDOS (M12).
+
+; ------------------------------------------------------------ το BOOT
+; Ο κώδικας της εκκίνησης (boot.asm), ΕΞΩ από το POLIS.BIN, σε δικό του χώρο
+; του rasm (M15): συναρμολογημένος για το BOOT, όπου τον αποσυμπιέζει το
+; start. Στο snapshot πέφτει στην C6, που την ξαναγράφει το start (res_z).
+        ifndef BARS
+        ifdef SNA
+        bank 6
+        else
+        bank
+        endif
+        org BOOT
+        include "boot.asm"
+boot_end:
+BOOT_LEN    equ boot_end - BOOT
+        endif
+        assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
+        ifndef SNA
+        ifdef C7RAW
+        save 'build/boot.bin',BOOT,BOOT_LEN     ; -> boot_z (το δεύτερο πέρασμα)
+        else
+        save 'build/bootchk.bin',BOOT,BOOT_LEN  ; (build.sh: ίδιο με το boot.bin)
+        endif
+        endif
 
 ; ------------------------------------------------------------ το init_z
 ; Ο κώδικας του init_z, ΕΞΩ από το POLIS.BIN, σε ΔΙΚΟ ΤΟΥ χώρο μνήμης του

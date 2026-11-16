@@ -151,6 +151,78 @@ cursor_input:
         ret z
         jp do_command
 
+; X (M15): η ΜΙΑ επιλεγμένη ομάδα (δική μας, στρατιώτες, πλήθος 2 και πάνω)
+; στα δύο: οι μισοί (προς τα κάτω) γίνονται νέα ομάδα, στο διπλανό ελεύθερο
+; πλακίδιο, με γεμάτη υγεία. Ο πληθυσμός δεν αλλάζει.
+sq_split:
+        ld a,(sel_n)
+        dec a
+        ret nz
+        ld ix,(SELLIST)
+        ld a,(ix+U_TEAM)
+        or a
+        ret nz
+        ld a,(ix+U_SET)
+        or a
+        ret z
+        cp 3
+        ret z
+        call sq_cnt
+        cp 2
+        ret c
+        push ix
+        call unit_sp            ; το πλακίδιό της: το διπλανό (i + 1) πρώτα
+        ld hl,sp_ui
+        ld a,(hl)
+        dec a
+        ld d,a
+        inc (hl)
+        ld a,(sp_uj)
+        dec a
+        ld e,a
+        ld c,3
+        call near_free
+        pop iy                  ; IY = η παλιά
+        ret c
+        push de
+        xor a                   ; μια ελεύθερη θέση (όπως το bld_spawn)
+.f:     ld c,a
+        call idx_ix
+        ld a,(ix+U_TEAM)
+        inc a
+        jr z,.got
+        ld a,c
+        inc a
+        cp UNITS
+        jr nz,.f
+        pop de
+        ret
+.got:   ld l,(iy+U_IDX)
+        ld h,SQ_N >> 8
+        ld a,(hl)
+        inc a
+        ld b,a                  ; το πλήθος
+        srl a
+        ld c,a                  ; οι μισοί (προς τα κάτω): η νέα
+        ld a,b
+        sub c
+        dec a
+        ld (hl),a
+        ld (iy+U_LOOK),255
+        pop de
+        push bc
+        call tile_xy
+        ld b,(iy+U_TEAM)
+        ld c,(iy+U_SET)
+        call unit_born
+        pop bc
+        ld l,(ix+U_IDX)
+        ld h,SQ_N >> 8
+        dec c
+        ld (hl),c
+        ld (ix+U_LOOK),255
+        ret
+
 ; Ο κέρσορας στον κόσμο -> cw_x, cw_y (ποτέ αρνητικά).
 cur_world:
         ld hl,(cam_x)

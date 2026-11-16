@@ -87,7 +87,7 @@ BLD_RES = 13
 MATRIX = {'C': (7, 6), 'H': (5, 4), 'B': (6, 6), 'G': (6, 4), 'S': (7, 4),
           'M': (4, 6), 'R': (6, 2), 'L': (4, 4), 'F': (6, 5), 'W': (7, 3),
           'T': (6, 3), 'ESC': (8, 2), 'N': (5, 6), 'K': (4, 5), 'D': (7, 5),
-          'U': (5, 2)}
+          'U': (5, 2), 'X': (7, 7)}
 TRAIN_KEY = 'T'
 
 # Οι μονάδες που βγαίνουν: κόστος και καρέ (των 25 Hz) εκπαίδευσης.
@@ -221,9 +221,10 @@ def main():
                 % (len(TYPES), START_AGE, MASK_PG, IMG0, cj['red_org'], keys,
                    ''.join(rows)))
         keym = [MATRIX[t[1]] for t in TYPES] + [MATRIX[TRAIN_KEY],
-                                                 MATRIX['ESC'], MATRIX['U']]
-        f.write('\n; τα πλήκτρα: οι τύποι (%s), μετά %s (εκπαίδευση), ESC και U '
-                '(έρευνα, M9)\n'
+                                                 MATRIX['ESC'], MATRIX['U'],
+                                                 MATRIX['X']]
+        f.write('\n; τα πλήκτρα: οι τύποι (%s), μετά %s (εκπαίδευση), ESC, U '
+                '(έρευνα, M9) και X (χωρισμός ομάδας, M15)\n'
                 '; ως (γραμμή του πίνακα, μάσκα)\nBLD_RES     equ %d\n'
                 'bld_keym:\n%s'
                 % (''.join(t[1] for t in TYPES), TRAIN_KEY, BLD_RES,

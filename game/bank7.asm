@@ -340,9 +340,16 @@ combat_think:
         ld a,(iy+U_TEAM)
         cp 2
         jr nc,.end
-        cp (ix+U_TEAM)          ; (ποτέ της ίδιας ομάδας)
+        cp (ix+U_TEAM)
         jr nz,.ord
+        ld a,(iy+U_SET)         ; ΕΝΩΣΗ (M15): δική της ομάδα του ίδιου
+        cp (ix+U_SET)           ; σετ, όχι η ίδια (ord_cmd)
+        jr nz,.end
+        ld a,(iy+U_IDX)
+        cp (ix+U_IDX)
+        jp nz,merge
 .end:   ld (hl),255             ; έπεσε: η εντολή τελείωσε
+        ld (ix+U_TGT),255
         ret
 .ord:   call c_dist
         jr .in
@@ -428,6 +435,61 @@ combat_think:
 .cw:    ld (ix+U_STUCK),0
         set F_MOVE,(ix+U_FL)
 .none:  ret
+
+; ΕΝΩΣΗ (M15). IX = στρατιώτης με εντολή ένωσης, IY = η ομάδα της (ίδια
+; ομάδα, ίδιο σετ), HL = &C7_ORD[IX]. Κοντά (ως MRG_D): μπαίνουν σε εκείνη
+; ως το SQ_MAX — όσοι περισσεύουν μένουν, και η εντολή τελειώνει· αν
+; μπήκαν όλοι, η εγγραφή φεύγει (όπως ο θάνατος, χωρίς πόζα και χωρίς
+; αλλαγή του πληθυσμού). Μακριά: η κίνηση της εντολής, ή κυνήγι.
+MRG_D       equ 24              ; 2 |dx| + |dy|: ο σχηματισμός του RETURN
+merge:  ld (ix+U_TGT),255
+        push hl
+        call c_dist
+        ld de,MRG_D + 1
+        or a
+        sbc hl,de
+        pop hl
+        jr c,.near
+        bit F_MOVE,(ix+U_FL)
+        ret nz
+        jp combat_think.ch
+.near:  ld (hl),255
+        call sq_cnt
+        ld b,a                  ; B = οι δικοί της
+        call iy_cnt
+        ld c,a
+        ld a,SQ_MAX
+        sub c                   ; ο χώρος της άλλης
+        ret z
+        cp b
+        jr c,.k
+        ld a,b
+.k:     ld c,a                  ; C = όσοι περνάνε
+        ld l,(iy+U_IDX)
+        ld h,SQ_N >> 8
+        add a,(hl)
+        ld (hl),a
+        ld (iy+U_LOOK),255
+        ld a,b
+        sub c
+        jr z,.gone
+        dec a
+        ld l,(ix+U_IDX)
+        ld (hl),a
+        ld (ix+U_LOOK),255
+        ret
+.gone:  call hp_hl
+        ld (hl),0
+        set 7,l
+        ld (hl),1               ; η «πόζα»: φεύγει στο επόμενο καρέ
+        ld a,(ix+U_FL)
+        and 1 << F_ORD
+        ld (ix+U_FL),a
+        ld (ix+U_JOB),0
+        set 7,(ix+U_FACE)
+        set 7,(ix+U_TEAM)
+        ld a,(ix+U_IDX)
+        jp dq_add
 
 ; ΚΑΝΕΝΑΣ ΣΤΟΥΣ 9 ΚΑΔΟΥΣ (find_nearest). Σε πλακίδια η απόσταση 2 |dx| + |dy|
 ; είναι 8 max(|di|, |dj|): οι κάδοι γύρω εγγυώνται μόνο 8 πλακίδια (64), ενώ
@@ -1075,6 +1137,8 @@ c_dist: ld l,(iy+U_WX)
 ; RETURN (do_command, πριν την κίνηση): ο εχθρός κάτω από τον κέρσορα (όπως
 ; το κλικ: από τη μπροστινή του ORDER προς τα πίσω, ζωντανός, ομάδα 1)
 ; γίνεται ο στόχος όσων είναι επιλεγμένες — αλλιώς καμία εντολή επίθεσης.
+; Ή (M15) δική μας ομάδα στρατιωτών που δεν είναι επιλεγμένη: εντολή
+; ένωσης (για όσες είναι του ίδιου σετ, combat_think).
 ord_cmd:
         ld c,255
         ld a,(ord_n)
@@ -1098,8 +1162,17 @@ ord_cmd:
         pop iy
         ld a,(iy+U_TEAM)
         dec a
+        jr z,.e
+        inc a                   ; ή δική μας ομάδα στρατιωτών, όχι επιλεγμένη:
+        jr nz,.n                ; ένωση (M15, combat_think)
+        bit F_SEL,(iy+U_FL)
         jr nz,.n
-        bit F_WANDER,(iy+U_FL)  ; οι ουδέτερες που περιπλανιούνται: όχι
+        ld a,(iy+U_SET)
+        or a
+        jr z,.n
+        cp 3
+        jr z,.n
+.e:     bit F_WANDER,(iy+U_FL)  ; οι ουδέτερες που περιπλανιούνται: όχι
         jr nz,.n
         ld a,(cur_x)
         sub (iy+U_SX)

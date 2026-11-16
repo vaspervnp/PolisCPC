@@ -836,6 +836,24 @@ bld_spawn:
         call bld_ring
         ret c
         call tile_xy
+        push hl
+        push de
+        ld a,(iy+B_TYPE)
+        call bt_hl
+        ld de,BT_UNIT
+        add hl,de
+        ld c,(hl)               ; το σετ
+        ld b,(iy+B_OWN)         ; της ομάδας του κτιρίου (M10)
+        pop de
+        pop hl
+        call unit_born
+        ld e,1
+        jp sp_pop               ; (NC)
+
+; IX = ελεύθερη θέση, HL, DE = WX, WY, B = ομάδα, C = σετ: μια νέα μονάδα
+; εκεί, μόνη της (SQ_N = 0), με γεμάτη υγεία (το bld_spawn, και ο χωρισμός
+; ομάδας του M15).
+unit_born:
         ld (ix+U_WX),l
         ld (ix+U_WX+1),h
         ld (ix+U_TX),l
@@ -844,8 +862,7 @@ bld_spawn:
         ld (ix+U_WY+1),d
         ld (ix+U_TY),e
         ld (ix+U_TY+1),d
-        ld a,(iy+B_OWN)         ; της ομάδας του κτιρίου (M10)
-        ld (ix+U_TEAM),a
+        ld (ix+U_TEAM),b
         xor a
         call nt_put             ; στόχος (η θέση ίσως ήταν ουδέτερης)
         ld (ix+U_FL),a
@@ -863,11 +880,7 @@ bld_spawn:
         ld l,(ix+U_IDX)         ; χωρίς φορτίο
         ld h,J_CARRY >> 8
         ld (hl),0
-        ld a,(iy+B_TYPE)
-        call bt_hl
-        ld de,BT_UNIT
-        add hl,de
-        ld a,(hl)
+        ld a,c
         call set_look
         ld hl,hp_set            ; η υγεία της (bank7.asm)
         call far7
@@ -877,12 +890,9 @@ bld_spawn:
         ld l,(ix+U_IDX)         ; μόνη της (η θέση ίσως ήταν ομάδας)
         ld h,SQ_N >> 8
         ld (hl),0
-        ld e,1
-        call sp_pop
         call unit_activity      ; φαίνεται ήδη;
         call vis_test
-        call z,unit_update
-        or a
+        jp z,unit_update
         ret
 
 ; IY = κτίριο, E = άνθρωποι: του παίκτη -> ο πληθυσμός + E.
