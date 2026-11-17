@@ -29,9 +29,11 @@
 Κέντρο του.
 9. ΟΧΙ ΔΙΚΟ ΣΟΥ. Κλικ στο Κέντρο του αντιπάλου, T: τίποτα (ούτε ουρά, ούτε
    πληρωμή).
-10. ΕΝΤΟΛΗ ΣΕ ΚΤΙΡΙΟ. RETURN πάνω του με τους 8 επιλεγμένους: όλοι το έχουν
+10. ΕΝΤΟΛΗ ΣΕ ΚΤΙΡΙΟ. RETURN πάνω του με 7 επιλεγμένους: όλοι το έχουν
     στόχο, το ρίχνουν, η ζημιά του σβήνει, και η οθόνη μετά = ο κόσμος χωρίς
-    αυτό, pixel προς pixel.
+    αυτό, pixel προς pixel. Ο 8ος (σπαθοφόρος, όχι επιλεγμένος) στέκεται
+    μπροστά στο Κέντρο, κάτω από τον κέρσορα: το κτίριο προηγείται της
+    ένωσης μαζί του (M15).
 11. ΝΙΚΗ. game_end = 1, το περιθώριο μαύρο, και στην κάρτα του HUD η
     σημαία (στην ήττα η νεκροκεφαλή).
 """
@@ -42,6 +44,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import m3_check as M3                           # noqa: E402
 import m4_check as M4                           # noqa: E402
+import m5_check as M5                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
 import m8_check as M8                           # noqa: E402
@@ -59,6 +62,8 @@ WAVE_AT = 40                    # s
 LIMIT = 900                     # s (M13: η ήττα ενός αδρανούς παίκτη είναι
                                 # χαοτική — 318 s στο M12, 688 s στο M13)
 SOLDIERS = (1, 2, 4, 5, 7, 8, 10, 11)   # της πόλης: σπαθοφόροι και τοξότες
+LONE = 7                                # (M15) όχι επιλεγμένος, μπροστά στο Κέντρο του
+CHOSEN = tuple(k for k in SOLDIERS if k != LONE)
 SELLIST = 0xA840
 
 
@@ -255,16 +260,32 @@ def victory(shots):
              '%s -> %s' % (sel, etc['slot'], q, hud0, hud1))
 
     # ------------------------------------------------------ 10. εντολή σε κτίριο
-    for n, k in enumerate(SOLDIERS):            # η επιλογή (το κουτί το
+    # (M15 φάση 6) ο 7, σπαθοφόρος, ΔΕΝ επιλέγεται και στέκεται κάτω από τον
+    # κέρσορα, πάνω στο Κέντρο του: το κτίριο προηγείται της ένωσης μαζί του
+    x, y = 2 * (61 - 31) + 190, 4 * (61 + 31) - 10     # μπροστά από το
+    M8.place(c, LONE, x, y, x + 2)                      # Κέντρο, στο (61, 31)
+    for f, v in ((13, 255), (16, 255)):     # U_SY, U_LOOK: η θέση στην οθόνη
+        c.poke(S.UNIT_TAB + LONE * S.U_SIZE + f, v)     # ξανά από την αρχή
+    g.tick(20)
+    for n, k in enumerate(CHOSEN):              # η επιλογή (το κουτί το
         a = S.UNIT_TAB + k * S.U_SIZE           # ελέγχει το M4)
         c.poke(SELLIST + 2 * n, a & 255)
         c.poke(SELLIST + 2 * n + 1, a >> 8)
         c.poke(a + 11, c.peek(a + 11) | S.F_SEL)
-    c.poke(sym['SEL_N'], len(SOLDIERS))
-    g.move_cursor(*M6.tile_cursor(g, 59, 28))
+    c.poke(sym['SEL_N'], len(CHOSEN))
+    lu, (x0, y0) = S.unit(c, LONE), g.cursor()  # ο κέρσορας στο sprite του,
+    kx, ky = M4.M2.cam(c, sym)                  # και σε πλακίδιο του Κέντρου
+    spots = [(x, y) for x in range(x0 % 2, 77, 2) for y in range(y0 % 6, 129, 6)
+             if 0 <= x - lu['sx'] < 4 and 0 <= y - lu['sy'] < 16 and
+             all(0 <= a - b < 4 for a, b in
+                 zip(M5.feet_tile(kx + x, ky + y), AI_TC))]
+    if spots:
+        g.move_cursor(*spots[0])
+    lu, (cx, cy) = S.unit(c, LONE), g.cursor()
+    under = bool(spots) and 0 <= cx - lu['sx'] < 4 and 0 <= cy - lu['sy'] < 16
     M7.press(g, KEY_RETURN, 1)
     orders = S.c7_read(c, C7_ORD, 128)
-    ordered = [k for k in SOLDIERS if orders[k] == 128 + etc['slot']]
+    ordered = [k for k in CHOSEN if orders[k] == 128 + etc['slot']]
     dmg_max, fell = 0, None
     for f in range(1500):
         g.tick(1)
@@ -280,12 +301,15 @@ def victory(shots):
     d = S.c7_read(c, BDMG + 2 * etc['slot'], 2)
     g.world = M4.M.game_world(blds=[('town_center', 30, 58)])
     same = g.compose('victory')
-    g.report('εντολή', ordered == list(SOLDIERS) and fell is not None and
+    g.report('εντολή', ordered == list(CHOSEN) and under and
+             fell is not None and
              dmg_max >= 500 and d == b'\0\0' and
              foot_free(c, *AI_TC, 4) and same,
-             'RETURN πάνω στο Κέντρο του: εντολή στο κτίριο %s· έπεσε σε %s '
-             'καρέ (ζημιά ως %d, μετά %d)· η οθόνη = ο κόσμος χωρίς αυτό'
-             % (ordered, fell, dmg_max, d[0] | d[1] << 8))
+             'RETURN πάνω στο Κέντρο του (και στον %d, %s): εντολή στο κτίριο '
+             '%s· έπεσε σε %s καρέ (ζημιά ως %d, μετά %d)· η οθόνη = ο κόσμος '
+             'χωρίς αυτό' % (LONE, 'κάτω από τον κέρσορα' if under else 'ΟΧΙ '
+                             'κάτω από τον κέρσορα', ordered, fell, dmg_max,
+                             d[0] | d[1] << 8))
     end = c.peek(sym['GAME_END'])
     c.run_frames(10)
     bd, ic = border(c), hud_end(c)

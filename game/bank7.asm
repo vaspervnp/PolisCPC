@@ -1138,9 +1138,13 @@ c_dist: ld l,(iy+U_WX)
 ; το κλικ: από τη μπροστινή του ORDER προς τα πίσω, ζωντανός, ομάδα 1)
 ; γίνεται ο στόχος όσων είναι επιλεγμένες — αλλιώς καμία εντολή επίθεσης.
 ; Ή (M15) δική μας ομάδα στρατιωτών που δεν είναι επιλεγμένη: εντολή
-; ένωσης (για όσες είναι του ίδιου σετ, combat_think).
+; ένωσης (για όσες είναι του ίδιου σετ, combat_think) — μόνο όταν δεν
+; υπάρχει εκεί ούτε εχθρός ούτε εχθρικό κτίριο (M15 φάση 6: οι δικοί μας
+; μπροστά από το Κέντρο του αντιπάλου έπαιρναν την επίθεση).
 ord_cmd:
         ld c,255
+        ld a,c
+        ld (.o2+1),a            ; η δική μας ομάδα κάτω από τον κέρσορα: καμία
         ld a,(ord_n)
         or a
         jr z,.bld
@@ -1160,6 +1164,7 @@ ord_cmd:
         ld e,(hl)
         push de
         pop iy
+        ld e,0                  ; E = 0 εχθρός, 1 δική μας
         ld a,(iy+U_TEAM)
         dec a
         jr z,.e
@@ -1172,6 +1177,7 @@ ord_cmd:
         jr z,.n
         cp 3
         jr z,.n
+        inc e
 .e:     bit F_WANDER,(iy+U_FL)  ; οι ουδέτερες που περιπλανιούνται: όχι
         jr nz,.n
         ld a,(cur_x)
@@ -1182,8 +1188,12 @@ ord_cmd:
         sub (iy+U_SY)
         cp 16
         jr nc,.n
+        dec e
+        jr z,.own
         ld c,(iy+U_IDX)
         jr .set
+.own:   ld a,(iy+U_IDX)         ; κρατιέται: μετά τους εχθρούς και τα κτίρια
+        ld (.o2+1),a
 .n:     djnz .l
 .bld:   ld a,(sel_bld)          ; κτίριο του αντιπάλου κάτω από τον κέρσορα
         push af                 ; (M10): 128 + η θέση του
@@ -1194,16 +1204,17 @@ ord_cmd:
         ld (sel_bld),a
         ld a,c
         inc a
-        jr z,.set
+        jr z,.o2
         dec a
         call brec_iy
         ld a,(iy+B_OWN)
         or a
         ld a,c
-        ld c,255
-        jr z,.set
+        jr z,.o2
         or 128
         ld c,a
+        jr .set
+.o2:    ld c,255                ; (αυτομεταβαλλόμενο: η δική μας, ή καμία)
 .set:   ld a,(sel_n)
         or a
         ret z

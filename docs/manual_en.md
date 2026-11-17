@@ -61,7 +61,7 @@ only after 15 minutes.
 
 * **PLAY AS ‹culture›** starts a free game against the computer.
 * **GREEK CAMPAIGN** and **EGYPTIAN CAMPAIGN** each have four levels (see
-  section 11).
+  section 12).
 * **TUTORIAL** teaches you the game step by step (see section 3).
 * **LOAD GAME** continues the game you saved with **V**. If there is no saved
   game, a new one starts.
@@ -102,6 +102,7 @@ and a **skull** means you lost.
 | **ESC** | cancel the placement |
 | **T** | with a building selected: train a unit |
 | **U** | with a building selected: research its next technology |
+| **X** | with one squad selected: split it in two |
 | **V** | save the game to disc (about 2 seconds) |
 
 On a PC emulator, **RETURN** is the main **Enter** key. The CPC's **ENTER**
@@ -116,6 +117,8 @@ What happens depends on what is under the cursor.
   it.
 * **An enemy unit** (red): attack it.
 * **An enemy building:** attack it until it falls.
+* **One of your own squads of the same kind:** the selected squads walk
+  there and join it (see section 9).
 
 Villagers carry their load to the nearest drop site:
 
@@ -164,10 +167,39 @@ key.
 | Archer | Archery Range | 40 food, 20 wood | 35 | 6 | shoots arrows from a distance |
 | Hoplite | Academy | 60 food, 40 gold | 90 | 10 | the heavy infantry of the Bronze Age |
 
-A unit standing behind a building is shown as an outline in its team's
-colour, so you never lose sight of it.
+Health and attack are per soldier. A unit standing behind a building is
+shown as an outline in its team's colour, so you never lose sight of it.
 
-## 9. Ages and technologies
+## 9. Squads
+
+![Squads with their numbers; the card shows the selected one, of 7](img/squad.png)
+
+Swordsmen, archers and hoplites fight in **squads**. A squad is one piece on
+the map, of one kind, with a number at its feet: how many soldiers it has,
+up to 20. A soldier on his own has no number. Villagers are always single.
+
+* **Training:** a new soldier joins a squad of his kind that stands within
+  three tiles of the building, with no order and no fight, and has room.
+  Otherwise he becomes a new squad of one.
+* **Population** counts people, not pieces: a squad of 8 is 8 people.
+* **The card:** with one squad selected, the card shows its number, and the
+  bar shows the health of the soldier in front.
+* **Joining:** select squads and press **RETURN** over one of your own
+  squads of the same kind. They walk there and join it, up to 20; whoever
+  does not fit stays as a squad of his own.
+* **Splitting:** select one squad of two or more and press **X**. Half of it
+  steps onto the next free tile as a new squad.
+
+**In battle** a squad strikes with the attack of its soldiers added up, but
+at most three soldiers strike each enemy soldier: 10 swordsmen against a
+single one strike like 3. Every blow does between 30% and 100% of its full
+damage, at random. The soldier in front takes the blow; when it kills him,
+the rest of the damage passes to the next one. The **smaller** squad always
+strikes first. Against buildings the whole squad strikes.
+
+The enemy trains into squads too, and its waves come as squads.
+
+## 10. Ages and technologies
 
 The game starts in the **Tool Age**. Select the Town Center and press **U**
 to advance:
@@ -194,7 +226,7 @@ you can have now. The bar of the card shows the progress.
 | Temple | Medicine | 120 food, 60 gold | villager health +10 |
 | Academy | Phalanx | 150 food, 100 gold | hoplite health +20 |
 
-## 10. The enemy, victory and defeat
+## 11. The enemy, victory and defeat
 
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
 and sends them against your Town Center in waves. In a single game (PLAY)
@@ -209,7 +241,7 @@ map shows a red flag (victory) or a skull (defeat).
 
 ![Battle](img/battle.png)
 
-## 11. The campaigns
+## 12. The campaigns
 
 ![Before each level](img/briefing.png)
 
@@ -231,7 +263,7 @@ Before each level, a screen shows its goal. Press a key to start.
 
 You also win any level if you destroy the enemy completely.
 
-## 12. Tips
+## 13. Tips
 
 * Put the three villagers to work at once: two on berries, one on wood.
   Have the Town Center train more right away.
@@ -239,6 +271,8 @@ You also win any level if you destroy the enemy completely.
 * You have no army at the start. Build Barracks before the first wave
   arrives. Keep the soldiers between
   the Town Center and the road the enemy comes on.
+* Leave new soldiers next to their Barracks, so they gather into one
+  squad. A lone soldier against a squad strikes first, but falls fast.
 * Build Granaries and Storage Pits next to the resources. Short trips mean
   more food and wood.
 * Save often with **V**.
