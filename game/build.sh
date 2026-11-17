@@ -23,6 +23,7 @@ rasm game/main.asm -DSNA=1 -o build/polis -sz -v2 -ss
 rasm game/main.asm -DSNA=1 -DBARS=1 -o build/m0_bars -sz -v2
 cmp -s build/c7.bin build/c7chk.bin || { echo 'ο κώδικας της C7 άλλαξε ανάμεσα στα περάσματα (build/c7.bin)'; exit 1; }
 cmp -s build/boot.bin build/bootchk.bin || { echo 'ο κώδικας του BOOT άλλαξε ανάμεσα στα περάσματα (build/boot.bin)'; exit 1; }
+cmp -s build/menu.bin build/menuchk.bin || { echo 'ο κώδικας του μενού άλλαξε ανάμεσα στα περάσματα (build/menu.bin)'; exit 1; }
 cmp -s build/init.bin build/initchk.bin || { echo 'ο κώδικας του init_z άλλαξε ανάμεσα στα περάσματα (build/init.bin)'; exit 1; }
 # Το POLIS.BIN φορτώνεται στο #0040. Ό,τι χρειάζεται το παιχνίδι όσο τρέχει
 # (ως το code_end) πρέπει να τελειώνει πριν το παράθυρο τράπεζας #4000· τα

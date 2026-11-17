@@ -101,7 +101,14 @@ start:
         ld bc,UGFX_LEN
         ldir
         call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
+        ifndef SNA
+        ld hl,menu_z            ; το μενού στο MENU_AT (συμπιεσμένο, M15)
+        ld de,MENU_AT
+        call dzx0
         call menu               ; πολιτισμός ή φόρτωμα (menu.asm, M12)
+        else                    ; (στο snapshot των ελέγχων κανένα μενού —
+        ds 12,0                 ; το menu.bin είναι του POLIS.BIN — και ο
+        endif                   ; κύριος κώδικας ίδιος: τα σύμβολα)
         ld hl,init_z            ; οι ρουτίνες της εκκίνησης στην οθόνη
         ld de,INIT              ; (init.asm, M11), και πίσω τους η
         call dzx0               ; αποθήκευση (savegame.asm, M12) και οι
@@ -673,10 +680,13 @@ BOOT_LEN    equ boot_end - BOOT
         endif
 
 
-; Το μενού έναρξης (menu.asm, M12): τρέχει στη θέση του, πριν από το BOOT.
+; Το μενού έναρξης (menu.asm, M12): στη θέση του μόνο στην οθόνη του M0
+; (εκεί δεν τρέχει)· αλλιώς (M15) συμπιεσμένο (menu_z), για το MENU_AT.
+MENU_AT     equ #A600           ; οι πίνακες των μονάδων (ACT_TAB ... FIELD_TAB):
+                                ; τους γράφει το init, μετά το μενού
+        ifdef BARS
         include "menu.asm"
-menu_end:
-        assert menu_end <= BOOT, 'menu over BOOT'
+        endif
 
 ; Τα γραφικά των μονάδων στις τράπεζες (ugfx.asm, M12): στο #B000, στις
 ; εγγραφές των μονάδων, πριν τις γράψει το units_init.
@@ -771,6 +781,18 @@ boot_z:
 boot_z      equ 0
         endif
 
+; Το μενού (M15: συμπιεσμένο, από το build/menu.bin του πρώτου περάσματος).
+        ifndef C7RAW
+        ifndef BARS
+menu_z:
+        lzx0
+        incbin "../build/menu.bin"
+        lzclose
+        endif
+        else
+menu_z      equ 0
+        endif
+
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB). ΤΕΛΕΥΤΑΙΟΣ:
 ; αποσυμπιέζεται πριν από οτιδήποτε, άρα μπορεί να περνάει πάνω από το BOOT
 ; (#7A30) ως το #8000 — όλα τα άλλα όχι (build.sh).
@@ -822,6 +844,23 @@ boot_end:
 BOOT_LEN    equ boot_end - BOOT
         endif
         assert BOOT + BOOT_LEN <= J_SI, 'boot past J_SI'
+; Το ίδιο το μενού (menu.asm): για το MENU_AT, όπου το αποσυμπιέζει το start
+; πριν το καλέσει. Ως το FD_TAB: το level της εκστρατείας γράφει ως το
+; LV_HDR + H_LEN (#A476), το TITLE_AT είναι στο #B000.
+        ifndef BARS
+        org MENU_AT
+        include "menu.asm"
+menu_end:
+MENU_LEN    equ menu_end - MENU_AT
+        assert MENU_AT >= LV_HDR + H_LEN && MENU_AT + MENU_LEN <= FD_TAB, 'MENU_AT'
+        ifndef SNA
+        ifdef C7RAW
+        save 'build/menu.bin',MENU_AT,MENU_LEN     ; -> menu_z (το δεύτερο πέρασμα)
+        else
+        save 'build/menuchk.bin',MENU_AT,MENU_LEN  ; (build.sh: ίδιο με το menu.bin)
+        endif
+        endif
+        endif
         ifndef SNA
         ifdef C7RAW
         save 'build/boot.bin',BOOT,BOOT_LEN     ; -> boot_z (το δεύτερο πέρασμα)
