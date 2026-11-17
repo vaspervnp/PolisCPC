@@ -92,14 +92,16 @@ def hold(c, sym, keys, ticks, times):
 
 def expect_cam(c, sym, keys, n):
     """Πού πρέπει να πάει η κάμερα σε n καρέ (+ τα 2 του αφήματος): ένας
-    άξονας ανά καρέ, η κάθετη σε ΔΥΟ καρέ (v_pend: στο πρώτο τίποτα δεν
-    κουνιέται, στο δεύτερο τελειώνει ό,τι κι αν πατιέται), στη διαγώνια
-    εναλλάξ (sdiag), και ο άλλος άξονας αν ο δικός του είναι στην άκρη."""
+    άξονας τη φορά, και ο καθένας σε ΔΥΟ καρέ (v_pend, και από τις
+    2026-11-17 h_pend: στο πρώτο τίποτα δεν κουνιέται, στο δεύτερο τελειώνει
+    ό,τι κι αν πατιέται), στη διαγώνια εναλλάξ (sdiag), και ο άλλος άξονας
+    αν ο δικός του είναι στην άκρη."""
     x, y = cam(c, sym)
     sx = keys.count('R') - keys.count('L')
     sy = keys.count('D') - keys.count('U')
     diag = c.peek(sym['SDIAG'])
     pend = None
+    hpend = None
 
     def step_h(x):
         if sx > 0 and x < MAX_CAM_X:
@@ -116,7 +118,9 @@ def expect_cam(c, sym, keys, n):
         return y
 
     for _ in range(n):
-        if pend is not None:
+        if hpend is not None:
+            x, hpend = hpend, None
+        elif pend is not None:
             y, pend = pend, None
         elif sx and sy:
             diag ^= 1
@@ -124,18 +128,20 @@ def expect_cam(c, sym, keys, n):
                 ny = step_v(y)
                 if ny != y:
                     pend = ny
-                else:
-                    x = step_h(x)
+                elif step_h(x) != x:
+                    hpend = step_h(x)
             else:
                 nx = step_h(x)
                 if nx != x:
-                    x = nx
+                    hpend = nx
                 elif step_v(y) != y:
                     pend = step_v(y)
-        elif sx:
-            x = step_h(x)
+        elif sx and step_h(x) != x:
+            hpend = step_h(x)
         elif sy and step_v(y) != y:
             pend = step_v(y)
+    if hpend is not None:
+        x = hpend
     if pend is not None:
         y = pend
     return x, y
@@ -152,6 +158,8 @@ def main():
     c.run_frames(5)
     assert M.load_sna(c), 'quickload'
     c.poke(sym['FOG_ON'], 0)              # χωρίς ομίχλη (M11)
+    c.poke(sym['AI_ON'], 0)               # ο αντίπαλος δεν χτίζει: η εικόνα
+                                          # αναφοράς είναι ο αρχικός κόσμος
     M.wait_phase(c, sym, 6)
 
     # ---------------------------------------------------- 3. μονάδες
@@ -160,7 +168,9 @@ def main():
     for k in range(3):
         for _ in range(4):
             times.append(M3.tick_time(c, sym))
-        cx, cy = cam(c, sym)
+        if c.peek(sym['H_PEND']):           # η στήλη έτοιμη, η κάμερα όχι
+            times.append(M3.tick_time(c, sym))  # ακόμα: η άκρη 4 pixels
+        cx, cy = cam(c, sym)                    # δείχνει ήδη το νέο έδαφος
         exp = S.expected(c, sym, M.reference(world, cx, cy))
         good = diff(decode_scrolled(c, sym), exp, 'units%d' % k, c, shots)
         print('μονάδες  %-9s κύλιση δεξιά ενώ κινούνται, κάμερα (%d,%d)'

@@ -17,9 +17,15 @@
 FOG         equ #5F80           ; C6: μετά τις εικόνες της εποχής
 FOG_LEN     equ MAPW * MAPW / 8
 FOG_R       equ 4               ; πλακίδια γύρω από τη μονάδα
-FD_TAB      equ #AD60           ; FD_N x (wx, y0, y1: dw): στήλες προς
-FD_N        equ 26              ; επανασχεδίαση (μετά το buffer γραμμής
-        assert FD_TAB >= BUF_A + #800 + 80 && FD_TAB + FD_N * 6 <= UNIT_TAB, 'FD_TAB'
+FD_TAB      equ #AD60           ; FD_N x (wx/2, y0/4, y1/4: db): στήλες προς
+FD_N        equ 40              ; επανασχεδίαση (μετά το buffer γραμμής
+FD_SZ       equ 3               ; ...). 2026-11-17: ΑΜΕΣΗ διεύθυνση, η θέση =
+                                ; (wx/2) mod 40 — οι 40 στήλες του παραθύρου
+                                ; δεν συγκρούονται ποτέ. Ως τότε 26 x 6 bytes
+                                ; με γραμμική αναζήτηση: ως 33 ms σε ένα καρέ
+                                ; (δεκάδες πλακίδια φανερώνονται μαζί)
+        assert FD_TAB >= BUF_A + #800 + 80 && FD_TAB + FD_N * FD_SZ <= UNIT_TAB, 'FD_TAB'
+        assert (FD_TAB & 255) + FD_N * FD_SZ <= 256, 'FD_TAB: one page'
 FOG_T       equ 5               ; 1/300 s από την αρχή του καρέ: ως εκεί
         assert FOG + FOG_LEN <= CMP_RED, 'FOG over CMP_RED'
         assert AGE_AT + AGE_MAX <= FOG, 'age file over FOG'

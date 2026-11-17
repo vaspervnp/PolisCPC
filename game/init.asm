@@ -594,7 +594,7 @@ fog_init:
         cp UNITS
         jr nz,.u
         ld hl,FD_TAB
-        ld b,FD_N * 6
+        ld b,FD_N * FD_SZ
 .f:     ld (hl),255
         inc hl
         djnz .f

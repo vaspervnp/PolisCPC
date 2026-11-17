@@ -39,7 +39,7 @@ FOG_R = 4
 TC = (30, 58)
 AI_TC = (58, 27)
 MAP, MAPW = 0x8000, 96
-FD_TAB, FD_N = 0xAD60, 26
+FD_TAB, FD_N, FD_SZ = 0xAD60, 40, 3     # (2026-11-17: άμεση διεύθυνση)
 HUD_PAGE, VIEW_H = 0x4000, 144
 TARGET = (48, 58)               # στην ομίχλη, ανατολικά της πόλης (στην οθόνη)
 SOLDIER = 2
@@ -153,8 +153,8 @@ def mm_screen(c):
 
 
 def fd_empty(c):
-    b = c.read_ram(FD_TAB, FD_N * 6)
-    return all(b[k] == 255 and b[k + 1] == 255 for k in range(0, FD_N * 6, 6))
+    b = c.read_ram(FD_TAB, FD_N * FD_SZ)
+    return all(b[k] == 255 for k in range(0, FD_N * FD_SZ, FD_SZ))
 
 
 def settle(g, n=200):

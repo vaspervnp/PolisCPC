@@ -161,6 +161,7 @@ frame:
         xor a
         ld (redraw),a
         ld (v_pend),a           ; μια κάθετη κύλιση στη μέση: ξεχνιέται
+        ld (h_pend),a           ; (και μια οριζόντια)
         inc a
         ld (phase),a            ; 1 = σχεδιάζει (το διαβάζει το tests/m1_check.py)
         ld hl,0                 ; πλήρης σχεδίαση: η κύλιση ξεκινάει από το 0,
@@ -422,6 +423,11 @@ sdx:        db 0                ; κύλιση που ζητήθηκε αυτό 
 sdy:        db 0
 sdiag:      db 0                ; η διαγώνια κύλιση εναλλάξ (scroll.asm)
 v_pend:     db 0                ; η κάθετη κύλιση στη μέση (2 καρέ)
+h_pend:     db 0                ; η οριζόντια στη μέση: η στήλη έτοιμη (2026-11-17)
+h_redo:     db 0                ; ... αλλά τη χάλασε ένα col_redraw
+h_c:        db 0                ; το byte της στήλης (στη νέα θέση)
+h_ncx:      dw 0                ; η νέα cam_x
+h_ns:       dw 0                ; η νέα μετατόπιση
 v_y0:       db 0                ; η γραμμή της λωρίδας: 0 ή VIEW_H - 8
 v_ny:       dw 0                ; η νέα cam_y
 v_ns:       dw 0                ; η νέα μετατόπιση
@@ -531,9 +537,6 @@ fr_j:       db 0                ; fog_reveal (fog.asm, M11)
 fr_j1:      db 0
 fr_i0:      db 0
 fr_i1:      db 0
-fd_x:       dw 0                ; fd_add: η νέα εγγραφή (wx, y0, y1)
-fd_y0:      dw 0
-fd_y1:      dw 0
 fd_c:       db 0
 fog_on:     db 1                ; 0: όλα εξερευνημένα (tests M1-M10, M11)
 mm_my:      db 0                ; minimap.asm: η γραμμή του καρέ

@@ -123,7 +123,10 @@ calc_cam_h:
 ; στο επόμενο (sdiag). Αν ο άξονας της σειράς του είναι ήδη στην άκρη,
 ; κυλάει ο άλλος στο ίδιο καρέ.
 scroll_apply:
-        ld a,(v_pend)           ; η κάθετη που άρχισε τελειώνει, μόνη της
+        ld a,(h_pend)           ; η οριζόντια που άρχισε τελειώνει, μόνη της
+        or a
+        jp nz,scroll_h2
+        ld a,(v_pend)           ; το ίδιο η κάθετη
         or a
         jp nz,scroll_v2
         ld a,(sdy)
@@ -144,21 +147,25 @@ scroll_apply:
         ret z
         jp scroll_h
 .hfirst:
-        ld hl,(scr_s)
-        push hl
         ld a,(sdx)
         call scroll_h
-        pop de
-        ld hl,(scr_s)
+        ld a,(h_pend)
         or a
-        sbc hl,de
         ret nz
 .v:     ld a,(sdy)
         jp scroll_v
 
-; A = sdx (±1): μία στήλη.
+; A = sdx (±1): μία στήλη, ΣΕ ΔΥΟ ΚΑΡΕ (2026-11-17: το καρέ της στήλης
+; ήταν ~45 ms). Στο πρώτο η στήλη ζωγραφίζεται (με τον πίνακα και την κάμερα
+; της νέας θέσης, και μετά ξανά οι παλιοί), μαζί και ο καθρέφτης της· στο
+; δεύτερο (scroll_h2) κινείται η κάμερα. Η οριζόντια κύλιση γίνεται έτσι στο
+; μισό ρυθμό. Η στήλη είναι στη μνήμη της αριστερής (δεξιάς) άκρης της
+; επόμενης (προηγούμενης) σειράς χαρακτήρων, ορατή: για ένα καρέ η άκρη 4
+; pixels δείχνει ήδη το νέο έδαφος. Ο καθρέφτης έχει το ίδιο, άρα οι
+; μονάδες που περνάνε από εκεί σβήνονται σωστά.
 scroll_h:
         ld hl,(cam_x)
+        ld (h_ocx),hl
         bit 7,a
         jr nz,.left
         ld de,MAX_CAM_X
@@ -168,7 +175,7 @@ scroll_h:
         ld hl,(cam_x)
         inc hl
         inc hl
-        ld (cam_x),hl
+        ld (h_ncx),hl
         ld hl,(scr_s)
         inc hl
         ld c,80 - 2             ; η νέα στήλη: δεξιά
@@ -178,31 +185,62 @@ scroll_h:
         ret z                   ; ήδη στην αριστερή άκρη
         dec hl
         dec hl
-        ld (cam_x),hl
+        ld (h_ncx),hl
         ld hl,(scr_s)
         dec hl
         ld c,0
 .h:     ld a,h
         and 3
         ld h,a
-        push hl                 ; η νέα μετατόπιση: δημοσιεύεται στο τέλος
-        push bc
+        ld (h_ns),hl
+        ld a,c
+        ld (h_c),a
+        call h_column
+        ld hl,(h_ocx)           ; ως το δεύτερο καρέ: η παλιά θέση
+        ld (cam_x),hl
+        call calc_cam_h
+        ld hl,(scr_s)
+        call build_lines
+        ld a,1
+        ld (h_pend),a
+        xor a
+        ld (h_redo),a
+        ret
+
+; Η στήλη h_c στη νέα θέση (h_ncx, h_ns): ο πίνακας, η κάμερα, το έδαφος
+; και οι πόροι, ο καθρέφτης.
+h_column:
+        ld hl,(h_ncx)
+        ld (cam_x),hl
+        ld hl,(h_ns)
         call build_lines
         call calc_cam_h
-        pop bc
-        push bc
         ld a,RAM_RES            ; οι πόροι είναι στην C6
         call setram
-        pop bc
-        push bc
-        ld a,c
+        ld a,(h_c)
         call draw_column        ; έδαφος ΚΑΙ πόροι
-        pop bc
-        ld a,c
-        call mirror_column      ; (επιστρέφει με την C0)
-        pop hl
+        ld a,(h_c)
+        jp mirror_column        ; (επιστρέφει με την C0)
+
+; Το δεύτερο καρέ: η κάμερα και η μετατόπιση (και η στήλη ξανά, αν τη
+; χάλασε στο μεταξύ ένα col_redraw).
+scroll_h2:
+        xor a
+        ld (h_pend),a
+        ld a,(h_redo)
+        or a
+        jr z,.go
+        call h_column
+        jr .pub
+.go:    ld hl,(h_ncx)
+        ld (cam_x),hl
+        call calc_cam_h
+        ld hl,(h_ns)
+        call build_lines
+.pub:   ld hl,(h_ns)
         ld (scr_s),hl
         ret
+h_ocx:  dw 0
 
 ; A = sdy (±1): το πρώτο καρέ μιας σειράς. NZ αν άρχισε, Z αν η κάμερα
 ; είναι ήδη στην άκρη.

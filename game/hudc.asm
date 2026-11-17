@@ -203,89 +203,48 @@ fog_new:
 .no:    pop hl
         ret
 
-; HL = wx, DE = y0 (κόσμος· y1 = y0 + 20): στο FD_TAB — με την ίδια στήλη
-; ενώνεται. Γεμάτο: όλο το παράθυρο ξανά (redraw).
-fd_add: ld (fd_x),hl
-        ld (fd_y0),de
-        ld hl,20
-        add hl,de
-        ld (fd_y1),hl
-        ld hl,FD_TAB
-        ld de,0                 ; η πρώτη ελεύθερη
-        ld b,FD_N
-.l:     push hl
+; HL = wx (ζυγό, ως 382), DE = y0 (κόσμος, πολλαπλάσιο του 4· y1 = y0 + 20):
+; στη θέση (wx/2) mod FD_N του FD_TAB. Η ίδια στήλη: ένωση. Άλλη στήλη στη
+; θέση: απέχει 80 bytes, άρα είναι έξω από το παράθυρο — αντικαθίσταται.
+fd_add: srl h
+        rr l
+        ld b,l                  ; B = wx/2
+        ld a,l
+.m:     sub FD_N
+        jr nc,.m
+        add a,FD_N
+        ld c,a
+        add a,a
+        add a,c                 ; x FD_SZ
+        add a,FD_TAB & 255
+        ld l,a
+        ld h,FD_TAB >> 8
+        srl d                   ; E = y0/4
+        rr e
+        srl d
+        rr e
+        ld a,e
+        add a,5
+        ld d,a                  ; D = y1/4
         ld a,(hl)
-        inc hl
-        ld h,(hl)
-        ld l,a
-        inc a                   ; #FFFF: ελεύθερη
-        jr nz,.u
-        ld a,h
-        inc a
-        jr nz,.u
-        ld a,d
-        or e
-        jr nz,.n
-        pop de
-        push de
-        jr .n
-.u:     push de
-        ld de,(fd_x)
-        or a
-        sbc hl,de
-        pop de
-        jr z,.same
-.n:     pop hl
-        ld a,6
-        add a,l
-        ld l,a
-        jr nc,.nc
-        inc h
-.nc:    djnz .l
-        ld a,d                  ; νέα
-        or e
-        jr z,.full
-        ex de,hl
-        ld de,fd_x
-        ex de,hl
-        ld bc,6
-        ldir
-        ret
-.full:  ld a,1
-        ld (redraw),a
-        ret
-.same:  pop hl                  ; ένωση: y0 = min, y1 = max
-        inc hl
-        inc hl
-        ld e,(hl)
-        inc hl
-        ld d,(hl)
-        push hl
-        ld hl,(fd_y0)
-        or a
-        sbc hl,de
-        pop hl
-        jr nc,.y1
-        ld de,(fd_y0)
+        cp b
+        jr nz,.new
+        inc hl                  ; ένωση: y0 = min, y1 = max
+        ld a,e
+        cp (hl)
+        jr nc,.k
+        ld (hl),a
+.k:     inc hl
+        ld a,(hl)
+        cp d
+        ret nc
         ld (hl),d
-        dec hl
+        ret
+.new:   ld (hl),b
+        inc hl
         ld (hl),e
         inc hl
-.y1:    inc hl
-        ld e,(hl)
-        inc hl
-        ld d,(hl)
-        push hl
-        ld hl,(fd_y1)
-        or a
-        sbc hl,de
-        pop hl
-        ret c
-        ret z
-        ld de,(fd_y1)
         ld (hl),d
-        dec hl
-        ld (hl),e
         ret
 
 ; Σε κάθε καρέ μονάδων (bld_tick): οι στήλες του FD_TAB, σε κομμάτια των
@@ -297,16 +256,14 @@ fog_step:
         ld hl,FD_TAB
         ld b,FD_N
 .l:     ld a,(hl)
-        inc hl
-        and (hl)
         inc a
         jr nz,.go
-        ld de,5
-        add hl,de
+        inc hl
+        inc hl
+        inc hl
         djnz .l
         ret
-.go:    dec hl
-        push hl
+.go:    push hl
         call fd_one
         pop hl
         ld a,(t0)
@@ -318,12 +275,10 @@ fog_step:
         ret
 
 ; HL = μια εγγραφή του FD_TAB: ένα κομμάτι της στήλης της (ή ελεύθερη).
-fd_one: ld e,(hl)               ; στήλη = wx - cam_x στο 0..78
-        inc hl
-        ld d,(hl)
-        inc hl
-        push hl
-        ex de,hl
+fd_one: push hl
+        ld l,(hl)               ; στήλη = wx - cam_x στο 0..78
+        ld h,0
+        add hl,hl
         ld de,(cam_x)
         or a
         sbc hl,de
@@ -336,28 +291,17 @@ fd_one: ld e,(hl)               ; στήλη = wx - cam_x στο 0..78
         ld (fd_c),a
         pop hl
         push hl
-        ld e,(hl)               ; y0, y1 - cam_y, στο 0..VIEW_H
-        inc hl
-        ld d,(hl)
-        inc hl
-        push hl
-        ex de,hl
-        ld de,(cam_y)
-        or a
-        sbc hl,de
-        ld c,VIEW_H
-        call clamp_c
+        inc hl                  ; y0, y1 - cam_y, στο 0..VIEW_H
+        ld a,(hl)
+        call .y
         and #FC
         ld (col_y0),a
         pop hl
-        ld e,(hl)
+        push hl
         inc hl
-        ld d,(hl)
-        ex de,hl
-        ld de,(cam_y)
-        or a
-        sbc hl,de
-        call clamp_c
+        inc hl
+        ld a,(hl)
+        call .y
         add a,3
         and #FC
         ld (col_y1),a
@@ -368,32 +312,36 @@ fd_one: ld e,(hl)               ; στήλη = wx - cam_x στο 0..78
         cp FD_ROWS + 1          ; ως FD_ROWS: όλο, και ελεύθερη
         jr c,.last
         ld a,(hl)               ; αλλιώς ως y0 + FD_ROWS, και το y0 της
-        add a,FD_ROWS           ; εγγραφής προχωράει
-        ld (col_y1),a
+        add a,FD_ROWS           ; εγγραφής προχωράει (/4 προς τα κάτω: ως 3
+        ld (col_y1),a           ; γραμμές ξανά)
         ld e,a
         ld d,0
         ld hl,(cam_y)
         add hl,de
-        ex de,hl
+        srl h
+        rr l
+        srl h
+        rr l
+        ld a,l
         pop hl
-        ld (hl),e
         inc hl
-        ld (hl),d
+        ld (hl),a
         jr .draw
 .last:  pop hl
-        dec hl
-        dec hl
-        ld (hl),255
-        inc hl
         ld (hl),255
 .draw:  jp fd_draw
 .free:  pop hl
-        dec hl
-        dec hl
-        ld (hl),255
-        inc hl
         ld (hl),255
         ret
+.y:     ld l,a                  ; A = y/4 -> 4 A - cam_y στο 0..VIEW_H
+        ld h,0
+        add hl,hl
+        add hl,hl
+        ld de,(cam_y)
+        or a
+        sbc hl,de
+        ld c,VIEW_H
+        jp clamp_c
 
 ; ------------------------------------------------------------ μίνι χάρτης
 

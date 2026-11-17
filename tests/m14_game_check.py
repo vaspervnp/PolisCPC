@@ -110,11 +110,19 @@ class Bot:
                 self.c.run_frames(2)
                 continue
             cam = M2.cam(self.c, self.sym)
+            pend = self.pend()
             try:
                 self.g.times.append(M3.tick_time(self.c, self.sym))
             except RuntimeError:
                 continue
-            self.g.scrolled.append(M2.cam(self.c, self.sym) != cam)
+            # με κύλιση: κινήθηκε η κάμερα, ή ετοιμάστηκε μια λωρίδα της
+            # (h_pend, v_pend: το πρώτο από τα δύο καρέ, 2026-11-17)
+            self.g.scrolled.append(M2.cam(self.c, self.sym) != cam or
+                                   self.pend() > pend)
+
+    def pend(self):
+        return self.c.peek(self.sym['H_PEND']) | \
+            self.c.peek(self.sym['V_PEND'])
 
     def sec(self):
         return c7w(self.c, self.sym, 'LV_SEC')

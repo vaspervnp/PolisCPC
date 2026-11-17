@@ -46,14 +46,16 @@ def free_slots(c, n):
             if c.peek(S.UNIT_TAB + i * S.U_SIZE + 28) == 255][:n]
 
 
-def duel(g, a_set, t_set):
-    """Ο a_set του παίκτη χτυπάει τον t_set του αντιπάλου: τα χτυπήματα."""
+def duel(g, a_set, t_set, row=0):
+    """Ο a_set του παίκτη χτυπάει τον t_set του αντιπάλου: τα χτυπήματα. Κάθε
+    ζεύγος σε δική του σειρά της οθόνης (row): όσοι φεύγουν (ομάδα 255)
+    αφήνουν πιασμένη τη θέση τους."""
     c, sym = g.c, g.sym
     a, t = free_slots(c, 2)
     cx, cy = M4.M2.cam(c, sym)
     gap = 40 if a_set == 2 else 10
     for k, st in ((a, a_set), (t, t_set)):
-        M8.enemy(c, k, cx + 30 + (gap if k == t else 0), cy + 60)
+        M8.enemy(c, k, cx + 30 + (gap if k == t else 0), cy + 30 + 26 * row)
         c.poke(S.UNIT_TAB + k * S.U_SIZE + 8, st)
         c.poke(S.UNIT_TAB + k * S.U_SIZE + U_LOOK, 255)
         c.poke(S.SQ_N + k, 0)
@@ -84,8 +86,8 @@ def main():
             a = S.UNIT_TAB + u['idx'] * S.U_SIZE + 11
             c.poke(a, c.peek(a) | S.F_WANDER)
     names = {1: 'σπαθοφόρος', 2: 'τοξότης', 4: 'οπλίτης', 5: 'ιππικό'}
-    for a_set, t_set, dbl in PAIRS:
-        hits = duel(g, a_set, t_set)
+    for row, (a_set, t_set, dbl) in enumerate(PAIRS):
+        hits = duel(g, a_set, t_set, row)
         top = max(hits) if hits else 0
         d = DMG[a_set]
         good = len(hits) >= 8 and (d < top <= 2 * d if dbl else top <= d)
