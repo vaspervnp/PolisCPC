@@ -102,17 +102,17 @@ RECTS = 0xA780                  # 192 bytes· στο τέλος του ελέγ�
 
 
 def c_read(c, sym):
-    """Στο τέλος του ελέγχου (ο Z80 μένει σε βρόχο): τα stats της C7 (40) και
+    """Στο τέλος του ελέγχου (ο Z80 μένει σε βρόχο): τα stats της C7 (52: 2 ομάδες x 6 σετ x 4, και ο πύργος) και
     τα πρώτα 128 bytes της θέσης 3 της C5."""
     st, a5 = sym['STATS'], 0x4000 + 3 * 0xC80
     code = bytes([0xF3, 0x01, 0xC7, 0x7F, 0xED, 0x49,
                   0x21, st & 255, st >> 8, 0x11, RECTS & 255, RECTS >> 8,
-                  0x01, 40, 0, 0xED, 0xB0,
+                  0x01, 52, 0, 0xED, 0xB0,
                   0x01, 0xC5, 0x7F, 0xED, 0x49,
                   0x21, a5 & 255, a5 >> 8, 0x11, (RECTS + 64) & 255,
                   (RECTS + 64) >> 8, 0x01, 128, 0, 0xED, 0xB0, 0x18, 0xFE])
     c.run_code(DUMP, code, 2)
-    return c.read_ram(RECTS, 40), c.read_ram(RECTS + 64, 128)
+    return c.read_ram(RECTS, 52), c.read_ram(RECTS + 64, 128)
 
 
 def main():
@@ -358,10 +358,10 @@ def main():
     # ------------------------------------------------- τέλος: C7 και C5
     st, c5 = c_read(c, sym)
     g.report('τεχνολογίες', v1t[0] == v0t[0] - 300 and v1t[1] == v0t[1] - 50 and
-             cm == [15, 10, 10, 10] and st[5] == 10 and st[20 + 5] == 8,
+             cm == [15, 10, 10, 10] and st[5] == 10 and st[24 + 5] == 8,
              'U στη σιταποθήκη και στην αποθήκη: τροφή %d -> %d, ξύλο %d -> %d· '
              'σε %d καρέ: φορτίο %s, ζημιά σπαθοφόρου %d (εχθρού %d)'
-             % (v0t[0], v1t[0], v0t[1], v1t[1], kt + 1, cm, st[5], st[20 + 5]))
+             % (v0t[0], v1t[0], v0t[1], v1t[1], kt + 1, cm, st[5], st[24 + 5]))
     slot3 = open(os.path.join(M4.M.ROOT, 'data', 'c5_slot3.bin'), 'rb').read()
     g.report('HOPL.BIN', c5 == slot3[:128] and st[16] == 90,
              'η θέση 3 της C5 = ο οπλίτης του c5_slot3.bin· υγεία του %d'

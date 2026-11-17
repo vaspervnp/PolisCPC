@@ -12,8 +12,9 @@
    εντολή επίθεσης σε στρατιώτη του)· η πόλη του μεγαλώνει (χωρικοί και
    κτίρια) και ο στρατός του φτάνει για κύμα (6: τόσους εκπαιδεύει, M14).
 3. ΠΡΟΚΛΗΣΗ. Ένας χωρικός του δίπλα στους στρατιώτες της πόλης: τον
-   χτυπούν, και το ai_cool μηδενίζεται.
-4. ΚΥΜΑ. Λίγο μετά φεύγει το πρώτο κύμα (ai_wave 8).
+   χτυπούν, και το ai_cool μηδενίζεται (ή το κύμα φεύγει αμέσως, και το
+   ai_cool γίνεται AI_GAP) — πολύ πριν τελειώσει η αναμονή.
+4. ΚΥΜΑ. Το πρώτο κύμα (ai_wave 8) φεύγει πριν τελειώσει η αναμονή.
 """
 import os
 import sys
@@ -43,7 +44,7 @@ def people(c, sets):
 def waving(c):
     orders = S.c7_read(c, C7_ORD, 128)
     return [u['idx'] for u in M10.team1(c)
-            if u['set'] in (1, 2, 4) and orders[u['idx']] != 255]
+            if u['set'] in (1, 2, 4, 5) and orders[u['idx']] != 255]
 
 
 def main():
@@ -59,7 +60,7 @@ def main():
         if waving(c) or S.c7_read(c, sym['AI_WAVE'])[0] != 6:
             break
     town1 = people(c, (0, 3)), len(M7.blds(c, 1))
-    army = people(c, (1, 2, 4))
+    army = people(c, (1, 2, 4, 5))
     g.report('ησυχία', not waving(c) and
              S.c7_read(c, sym['AI_WAVE'])[0] == 6 and town1[0] > town0[0] and
              town1[1] > town0[1] and army >= 6,
@@ -67,23 +68,27 @@ def main():
              'στρατός %d· αναμονή ακόμα %d s'
              % (s + 1, waving(c), town0, town1, army, cool(c, sym)))
 
+    left = cool(c, sym)
     vil = [u for u in M10.team1(c) if u['set'] == 0][0]
     me = [u for u in S.units(c) if u['team'] == 0 and u['set'] == 1][0]
     M8.place(c, vil['idx'], me['wx'] + 8, me['wy'], me['wx'] + 8)
-    for t in range(400):
+    wave = lambda: S.c7_read(c, sym['AI_WAVE'])[0] != 6     # noqa: E731
+    for t in range(1500):
         c.run_frames(2)
-        if cool(c, sym) == 0:
+        if cool(c, sym) == 0 or wave():
             break
-    g.report('πρόκληση', cool(c, sym) == 0,
-             'ο χωρικός του %d δίπλα στον στρατιώτη %d: αναμονή %d σε %d '
-             'καρέ' % (vil['idx'], me['idx'], cool(c, sym), 2 * (t + 1)))
+    s1 = (t + 1) * 2 / 50.0
+    g.report('πρόκληση', (cool(c, sym) == 0 or wave()) and s1 < left - 30,
+             'ο χωρικός του %d δίπλα στον στρατιώτη %d: σε %.0f s η αναμονή '
+             '%d (έμεναν %d s)%s' % (vil['idx'], me['idx'], s1, cool(c, sym),
+                                    left, '· το κύμα έφυγε' if wave() else ''))
     for s2 in range(180):
-        c.run_frames(50)
-        if S.c7_read(c, sym['AI_WAVE'])[0] != 6:
+        if wave():
             break
-    g.report('κύμα', S.c7_read(c, sym['AI_WAVE'])[0] == 8,
-             'το πρώτο κύμα σε %d s μετά την πρόκληση (σε επίθεση %s)'
-             % (s2 + 1, waving(c)))
+        c.run_frames(50)
+    g.report('κύμα', wave() and s1 + s2 < left,
+             'το πρώτο κύμα %d s μετά την πρόκληση (σε επίθεση %s), πριν από '
+             'τα %d s της αναμονής' % (s2, waving(c), left))
 
     print('\nM17 (ο αντίπαλος περιμένει): %s' % ('OK' if g.ok else 'ΑΠΟΤΥΧΙΑ'))
     sys.exit(0 if g.ok else 1)

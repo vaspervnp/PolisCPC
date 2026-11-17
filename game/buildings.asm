@@ -905,14 +905,8 @@ age_load:
         ld a,(hl)
         ld (hl),0
         cp 3
-        ld hl,age4_name         ; Σιδήρου: μόνο οι εικόνες
-        jr nz,.ld
-        ld hl,hopl_name         ; Χαλκού: ο οπλίτης, στη θέση 3 της C5
-        call disk_load
-        ret c
-        ld a,RAM_SPR
-        ld de,SPR_BASE + 3 * SPR_STRIDE
-        call .unz
+        ld hl,age4_name         ; Σιδήρου: οι εικόνες (ο οπλίτης είναι στη
+        jr nz,.ld               ; θέση 3 από την εκκίνηση, main.asm)
         ld hl,age3_name
 .ld:    call disk_load
         ret c

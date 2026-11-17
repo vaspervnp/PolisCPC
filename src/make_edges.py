@@ -30,10 +30,11 @@
                         21 καρέ του σετ, με το καρέ 12 (το πρώτο της επίθεσης
                         S, που δεν δείχνεται: μόνο το χτύπημα 13/15/17) να
                         είναι Η ΟΨΗ W ΤΗΣ ΕΠΙΘΕΣΗΣ: το 15 (E) καθρεφτισμένο.
--> data/c5_slot3.bin    η θέση 3 της C5 ΟΛΟΚΛΗΡΗ (25 καρέ, με τις όψεις W
-                        έτοιμες): ο ΟΠΛΙΤΗΣ (σετ 4, από την ακαδημία). Δεν
-                        φορτώνεται στην εκκίνηση: είναι το HOPL.BIN της
-                        δισκέτας, στη Χαλκού (game/disk.asm). Ο χωρικός με
+-> data/c5_slot3.bin    η θέση 3 της C5 ΟΛΟΚΛΗΡΗ (25 καρέ): ο ΟΠΛΙΤΗΣ (σετ 4,
+                        από την ακαδημία) και το ΙΠΠΙΚΟ (σετ 5, από τον
+                        στάβλο, src/horse8.py), 12 καρέ το καθένα (slot3).
+                        Είναι το HOPL.BIN της δισκέτας, που το φορτώνει το
+                        start (game/main.asm). Ο χωρικός με
                         φορτίο (σετ 3) δεν έχει πια δικά του καρέ: ο χωρικός
                         + το δέμα από πάνω (carry_ov, bank7.asm).
 -> data/ctop.asm        ανά καρέ του χωρικού: η γραμμή του δέματος (2 πάνω από
@@ -78,6 +79,38 @@ def slot(name):
     return fs + [gfx.mirror(fs[4 + k]) for k in range(WEST)]
 
 
+# Η ΘΕΣΗ 3, ΜΟΙΡΑΣΜΕΝΗ (2026-11-17): ο οπλίτης (σετ 4) και το ιππικό (σετ 5,
+# src/horse8.py), 12 καρέ το καθένα, και ένα κενό (25 = SPR_STRIDE / 128):
+#   0-1 βάδισμα S, 2-3 E, 4-5 N, 6-7 W (τα E καθρεφτισμένα): 2 καρέ ανά όψη,
+#   8 το W της επίθεσης, 9 το χτύπημα S, 10 το χτύπημα E, 11 το πτώμα.
+# Το χτύπημα N είναι το βάδισμα N (4). Ο Z80 τα βρίσκει με το half_tab
+# (game/units.asm, unit_frame).
+HALF = 12
+HALF_WALK = {'s': (0, 1), 'e': (4, 6), 'n': (8, 9)}
+POSE = {12: 8, 13: 9, 15: 10, 17: 4, 18: 11, 19: 11, 20: 11}  # U_STEP -> καρέ
+
+
+def half(fs):
+    out = []
+    for f in 'sen':
+        out += [fs[k] for k in HALF_WALK[f]]
+    out += [gfx.mirror(fs[k]) for k in HALF_WALK['e']]
+    out += [gfx.mirror(fs[ATK_E]), fs[13], fs[ATK_E], fs[20]]
+    assert len(out) == HALF
+    return out
+
+
+def cavalry_frames():
+    import horse8
+    return horse8.build().frames
+
+
+def slot3():
+    """Τα 25 καρέ της θέσης 3: οπλίτης, ιππικό, ένα κενό."""
+    blank = [[None] * 8 for _ in range(16)]
+    return half(frames(SLOT3)) + half(cavalry_frames()) + [blank]
+
+
 def edges(spr):
     def on(i, j):
         return 0 <= i < 8 and 0 <= j < 16 and spr[j][i] is not None
@@ -94,9 +127,11 @@ def edges(spr):
 
 def table():
     out = bytearray()
-    for name in SETS + [SLOT3]:
+    for name in SETS:
         for f in slot(name):
             out += bytes(edges(f))
+    for f in slot3():
+        out += bytes(edges(f))
     return out
 
 
@@ -172,7 +207,7 @@ def main():
         with open(os.path.join(DATA, 'c5_set%d.bin' % k), 'wb') as f:
             f.write(b''.join(gfx.encode_masked(img) for img in c5_set(name)))
     with open(os.path.join(DATA, 'c5_slot3.bin'), 'wb') as f:
-        f.write(b''.join(gfx.encode_masked(img) for img in slot(SLOT3)))
+        f.write(b''.join(gfx.encode_masked(img) for img in slot3()))
     import make_carry
     tops = []
     for img in slot('villager_m'):

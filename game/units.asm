@@ -378,7 +378,7 @@ unit_think:
         bit F_MOVE,(ix+U_FL)
         jr nz,.mv
         bit F_WANDER,(ix+U_FL)
-        jr z,unit_think_vis
+        jp z,unit_think_vis
         call rnd                ; ελεύθερη: 1 στις 2 φορές, νέος στόχος
         and 1
         jr nz,unit_think_vis
@@ -416,7 +416,14 @@ unit_think:
         jr nz,unit_think_vis    ; 2ο καρέ, στο units_move)
         ld de,#0810             ; ως 8 bytes, 16 γραμμές
         call nav_step
+        jr z,.arr
+        ld a,(ix+U_SET)         ; το ιππικό: δύο φορές
+        cp 5
         jr nz,.went
+        ld de,#0810
+        call nav_step
+        jr nz,.went
+.arr:
         res F_MOVE,(ix+U_FL)
         ld (ix+U_STEP),0
         jr unit_think_vis
@@ -794,10 +801,14 @@ unit_update:
         inc a                   ; κάνει το units_think
         jr z,.nostep
 .stepok:
+        ld a,(ix+U_SET)         ; το ιππικό: βήμα σε κάθε καρέ (διπλή
+        cp 5                    ; ταχύτητα)
+        jr z,.fast
         ld a,(utick)
         xor (ix+U_IDX)          ; οι μισές στα μονά, οι μισές στα ζυγά
         rra
         jr c,.nostep
+.fast:
         ld a,(t0)               ; ΟΡΙΟ ΧΡΟΝΟΥ: αν το καρέ έχει ήδη φάει
         ld b,a                  ; T_BUDGET / 300 s (κύλιση, απόφαση, βήματα
         ld a,(int_t)            ; και τα σβησίματα και οι σχεδιάσεις τους που
@@ -1357,9 +1368,9 @@ units_draw:
         jp nz,.mark
         bit 7,(ix+U_FACE)       ; πόζα: τα καρέ της δεν είναι μεταγλωττισμένα
         jr nz,.data
-        ld a,(ix+U_SET)         ; ο οπλίτης: μόνο δεδομένα (M9)
+        ld a,(ix+U_SET)         ; οπλίτης, ιππικό: μόνο δεδομένα (M9)
         cp 4
-        jr z,.data
+        jr nc,.data
         ld a,e                  ; καμία γραμμή σε όριο σελίδας: το low byte
         cp #FD                  ; των (ως 3) σειρών χαρακτήρων < #FD
         jr nc,.data
@@ -1457,8 +1468,10 @@ sq_label:
         dec a
         cp 2
         jr c,.y                 ; 1, 2
-        cp 3                    ; 4: ο οπλίτης
-        ret nz
+        cp 3                    ; 4, 5: οπλίτης, ιππικό (3: με φορτίο,
+        ret c                   ; 255: ο χωρικός)
+        cp 5
+        ret nc
 .y:     ld l,(ix+U_IDX)
         ld h,SQ_N >> 8
         ld a,(hl)
@@ -1652,7 +1665,10 @@ unit_frame:
         ld l,(ix+U_FRAME)
         ld h,(ix+U_FRAME+1)
         ret
-.calc:  bit 7,(ix+U_FACE)       ; πόζα (M8): το καρέ U_STEP του σετ
+.calc:  ld a,(ix+U_SET)         ; οπλίτης, ιππικό: μισή θέση το καθένα
+        cp 4
+        jr nc,uf_half
+        bit 7,(ix+U_FACE)       ; πόζα (M8): το καρέ U_STEP του σετ
         jr z,.walk
         ld h,(ix+U_STEP)
         ld l,0
@@ -1688,6 +1704,39 @@ unit_frame:
         ret
 
 face_off:   dw 0, 4 * 128, 8 * 128, SPR_WEST        ; S, E, N, W
+
+; Η ΘΕΣΗ 3 ΜΟΙΡΑΣΜΕΝΗ (2026-11-17, src/make_edges.py): 12 καρέ ανά σετ —
+; βάδισμα 2 ανά όψη (S E N W: 0-7, καρέ = 2 όψη + ((STEP >> 1) AND 1)), και
+; οι πόζες από το half_pose (U_STEP 12-20: το W της επίθεσης, τα χτυπήματα
+; S E, το N = το βάδισμα N, ο θάνατος = το πτώμα).
+uf_half:
+        bit 7,(ix+U_FACE)
+        jr z,.hw
+        ld a,(ix+U_STEP)
+        sub 12
+        add a,half_pose & 255
+        ld l,a
+        adc a,half_pose >> 8
+        sub l
+        ld h,a
+        ld a,(hl)
+        jr .hf
+.hw:    ld a,(ix+U_STEP)
+        rrca
+        and 1
+        ld e,a
+        ld a,(ix+U_FACE)
+        add a,a
+        add a,e
+.hf:    ld h,a                  ; x 128
+        ld l,0
+        srl h
+        rr l
+        ld e,(ix+U_BASE)
+        ld d,(ix+U_BASE+1)
+        add hl,de
+        ret
+half_pose:  db 8, 9, 9, 10, 10, 4, 11, 11, 11
 
 ; Η αλλαγή γραμμής των μεταγλωττισμένων sprites (src/make_compiled.py):
 ; αντιγράφεται στο #0028 στην εκκίνηση, ώστε να φαίνεται και με την C7 στο

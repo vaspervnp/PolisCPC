@@ -102,6 +102,16 @@ start:
         ldir
         call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
         ifndef SNA
+        ld hl,hopl_name         ; η θέση 3 της C5 από τη δισκέτα (HOPL.BIN:
+        call disk_load          ; οπλίτης και ιππικό, 2026-11-17)
+        di
+        ld a,RAM_SPR
+        call setram
+        ld hl,LOAD_AT
+        ld de,SPR_BASE + 3 * SPR_STRIDE
+        call dzx0
+        ld a,RAM_BASE
+        call setram
         ld hl,menu_name         ; το μενού από τη δισκέτα (MENU.BIN,
         call disk_load          ; συμπιεσμένο) στο MENU_AT
         di
@@ -110,7 +120,8 @@ start:
         call dzx0
         call menu               ; πολιτισμός ή φόρτωμα (menu.asm, M12)
         else                    ; (στο snapshot των ελέγχων κανένα μενού —
-        ds 19,0                 ; και ο κύριος κώδικας ίδιος: τα σύμβολα)
+        ds 19 + 26,0            ; και ο κύριος κώδικας ίδιος: τα σύμβολα·
+                                ; η θέση 3 είναι στην τράπεζα 5, πιο κάτω)
         endif
         ld hl,init_z            ; οι ρουτίνες της εκκίνησης στην οθόνη
         ld de,INIT              ; (init.asm, M11), και πίσω τους η
@@ -652,6 +663,7 @@ s_y:        db 0
 set_base:   dw SPR_BASE, SPR_BASE + SPR_STRIDE, SPR_BASE + 2 * SPR_STRIDE
             dw SPR_BASE                         ; 3: με φορτίο = ο χωρικός + δέμα
             dw SPR_BASE + 3 * SPR_STRIDE        ; 4: ο οπλίτης (HOPL.BIN, M9)
+            dw SPR_BASE + 3 * SPR_STRIDE + 12 * 128 ; 5: το ιππικό (η ίδια θέση)
 
 ; ------------------------------------------------------------ γραφικά
 ; Τα 16 πλακίδια x 16 bytes = ΜΙΑ σελίδα, στοιχισμένη, στην τράπεζα C6
@@ -823,6 +835,17 @@ end:
 
 ; Τα αρχεία των εποχών (ένα ανά πολιτισμό) και του οπλίτη μπαίνουν στη
 ; δισκέτα από το game/build.sh (src/dsk.py), χωρίς κεφαλίδα AMSDOS (M12).
+
+; Η θέση 3 της C5 (οπλίτης και ιππικό): στο snapshot των ελέγχων κατευθείαν
+; στην τράπεζα 5· στο POLIS.BIN από τη δισκέτα (HOPL.BIN, το start).
+        ifdef SNA
+        ifndef BARS
+        bank 5
+        org 0                   ; (ο rasm γράφει την τράπεζα από την αρχή της,
+        ds 3 * SPR_STRIDE,0     ; ό,τι κι αν λέει το org: οι θέσεις 0-2, που
+        incbin "../data/c5_slot3.bin"   ; τις γράφει το units_gfx)
+        endif
+        endif
 
 ; ------------------------------------------------------------ το BOOT
 ; Ο κώδικας της εκκίνησης (boot.asm), ΕΞΩ από το POLIS.BIN, σε δικό του χώρο

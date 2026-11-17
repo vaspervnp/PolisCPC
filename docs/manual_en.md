@@ -145,7 +145,7 @@ When the building is finished, you hear a tone.
 | S | Storage Pit | 120 wood | – | drop site for wood, gold, stone; weapons and armour |
 | M | Market | 150 wood | Granary | the gathering technologies |
 | R | Archery Range | 150 wood | Barracks | archers; Archery, Composite Bow |
-| L | Stable | 150 wood | Barracks | needed for the Academy |
+| L | Stable | 150 wood | Barracks | cavalry; needed for the Academy |
 | F | Farm | 75 wood | Market | when built, 3 × 3 field plots, 40 food each |
 | W | Tower | 150 stone | Granary | shoots arrows at enemies up to 11 tiles away |
 | N | Temple | 200 wood | Bronze Age | Medicine |
@@ -170,15 +170,20 @@ up to 11 tiles away, farther than an archer can shoot. Each arrow does 5 to
 | Swordsman | Barracks | 35 food, 15 gold | 60 | 8 | close combat |
 | Archer | Archery Range | 40 food, 20 wood | 35 | 6 | shoots arrows from a distance |
 | Hoplite | Academy | 60 food, 40 gold | 90 | 10 | the heavy infantry of the Bronze Age |
+| Cavalry | Stable | 70 food, 50 gold | 50 | 9 | fast: for raids on the enemy's villagers |
 
 Health and attack are per soldier. A unit standing behind a building is
 shown as an outline in its team's colour, so you never lose sight of it.
+
+**Who beats whom.** Hoplites deal double damage to cavalry, cavalry to
+archers, and archers to hoplites. Swordsmen have no advantage and no
+weakness. A mixed army is stronger than a large army of one kind.
 
 ## 9. Squads
 
 ![Squads with their numbers; the card shows the selected one, of 7](img/squad.png)
 
-Swordsmen, archers and hoplites fight in **squads**. A squad is one piece on
+Swordsmen, archers, hoplites and cavalry fight in **squads**. A squad is one piece on
 the map, of one kind, with a number at its feet: how many soldiers it has,
 up to 20. A soldier on his own has no number. Villagers are always single.
 
@@ -236,7 +241,9 @@ you can have now. The bar of the card shows the progress.
 ## 11. The enemy, victory and defeat
 
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
-and sends them against your Town Center in waves. In a single game (PLAY)
+and sends them against your Town Center in waves. After four minutes it
+also builds a Stable and trains cavalry, and once you reach the Bronze Age
+it builds an Academy and trains hoplites too. In a single game (PLAY)
 the enemy first stays in its own city for 5 to 10 minutes (different each
 game), building and training as usual. Then its first wave of 6 soldiers
 comes. If you strike it first, it waits no longer: the wave leaves as soon

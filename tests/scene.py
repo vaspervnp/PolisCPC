@@ -34,10 +34,14 @@ def frames(name):
 
 # όπως στην C5 (src/make_edges.py): τα σετ 0-2 με το καρέ 12 = το W της
 # επίθεσης· το 3 (με φορτίο) = ο χωρικός με το δέμα από πάνω (carry_ov)· το
-# 4 = ο οπλίτης (HOPL.BIN, στη θέση 3)
+# 4 = ο οπλίτης και 5 = το ιππικό (HOPL.BIN, η θέση 3 μοιρασμένη: 12 καρέ
+# το καθένα, src/make_edges.py — HALF_POSE όπως το half_pose του Z80)
 import make_carry as MC                         # noqa: E402
 _C5 = [frames('c5_set%d' % k) for k in range(3)]
-SPRITES = _C5 + [[MC.carry(f) for f in _C5[0]], frames('c5_slot3')]
+_S3 = frames('c5_slot3')
+SPRITES = _C5 + [[MC.carry(f) for f in _C5[0]], _S3[:12], _S3[12:24]]
+HALF_POSE = {12: 8, 13: 9, 14: 9, 15: 10, 16: 10, 17: 4, 18: 11, 19: 11,
+             20: 11}
 BASE = {3: 0}                                   # τα καρέ χωρίς το δέμα
 CURSOR, MARK, ANCHOR = frames('cursor')[:3]
 ARROWS, PR_N = 0xA5E0, 4                       # τα βέλη (game/bank7.asm)
@@ -95,6 +99,10 @@ def sprite_of(u, bare=False):
     s = SPRITES[BASE.get(u['set'], u['set']) if bare else u['set']]
     if u['set'] == 3 and u['team'] & 0x80:  # πεθαίνει: χωρίς δέμα
         s = SPRITES[0]
+    if u['set'] >= 4:                      # η μισή θέση (οπλίτης, ιππικό)
+        if u['face'] & 0x80:
+            return s[HALF_POSE[u['step']]]
+        return s[2 * (u['face'] & 3) + ((u['step'] >> 1) & 1)]
     if u['face'] & 0x80:                   # πόζα (M8): το U_STEP είναι το καρέ
         f = u['step']
         return gfx.mirror(s[4 + f - 21]) if f >= 21 else s[f]

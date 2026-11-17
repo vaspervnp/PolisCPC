@@ -55,7 +55,7 @@ INFO = {b['key']: b for b in json.load(open(os.path.join(
     gfx.OUT, 'buildings.json')))['buildings']}
 
 UNIT_SETS = ['villager_m', 'swordsman', 'archer', 'villager_carry',
-             'hoplite']                                 # = U_SET
+             'hoplite', 'cavalry']                      # = U_SET
 
 # (κλειδί, πλήκτρο, προαπαιτούμενο, κόστος (τροφή, ξύλο, χρυσό, πέτρα),
 #  πόντοι ανέγερσης, μονάδα που βγάζει)
@@ -67,7 +67,7 @@ TYPES = [
     ('storage_pit', 'S', None,      (0, 120, 0, 0),  25, None),
     ('market',      'M', 'granary', (0, 150, 0, 0),  30, None),
     ('archery',     'R', 'barracks', (0, 150, 0, 0), 30, 'archer'),
-    ('stable',      'L', 'barracks', (0, 150, 0, 0), 30, None),
+    ('stable',      'L', 'barracks', (0, 150, 0, 0), 30, 'cavalry'),
     ('farm',        'F', 'market',  (0, 75, 0, 0),   15, None),
     ('tower',       'W', 'granary', (0, 0, 0, 150),  30, None),
     # Εποχή του Χαλκού (M9): η ακαδημία βγάζει οπλίτες (το σετ τους από τη
@@ -94,7 +94,8 @@ TRAIN_KEY = 'T'
 UNITS = {'villager_m': ((50, 0, 0, 0), 200),
          'swordsman':  ((35, 0, 15, 0), 250),
          'archer':     ((40, 20, 0, 0), 250),
-         'hoplite':    ((60, 0, 40, 0), 250)}  # (ένα byte: ως 255 — ήταν 300, M12)
+         'hoplite':    ((60, 0, 40, 0), 250),
+         'cavalry':    ((70, 0, 50, 0), 220)}   # (2026-11-17: σετ 5, θέση 3)  # (ένα byte: ως 255 — ήταν 300, M12)
 assert all(t <= 255 for _, t in UNITS.values()), 'καρέ εκπαίδευσης: ένα byte'
 
 

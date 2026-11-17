@@ -504,8 +504,10 @@ sq_card:
         dec a
         cp 2
         jr c,.y
-        cp 3
-        jr nz,.no2
+        cp 3                    ; 4, 5: οπλίτης, ιππικό
+        jr c,.no2
+        cp 5
+        jr nc,.no2
 .y:     ld a,1
         ld (sq_on),a
         ld (card_on),a

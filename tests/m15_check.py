@@ -389,7 +389,7 @@ def phase5(shots):
     g = M4.Game(shots, ai=True)
     c, sym = g.c, g.sym
     S.c7_write(c, sym['AI_COOL'], [5, 0])
-    soldiers = lambda: [u for u in M10.team1(c) if u['set'] in (1, 2, 4)]
+    soldiers = lambda: [u for u in M10.team1(c) if u['set'] in (1, 2, 4, 5)]
     p0 = sum(cnt(c, u['idx']) for u in soldiers())
     lead = merge = None
     for s in range(60):

@@ -59,15 +59,18 @@ stats:      db 25, 3, 14, 0     ; χωρικός
             db 35, 6, 80, 1     ; τοξότης
             db 25, 3, 14, 0     ; χωρικός με φορτίο
             db 90, 10, 14, 0    ; οπλίτης (M9)
+            db 50, 9, 14, 0     ; ιππικό (2026-11-17: γρήγορο, units.asm)
             db 25, 3, 14, 0     ; (ομάδα 1)
             db 60, 8, 14, 0
             db 35, 6, 80, 1
             db 25, 3, 14, 0
             db 90, 10, 14, 0
-            db 0                ; (stats + 40: ούτε υγεία ούτε σετ)
-tw_hit:     db TW_DMG           ; stats + 41: η ζημιά των πύργων του παίκτη
+            db 50, 9, 14, 0
+            db 0                ; (stats + 48: ούτε υγεία ούτε σετ)
+tw_hit:     db TW_DMG           ; stats + 49: η ζημιά των πύργων του παίκτη
                                 ; (Βαλλιστική, Σιδήρου)
-ST_SETS     equ 5
+ST_SETS     equ 6
+        assert ST_SETS == 6, 'st_hl: x 6'
 ; Το καρέ του χτυπήματος: S E N = 13, 15, 17 του σετ· το W (το 15
 ; καθρεφτισμένο) στη θέση του 12 (src/make_edges.py).
 ATK_W       equ 12
@@ -76,10 +79,10 @@ ATK_W       equ 12
 st_hl:  push bc
         ld a,(ix+U_TEAM)
         and 1
+        add a,a
         ld c,a
         add a,a
-        add a,a
-        add a,c                 ; x ST_SETS
+        add a,c                 ; x ST_SETS (6)
         pop bc
         add a,(ix+U_SET)
         add a,a
@@ -240,20 +243,35 @@ sq_join:
         or a
         ret
 sj_set: db 0
+dm_c:   db 0
+ctr_t:  db 255, 255, 4, 255, 5, 2   ; ανά σετ: ποιον νικάει
 sj_w:   db 0
 
 ; IX = ο επιτιθέμενος, IY = ο στόχος (μονάδα) -> B = η ζημιά (M15): του σετ
 ; x όσοι χτυπάνε — το πλήθος, αλλά το πολύ 3 ανά άνθρωπο του στόχου (ποτέ
 ; όλη η ομάδα σε έναν) — ως 255, x τυχαία 30-98%, τουλάχιστον 1. Κρατάει C.
-sq_dmg: call iy_cnt
+; ΠΟΙΟΣ ΝΙΚΑΕΙ ΠΟΙΟΝ (2026-11-17): διπλή ζημιά ανά άνθρωπο όταν το σετ
+; του στόχου είναι το ctr_t του επιτιθέμενου — οπλίτης > ιππικό > τοξότης >
+; οπλίτης.
+sq_dmg: ld a,(ix+U_SET)
+        ld hl,ctr_t
+        call tab_a
+        cp (iy+U_SET)
+        ld a,1
+        jr z,.n
+        xor a
+.n:     ld (dm_c),a             ; 1 αν τον νικάει
+        call iy_cnt
         ld b,a
         add a,a
         add a,b                 ; 3 x το πλήθος του στόχου
-        db #11                  ; (ld de,nn: προσπερνάει το ld a,255)
+        jr sq_dm
 ; IX -> B = η ζημιά της σε κτίριο: χωρίς όριο ανά άνθρωπο.
 sq_dmgb:
+        ld a,2
+        ld (dm_c),a
         ld a,255
-        ld d,a                  ; το όριο
+sq_dm:  ld d,a                  ; το όριο
         call sq_cnt
         cp d
         jr c,.c
@@ -262,7 +280,11 @@ sq_dmgb:
         call st_hl
         inc hl
         ld e,(hl)
-        xor a
+        ld a,(dm_c)
+        dec a
+        jr nz,.e
+        sla e                   ; τον νικάει: x 2
+.e:     xor a
 .m:     add a,e
         jr c,.max
         djnz .m
@@ -1469,7 +1491,7 @@ techs:  TECH BTY_TOWN_CENTER, 2, 255, 800, 0, 0, 0, 150, RK_AGE, 3, 0   ; Επο
         TECH BTY_ACADEMY, 3, 255, 150, 0, 100, 0, 60, RK_STAT, 16, 20   ; Φάλαγγα: οπλίτης +20
         TECH BTY_TOWN_CENTER, 3, 0, 1000, 0, 800, 0, 200, RK_AGE, 4, 0  ; Εποχή του Σιδήρου
         TECH BTY_ACADEMY, 4, 12, 200, 0, 150, 0, 70, RK_STAT, 17, 4    ; Σιδερένια δόρατα: οπλίτης +4
-        TECH BTY_TOWER, 4, 255, 0, 100, 0, 150, 60, RK_STAT, 41, 4      ; Βαλλιστική: πύργος +4
+        TECH BTY_TOWER, 4, 255, 0, 100, 0, 150, 60, RK_STAT, 49, 4      ; Βαλλιστική: πύργος +4
         assert ($ - techs) / T_SIZE <= 16, 'res_done: 16 bits'
 T_N         equ ($ - techs) / T_SIZE
 res_done:   dw 0                ; bit t: έγινε
@@ -2287,6 +2309,7 @@ AI_FOOD     equ 100             ; κάτω από τόση τροφή: χωρά�
 AI_FGAP     equ 120             ; s ανάμεσα σε δύο χωράφια του
 AI_GAP      equ 120             ; s ανάμεσα στα κύματα (M14: ήταν 60)
 AI_WMAX     equ 16
+AI_T2       equ 240             ; s: μετά από τόσα, στάβλος (2026-11-17)
 HOME_R      equ 18
 
 ; Η ΠΙΣΤΑ (M13): ό,τι ως το M12 ήταν σταθερές — από την κεφαλίδα της, ένα
@@ -2336,6 +2359,8 @@ an_b2:      db 255
 an_pu:      db 255              ; μια μονάδα του παίκτη
 ab_tc:      db 255              ; θέσεις: Κέντρο Πόλης, στρατώνας
 ab_bar:     db 255
+ab_stb:     db 255              ; στάβλος, ακαδημία (2026-11-17: ιππικό,
+ab_aca:     db 255              ; οπλίτες· με τη σειρά, μετά τον στρατώνα)
 ab_ptc:     db 255              ; του παίκτη: Κέντρο Πόλης, κάποιο κτίριο
 ab_pb:      db 255
 ab_fs:      db 255              ; ένα θεμέλιο του
@@ -2554,10 +2579,16 @@ ai_blds:
         ld a,e
         ld (ab_tc),a
         jr .n
-.nt:    cp BTY_BARRACKS
+.nt:    ld hl,ab_bar            ; στρατώνας, στάβλος, ακαδημία
+        cp BTY_BARRACKS
+        jr z,.ar
+        inc hl
+        cp BTY_STABLE
+        jr z,.ar
+        inc hl
+        cp BTY_ACADEMY
         jr nz,.nb
-        ld a,e
-        ld (ab_bar),a
+.ar:    ld (hl),e
 .nb:    ld a,(iy+B_ST)
         or a
         jr nz,.rd
@@ -2763,13 +2794,36 @@ ai_build:
         sbc hl,de
         ld de,AI_FGAP
         sbc hl,de
-        ret c
+        jr c,.more
         ld hl,(ai_val)          ; με στρατώνα, και η τροφή κάτω από AI_FOOD
         ld de,AI_FOOD           ; (οι θάμνοι τελειώνουν, M14): χωράφι —
         or a                    ; χωρίς σιταποθήκη και αγορά (ο παίκτης
         sbc hl,de               ; τα θέλει)
-        ret nc
         ld a,BTY_FARM
+        jr c,ai_place
+; 2026-11-17: μετά από AI_T2 s ένας στάβλος, και μια ακαδημία όταν η εικόνα
+; της είναι στη μνήμη (ο παίκτης στην Εποχή του Σιδήρου).
+.more:  ld hl,(lv_sec)
+        ld de,AI_T2
+        or a
+        sbc hl,de
+        ret c
+        ld a,(ab_stb)
+        inc a
+        ld a,BTY_STABLE
+        jr z,ai_place
+        ld a,(ab_aca)
+        inc a
+        ret nz
+        ld a,BTY_ACADEMY
+        call bt_hl
+        ld de,16
+        add hl,de
+        ld a,(hl)
+        inc hl
+        or (hl)
+        ret z
+        ld a,BTY_ACADEMY
 
 ; A = τύπος: στην πρώτη ελεύθερη θέση του ai_spots, αν πληρώνεται· θεμέλιο,
 ; και οι χτίστες εκεί.
@@ -2892,23 +2946,33 @@ fp_free:
 
 ; Στρατός: σπαθοφόροι από τον στρατώνα, και τα κύματα.
 ai_army:
-        ld a,(ab_bar)
+        ld hl,ab_aca            ; ακαδημία, στάβλος, στρατώνας (2026-11-17:
+        ld b,3                  ; με αυτή τη σειρά, ένας τη φορά ανά κτίριο)
+.q:     push bc
+        push hl
+        ld a,(hl)
         cp 255
-        jr z,.att
+        jr z,.nx
         call brec_iy
         ld a,(iy+B_ST)
         or a
-        jr z,.att
+        jr z,.nx
         ld a,(ai_wave)          ; όχι πάνω από το επόμενο κύμα (M14: ως
         ld c,a                  ; τότε μάζευε ό,τι χωρούσε — 13 στο πρώτο
         ld a,(an_idle)          ; κύμα, στα 180 s, απέναντι σε 3 χωρικούς)
+        ld hl,ab_q              ; (και όσοι στις ουρές)
+        add a,(hl)
         cp c
-        jr nc,.att
+        jr nc,.nx
         ld a,(iy+B_QN)
-        cp 2
-        jr nc,.att
+        or a
+        jr nz,.nx
         call ai_room
         call nc,ai_queue
+.nx:    pop hl
+        pop bc
+        dec hl
+        djnz .q
 .att:   ld a,(an_lost)          ; όσοι του κύματος έμειναν μακριά χωρίς
         or a                    ; στόχο παίρνουν τον επόμενο
         jr z,.w
