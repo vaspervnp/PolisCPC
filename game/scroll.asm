@@ -441,6 +441,7 @@ draw_column:
         ld de,MAP
         add hl,de
         ld (col_ptr),hl
+        call fog_ptr            ; και ο δείκτης της ομίχλης (col_fp, col_fm)
         call col_tile
         ld (col_t0),hl
         ld (col_r0),a
@@ -456,6 +457,10 @@ draw_column:
         ld hl,(col_j)
         inc hl
         ld (col_j),hl
+        ld hl,(col_fp)          ; +96 πλακίδια: +12 bytes της ομίχλης, το
+        ld de,MAPW / 8          ; ίδιο bit
+        add hl,de
+        ld (col_fp),hl
         ld hl,(col_ptr)
         ld de,MAPW
         add hl,de
@@ -463,7 +468,13 @@ draw_column:
 .odd:   ld hl,(col_i)
         inc hl
         ld (col_i),hl
-        ld hl,(col_ptr)
+        ld hl,col_fm            ; +1: το επόμενο bit (και byte)
+        rlc (hl)
+        jr nc,.ob
+        ld hl,(col_fp)
+        inc hl
+        ld (col_fp),hl
+.ob:    ld hl,(col_ptr)
         inc hl
 .look:  ld (col_ptr),hl
         call col_tile
@@ -722,9 +733,11 @@ col_tile:
         ld a,(col_j)
         cp MAPW
         jr nc,.void
-        ld hl,(col_ptr)
-        call fog_hl             ; ανεξερεύνητο (M11): σαν έξω από τον χάρτη
+        ld hl,(col_fp)          ; ανεξερεύνητο (M11): σαν έξω από τον χάρτη
+        ld a,(col_fm)           ; (ο δείκτης της ομίχλης προχωράει μαζί με
+        and (hl)                ; το col_ptr: draw_column)
         jr z,.void
+        ld hl,(col_ptr)
         ld a,(hl)
         ld l,a
         and #F0

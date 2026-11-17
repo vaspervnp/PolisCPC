@@ -264,8 +264,6 @@ bld_cands:
         ld a,(iy+B_ST)          ; θεμέλιο: καμία εικόνα
         or a
         jp z,.n
-        call bld_fog            ; ανεξερεύνητο (M11): καμία
-        jp z,.n
         ld l,(iy+B_WX)          ; sx < x1
         ld h,(iy+B_WX+1)
         ld de,(cam_x)
@@ -325,7 +323,10 @@ bld_cands:
         ld a,l
         cp c
         jr nc,.n
-.add:   ld a,(cand_c)           ; με εισαγωγή, κατά βάθος: ζεύγη (θέση,
+.add:   call bld_fog            ; ανεξερεύνητο (M11): καμία — ΜΕΤΑ τα
+        jr z,.n                 ; ορθογώνια (στη στήλη της κύλισης σχεδόν
+                                ; κανένα δεν περνάει, και η ομίχλη είναι ακριβή)
+        ld a,(cand_c)           ; με εισαγωγή, κατά βάθος: ζεύγη (θέση,
         cp CAND_MAX             ; βάθος)
         jr nc,.n
         ld e,a
@@ -662,6 +663,7 @@ bld_tick:
         call rq_step            ; (hudc.asm, M14)
         call fog_step           ; τα νέα πλακίδια που φαίνονται (M11)
         call age_step
+        call tw_tick            ; οι πύργοι (και των δύο)
         ld hl,ai_tick           ; ο αντίπαλος (bank7.asm, M10)
         call far7
         ld a,(res_n)            ; έρευνες (bank7.asm, M9)
@@ -708,6 +710,192 @@ bld_tick:
         pop bc
         djnz .l
         ret
+
+; ΟΙ ΠΥΡΓΟΙ (2026-11-17, κύριος κώδικας: η C7 είναι γεμάτη). Ο έτοιμος πύργος ρίχνει βέλη στον κοντινότερο εχθρό
+; μέσα στο TW_R (11 πλακίδια· ο τοξότης 80). Το B_PROG του (που στα έτοιμα
+; κτίρια μετράει μόνο την ουρά, και ο πύργος δεν έχει) είναι το ρολόι του:
+; +1 ανά καρέ μονάδων ως το TW_P. Τότε σημαδεύει — ένας πύργος τη φορά
+; (tw_b), ένα τέταρτο του πίνακα μονάδων ανά καρέ (όπως το seek: ~0,5 ms),
+; άρα 4 καρέ — και ρίχνει: ένα βέλος του ARROWS με «τοξότη» 128 + τη θέση
+; του (pr_one: ζημιά TW_DMG .. +7· ο χωρικός που χτυπιέται απαντάει στον
+; πύργο, bord). Κανένας στόχος: ξανά σε 8 καρέ.
+TW_P        equ 20
+TW_R        equ 88
+TW_DMG      equ 5
+TW_DY       equ 22              ; η μέση της κάτοψης (2 x 2) στο U_WY μονάδας
+TW_TOP      equ 6               ; το βέλος: τόσες γραμμές κάτω από την κορυφή
+
+tw_tick:
+        ld a,(game_end)
+        or a
+        ret nz
+        ld a,(tw_b)
+        inc a
+        jr nz,tw_aim
+        ld iy,BLD_TAB           ; τα ρολόγια· ο πρώτος έτοιμος σημαδεύει
+        ld a,(bld_top)
+        ld b,a
+        ld c,0
+.l:     ld a,(iy+B_TYPE)
+        cp BTY_TOWER
+        jr nz,.n
+        ld a,(iy+B_ST)
+        or a
+        jr z,.n
+        ld a,(iy+B_PROG)
+        cp TW_P
+        jr nc,.r
+        inc (iy+B_PROG)
+        jr .n
+.r:     ld a,(tw_b)
+        inc a
+        jr nz,.n
+        ld a,c
+        ld (tw_b),a
+        xor a
+        ld (tw_q),a
+        dec a
+        ld (tw_i),a
+        ld hl,TW_R + 1
+        ld (tw_d),hl
+        ld l,(iy+B_W)           ; το κέντρο, στις συντεταγμένες μονάδας
+        srl l
+        dec l
+        dec l
+        ld h,0
+        ld e,(iy+B_WX)
+        ld d,(iy+B_WX+1)
+        add hl,de
+        ld (tw_px),hl
+        ld l,(iy+B_WYB)
+        ld h,(iy+B_WYB+1)
+        ld de,-TW_DY
+        add hl,de
+        ld (tw_py),hl
+.n:     inc c
+        call bnext
+        djnz .l
+        ret
+
+; A = tw_b + 1: ένα τέταρτο ακόμα, και μετά το τέταρτο, η βολή.
+tw_aim: dec a
+        call brec_iy
+        ld a,(iy+B_TYPE)
+        cp BTY_TOWER
+        jp nz,.end              ; έπεσε στο μεταξύ
+        push ix
+        ld a,(tw_q)
+        add a,a
+        add a,a
+        add a,UNIT_TAB >> 8
+        ld ixh,a
+        ld ixl,UNIT_TAB & 255
+        ld a,(iy+B_OWN)
+        xor 1
+        ld c,a
+        ld b,UNITS / 4
+.l:     ld a,(ix+U_TEAM)        ; εχθρός (οι νεκρές, ελεύθερες: >= 2)
+        cp c
+        jr nz,.n
+        bit F_WANDER,(ix+U_FL)
+        jr nz,.n
+        ld hl,(tw_px)            ; 2 |dx| + |dy|
+        ld e,(ix+U_WX)
+        ld d,(ix+U_WX+1)
+        or a
+        sbc hl,de
+        call abs_hl
+        add hl,hl
+        push hl
+        ld hl,(tw_py)
+        ld e,(ix+U_WY)
+        ld d,(ix+U_WY+1)
+        or a
+        sbc hl,de
+        call abs_hl
+        pop de
+        add hl,de
+        ld de,(tw_d)
+        or a
+        sbc hl,de
+        jr nc,.n
+        add hl,de
+        ld e,(ix+U_IDX)         ; όχι στόχος (NT)
+        push hl
+        call nt_get
+        pop hl
+        rrca
+        jr c,.n
+        ld (tw_d),hl
+        ld a,(ix+U_IDX)
+        ld (tw_i),a
+.n:     ld de,U_SIZE
+        add ix,de
+        djnz .l
+        pop ix
+        ld hl,tw_q
+        inc (hl)
+        ld a,(hl)
+        cp 4
+        ret c
+        ld a,(tw_i)
+        cp 255
+        ld a,TW_P - 8
+        jr z,.p
+        call tw_fire
+        xor a
+.p:     ld (iy+B_PROG),a
+.end:   ld a,255
+        ld (tw_b),a
+        ret
+
+; IY = ο πύργος: ένα βέλος από την κορυφή του στον tw_i (όπως το proj_new).
+; Καμία θέση στο ARROWS: η βολή χάνεται.
+tw_fire:
+        ld hl,ARROWS + 4
+        ld de,8
+        ld b,PR_N
+.f:     ld a,(hl)
+        inc a
+        jr z,.got
+        add hl,de
+        djnz .f
+        ret
+.got:   ld a,(tw_i)
+        ld (hl),a
+        inc hl
+        ld a,(tw_b)
+        or 128
+        ld (hl),a
+        ld de,-5
+        add hl,de
+        ld de,(tw_px)
+        inc de
+        ld (hl),e
+        inc hl
+        ld (hl),d
+        inc hl
+        push hl
+        ld l,(iy+B_WYB)
+        ld h,(iy+B_WYB+1)
+        ld e,(iy+B_H)
+        ld d,0
+        or a
+        sbc hl,de
+        ld de,TW_TOP
+        add hl,de
+        ex de,hl
+        pop hl
+        ld (hl),e
+        inc hl
+        ld (hl),d
+        ret
+tw_b:   db 255                  ; ο πύργος που σημαδεύει (255 κανένας)
+tw_q:   db 0
+tw_i:   db 0
+tw_d:   dw 0
+tw_px:  dw 0
+tw_py:  dw 0
 
 ; Η Εποχή του Χαλκού τελείωσε (res_end): οι εικόνες της από τη δισκέτα
 ; (disk.asm, στην οθόνη, και αποσυμπιεσμένες στην C6), και η εποχή στους

@@ -64,6 +64,9 @@ stats:      db 25, 3, 14, 0     ; χωρικός
             db 35, 6, 80, 1
             db 25, 3, 14, 0
             db 90, 10, 14, 0
+            db 0                ; (stats + 40: ούτε υγεία ούτε σετ)
+tw_hit:     db TW_DMG           ; stats + 41: η ζημιά των πύργων του παίκτη
+                                ; (Βαλλιστική, Σιδήρου)
 ST_SETS     equ 5
 ; Το καρέ του χτυπήματος: S E N = 13, 15, 17 του σετ· το W (το 15
 ; καθρεφτισμένο) στη θέση του 12 (src/make_edges.py).
@@ -134,6 +137,8 @@ hp_init:
 .a:     ld (hl),255
         inc hl
         djnz .a
+        ld a,255                ; κανένας πύργος δεν σημαδεύει
+        ld (tw_b),a
         ld hl,C7_ORD
         ld b,UNITS
 .o:     ld (hl),255
@@ -169,6 +174,8 @@ hp_set: call st_hl
         call hp_hl
         ld (hl),a
         ld h,C7_LS >> 8         ; δεν χτύπησε κανέναν
+        ld (hl),255
+        set 7,l                 ; ούτε κυνηγάει (CH_D)
         ld (hl),255
         ret
 
@@ -350,7 +357,7 @@ combat_think:
         jp nz,merge
 .end:   ld (hl),255             ; έπεσε: η εντολή τελείωσε
         ld (ix+U_TGT),255
-        ret
+        jp .gone
 .ord:   call c_dist
         jr .in
 .auto:  ld a,(ix+U_TGT)
@@ -358,14 +365,14 @@ combat_think:
         jr nz,.tg
         call seek               ; κανένας στους 9 κάδους: πιο μακριά
         cp 255
-        jp z,.none
+        jp z,.gone
         ld (ix+U_TGT),a
 .tg:    call idx_iy
         bit F_WANDER,(iy+U_FL)
         jp nz,.none
         ld a,(iy+U_TEAM)
         cp 2
-        jp nc,.none
+        jp nc,.gone
         bit F_MOVE,(ix+U_FL)    ; εκτελεί εντολή του παίκτη: όχι (το
         jr z,.go                ; κυνήγι γύρω από τοίχο, CH_WALK, δεν είναι
         ld a,(ix+U_FIELD)       ; εντολή: η εμβέλεια ελέγχεται)
@@ -435,6 +442,20 @@ combat_think:
 .cw:    ld (ix+U_STUCK),0
         set F_MOVE,(ix+U_FL)
 .none:  ret
+; Ο στόχος έπεσε (ή κανένας πια): όποιος κυνηγούσε σταματάει εκεί — αλλιώς
+; πήγαινε για πάντα στο σημείο του κυνηγιού, που δίπλα σε κτίριο μπορεί να
+; είναι απρόσιτο, κι έμενε σε κίνηση (M8, 2026-11-17).
+.gone:  bit F_MOVE,(ix+U_FL)
+        ret z
+        ld l,(ix+U_IDX)         ; κυνηγούσε (CH_D < 255: όχι εντολή του
+        ld h,CH_D >> 8          ; παίκτη, ord_cmd· ούτε καινούργια, hp_set)
+        set 7,l
+        ld a,(hl)
+        inc a
+        ret z
+        ld (hl),255
+        res F_MOVE,(ix+U_FL)
+        ret
 
 ; ΕΝΩΣΗ (M15). IX = στρατιώτης με εντολή ένωσης, IY = η ομάδα της (ίδια
 ; ομάδα, ίδιο σετ), HL = &C7_ORD[IX]. Κοντά (ως MRG_D): μπαίνουν σε εκείνη
@@ -724,7 +745,10 @@ atk_pose:
 ; Ομάδα (M15): η υγεία είναι του μπροστινού· όση ζημιά τη φτάνει τον
 ; σκοτώνει (το πλήθος -1, ο πληθυσμός -1), και το υπόλοιπο πάει στον
 ; επόμενο με γεμάτη υγεία. Ο τελευταίος: ο θάνατος της εγγραφής.
-hit:    ld a,(iy+U_TEAM)        ; ο ήχος, και η ειδοποίηση (M12)
+hit:    ld a,(iy+U_TEAM)        ; ο αντίπαλος χτυπήθηκε: προκλήθηκε
+        dec a
+        call z,ai_prov
+        ld a,(iy+U_TEAM)        ; ο ήχος, και η ειδοποίηση (M12)
         call snd_struck
         ld l,(iy+U_IDX)
         ld h,C7_HP >> 8
@@ -894,12 +918,30 @@ pr_one: call idx_iy
         jr nz,.move
         pop af
         ld c,(ix+5)             ; ο τοξότης, και η ζημιά της ομάδας του
+        bit 7,c
+        jr nz,.tw               ; ή πύργος (128 + η θέση του)
         push ix
         ld a,c
         call idx_ix
         call sq_dmg
         pop ix
-        call hit
+        jr .h
+.tw:    ld a,c                  ; πύργος: η ζημιά του (του παίκτη: tw_hit)
+        and 127                 ; .. + 7
+        push iy
+        call brec_iy
+        ld a,(iy+B_OWN)
+        pop iy
+        or a
+        ld a,TW_DMG
+        jr nz,.t1
+        ld a,(tw_hit)
+.t1:    ld b,a
+        call rnd
+        and 7
+        add a,b
+        ld b,a
+.h:     call hit
         call dq_add
 .free:  ld (ix+4),255
         ret
@@ -1230,6 +1272,10 @@ ord_cmd:
         ld d,C7_ORD >> 8
         ld a,c
         ld (de),a
+        ld d,CH_D >> 8          ; και κανένα κυνήγι (combat_think.gone)
+        set 7,e
+        ld a,255
+        ld (de),a
         djnz .s
         ret
 
@@ -1422,6 +1468,9 @@ techs:  TECH BTY_TOWN_CENTER, 2, 255, 800, 0, 0, 0, 150, RK_AGE, 3, 0   ; Επο
         TECH BTY_TEMPLE, 3, 255, 120, 0, 60, 0, 50, RK_STAT, 0, 10      ; Ιατρική: χωρικός +10
         TECH BTY_ACADEMY, 3, 255, 150, 0, 100, 0, 60, RK_STAT, 16, 20   ; Φάλαγγα: οπλίτης +20
         TECH BTY_TOWN_CENTER, 3, 0, 1000, 0, 800, 0, 200, RK_AGE, 4, 0  ; Εποχή του Σιδήρου
+        TECH BTY_ACADEMY, 4, 12, 200, 0, 150, 0, 70, RK_STAT, 17, 4    ; Σιδερένια δόρατα: οπλίτης +4
+        TECH BTY_TOWER, 4, 255, 0, 100, 0, 150, 60, RK_STAT, 41, 4      ; Βαλλιστική: πύργος +4
+        assert ($ - techs) / T_SIZE <= 16, 'res_done: 16 bits'
 T_N         equ ($ - techs) / T_SIZE
 res_done:   dw 0                ; bit t: έγινε
 
@@ -1884,8 +1933,9 @@ BDMG        equ RES_P + BLD_MAX + 4 ; 28 x dw: η ζημιά ανά θέση κ�
 BOW_T       equ 5
 
 ; υγεία / 4 ανά τύπο
-bld_hp:     db 150, 40, 75, 60, 60, 75, 75, 75, 25, 75, 75, 100, 100
+bld_hp:     db 150, 40, 75, 60, 60, 75, 75, 75, 25, 125, 75, 100, 100
         assert $ - bld_hp == BT_N, 'bld_hp'
+
 
 ; IX, A = η εντολή (bit 7), HL = &C7_ORD.
 bord:   and 127
@@ -2045,6 +2095,9 @@ fld_of: ld a,(field_tc)
 
 ; IX χτυπάει το κτίριο IY: η πόζα (όψη προς το κέντρο του) και η ζημιά.
 bld_hit:
+        ld a,(iy+B_OWN)         ; του αντιπάλου: προκλήθηκε
+        dec a
+        call z,ai_prov
         ld a,(iy+B_TYPE)
         call bt_hl
         ld a,(hl)
@@ -2333,6 +2386,17 @@ ai_tick:
         or l
         ret z
         dec hl
+        ld (ai_cool),hl
+        ret
+
+; Ο ΠΑΙΚΤΗΣ ΕΠΙΤΕΘΗΚΕ (2026-11-17): πριν από το πρώτο κύμα (ai_wave ακόμα 6)
+; ο αντίπαλος δεν περιμένει πια το ai_cool — το κύμα φεύγει μόλις είναι
+; έτοιμο. Κρατάει BC, DE.
+ai_prov:
+        ld a,(ai_wave)
+        cp 6
+        ret nz
+        ld hl,0
         ld (ai_cool),hl
         ret
 

@@ -147,7 +147,7 @@ When the building is finished, you hear a tone.
 | R | Archery Range | 150 wood | Barracks | archers; Archery, Composite Bow |
 | L | Stable | 150 wood | Barracks | needed for the Academy |
 | F | Farm | 75 wood | Market | when built, 3 × 3 field plots, 40 food each |
-| W | Tower | 150 stone | Granary | |
+| W | Tower | 150 stone | Granary | shoots arrows at enemies up to 11 tiles away |
 | N | Temple | 200 wood | Bronze Age | Medicine |
 | K | Government Center | 200 wood | Bronze Age, Market | |
 | D | Academy | 200 wood | Bronze Age, Stable | hoplites; Phalanx |
@@ -157,6 +157,10 @@ queue, and the queue holds up to five. The cost is paid when you press the
 key.
 
 **Population:** you can have up to 15 people, plus 5 for each House.
+
+**The Tower** shoots on its own: one arrow every second at the nearest enemy
+up to 11 tiles away, farther than an archer can shoot. Each arrow does 5 to
+12 damage. An enemy villager who is struck charges the tower.
 
 ## 8. Units
 
@@ -206,7 +210,8 @@ to advance:
 
 * **Bronze Age:** 800 food. It unlocks the Temple, the Government Center and
   the Academy. The buildings of your culture take their new look.
-* **Iron Age:** 1000 food and 800 gold, in the Bronze Age.
+* **Iron Age:** 1000 food and 800 gold, in the Bronze Age. It unlocks Iron
+  Spears and Ballistics.
 
 **U** on any other building researches the first of its technologies that
 you can have now. The bar of the card shows the progress.
@@ -225,12 +230,17 @@ you can have now. The bar of the card shows the progress.
 | Archery Range | Composite Bow *(Bronze, after Archery)* | 180 wood, 100 gold | longer range |
 | Temple | Medicine | 120 food, 60 gold | villager health +10 |
 | Academy | Phalanx | 150 food, 100 gold | hoplite health +20 |
+| Academy | Iron Spears *(Iron, after Phalanx)* | 200 food, 150 gold | hoplite attack +4 |
+| Tower | Ballistics *(Iron)* | 100 wood, 150 stone | tower damage +4 |
 
 ## 11. The enemy, victory and defeat
 
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
 and sends them against your Town Center in waves. In a single game (PLAY)
-the first wave of 6 soldiers comes after 5 minutes; every next one is two
+the enemy first stays in its own city for 5 to 10 minutes (different each
+game), building and training as usual. Then its first wave of 6 soldiers
+comes. If you strike it first, it waits no longer: the wave leaves as soon
+as it is ready. Every next one is two
 soldiers bigger, two minutes apart at least. When its berries run out it
 builds Farms too. When one of your units is
 struck, you hear a warning, at most once every ten seconds.
@@ -273,6 +283,8 @@ You also win any level if you destroy the enemy completely.
   the Town Center and the road the enemy comes on.
 * Leave new soldiers next to their Barracks, so they gather into one
   squad. A lone soldier against a squad strikes first, but falls fast.
+* A Tower next to the Town Center strikes the waves before they arrive,
+  and gives your stone a use.
 * Build Granaries and Storage Pits next to the resources. Short trips mean
   more food and wood.
 * Save often with **V**.

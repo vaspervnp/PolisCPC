@@ -47,7 +47,7 @@ def main():
     c = CPC()
     c.run_frames(5)
     M.load_sna(c)
-    M.wait_phase(c, sym, 6)
+    M.wait_phase(c, sym, 6, limit_ms=8000)       # (M13: ~4 s)
     if sys.argv[1:2] == ['scroll']:
         import m2_check as M2
         import m3_check as M3

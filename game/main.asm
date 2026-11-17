@@ -102,13 +102,16 @@ start:
         ldir
         call units_gfx          ; τα sprites -> C5, μέσω της οθόνης
         ifndef SNA
-        ld hl,menu_z            ; το μενού στο MENU_AT (συμπιεσμένο, M15)
+        ld hl,menu_name         ; το μενού από τη δισκέτα (MENU.BIN,
+        call disk_load          ; συμπιεσμένο) στο MENU_AT
+        di
+        ld hl,LOAD_AT
         ld de,MENU_AT
         call dzx0
         call menu               ; πολιτισμός ή φόρτωμα (menu.asm, M12)
         else                    ; (στο snapshot των ελέγχων κανένα μενού —
-        ds 12,0                 ; το menu.bin είναι του POLIS.BIN — και ο
-        endif                   ; κύριος κώδικας ίδιος: τα σύμβολα)
+        ds 19,0                 ; και ο κύριος κώδικας ίδιος: τα σύμβολα)
+        endif
         ld hl,init_z            ; οι ρουτίνες της εκκίνησης στην οθόνη
         ld de,INIT              ; (init.asm, M11), και πίσω τους η
         call dzx0               ; αποθήκευση (savegame.asm, M12) και οι
@@ -358,7 +361,9 @@ linebuf:
         ds 80
         endif
 
-; Η διεύθυνση κάθε γραμμής οθόνης: #C000 + (y%8)*#800 + (y/8)*80.
+; Η διεύθυνση κάθε γραμμής οθόνης: #C000 + (y%8)*#800 + (y/8)*80. Σε
+; όριο 16 bytes: οι 8 γραμμές μιας σειράς μένουν σε μία σελίδα (build_lines).
+        align 16
 line_addr:
 ly = 0
         repeat 200
@@ -424,6 +429,8 @@ col_n:      db 0
 col_i:      dw 0
 col_j:      dw 0
 col_ptr:    dw 0
+col_fp:     dw 0                ; η ομίχλη του col_ptr: byte (fog_ptr)
+col_fm:     db 0                ; και bit
 col_t0:     dw 0
 col_t1:     dw 0
 col_lp:     dw 0
@@ -681,7 +688,8 @@ BOOT_LEN    equ boot_end - BOOT
 
 
 ; Το μενού έναρξης (menu.asm, M12): στη θέση του μόνο στην οθόνη του M0
-; (εκεί δεν τρέχει)· αλλιώς (M15) συμπιεσμένο (menu_z), για το MENU_AT.
+; (εκεί δεν τρέχει)· αλλιώς συναρμολογημένο για το MENU_AT, και στη δισκέτα
+; συμπιεσμένο (MENU.BIN, από το build/menu.bin: build.sh).
 MENU_AT     equ #A600           ; οι πίνακες των μονάδων (ACT_TAB ... FIELD_TAB):
                                 ; τους γράφει το init, μετά το μενού
         ifdef BARS
@@ -779,18 +787,6 @@ boot_z:
         endif
         else
 boot_z      equ 0
-        endif
-
-; Το μενού (M15: συμπιεσμένο, από το build/menu.bin του πρώτου περάσματος).
-        ifndef C7RAW
-        ifndef BARS
-menu_z:
-        lzx0
-        incbin "../build/menu.bin"
-        lzclose
-        endif
-        else
-menu_z      equ 0
         endif
 
 ; Ο χάρτης συμπιεσμένος από τον ίδιο τον rasm (9.216 -> ~2 KB). ΤΕΛΕΥΤΑΙΟΣ:
@@ -985,7 +981,7 @@ tut_end     equ TUT_AT + 1      ; έβαζε στο #4000 της C6, πάνω σ
         include "bank7.asm"
 c7_end:
 C7_LEN      equ c7_end - C7_CODE
-        assert C7_CODE + C7_LEN <= CH_D, 'C7 code past tables'
+        assert C7_CODE + C7_LEN <= C7_LS, 'C7 code past tables'
         ifndef SNA
         ifdef C7RAW
         save 'build/c7.bin',C7_CODE,C7_LEN      ; -> c7_z (το δεύτερο πέρασμα)

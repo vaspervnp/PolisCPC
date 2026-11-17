@@ -304,6 +304,10 @@ def main():
     # ------------------------------------------------- 8. Εποχή του Σιδήρου
     set_res(c, sym, 3000)
     tc = click_bld(g, (32, 60))
+    if tc == 255:                           # (μια μονάδα μπροστά του: το
+        tc = [b['slot'] for b in M7.blds(c)  # κλικ την παίρνει)
+              if b['type'] == 'town_center'][0]
+        c.poke(sym['SEL_BLD'], tc)
     v0 = M6.hud_vals(c, sym)
     M7.press(g, 'u')
     v1 = M6.hud_vals(c, sym)

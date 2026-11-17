@@ -694,17 +694,44 @@ units_move:
         ld a,(cam_y)
         add a,e
         ld e,a
-        ld hl,PX
-.scan:  ld a,(hl)
+        ld hl,PX                ; (x 4 ξεδιπλωμένο: 128 = 4 x 32, και κάθε
+.scan:  ld a,(hl)               ; υποψήφια γυρίζει στη θέση της)
         sub c
         cp b
-        jr nc,.sk
-        set 7,l
+        jr c,.h0
+.c0:    inc l
+        ld a,(hl)
+        sub c
+        cp b
+        jr c,.h1
+.c1:    inc l
+        ld a,(hl)
+        sub c
+        cp b
+        jr c,.h2
+.c2:    inc l
+        ld a,(hl)
+        sub c
+        cp b
+        jr c,.h3
+.c3:    inc l
+        bit 7,l
+        jr z,.scan
+        jr .ents
+.h0:    call .hit
+        jr .c0
+.h1:    call .hit
+        jr .c1
+.h2:    call .hit
+        jr .c2
+.h3:    call .hit
+        jr .c3
+.hit:   set 7,l                 ; στο x: και στο y;
         ld a,(hl)
         res 7,l
         sub e
         cp d
-        jr nc,.sk
+        ret nc
         push hl
         push bc
         push de
@@ -717,9 +744,7 @@ units_move:
         pop de
         pop bc
         pop hl
-.sk:    inc l
-        bit 7,l
-        jr z,.scan
+        ret
 .ents:  ld ix,ANCHOR_REC          ; η γωνία του κουτιού, ή το σημάδι του
         ld hl,SPR_ANCHOR        ; επιλεγμένου κτιρίου (buildings.asm)
         ld a,(box_on)

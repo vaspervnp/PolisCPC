@@ -24,12 +24,34 @@ lv_init:
         ld a,(hl)
         dec hl
         cp #5A
-        jr z,.cp
-.def:   ld hl,lv_def
+        jr nz,.def
+        call .cp                ; η πίστα της εκστρατείας
+        jr .tu
+.def:   ld hl,lv_def            ; ο ελεύθερος αγώνας: το πρώτο κύμα σε 5-10
+        call .cp                ; λεπτά, 300 + v + v/8 + v/32 s (ως 593)·
+        ld a,r                  ; το v από τη στιγμή που τελείωσε το μενού
+        ld hl,int_t             ; (R, int_t). Ως τότε ο αντίπαλος χτίζει και
+        xor (hl)                ; εκπαιδεύει κανονικά (εκτός αν τον χτυπήσει
+        ld c,a                  ; ο παίκτης: ai_prov, bank7.asm)
+        ld b,0
+        ld h,b
+        ld l,a
+        srl c
+        srl c
+        srl c
+        add hl,bc
+        srl c
+        srl c
+        add hl,bc
+        ld bc,300
+        add hl,bc
+        ld (lv_h + H_COOL),hl
+        jr .tu
 .cp:    ld de,lv_h
         ld bc,H_TEXT
         ldir
-        ld a,(tut_on)           ; το tutorial (menu.asm): η παρτίδα του χάρτη
+        ret
+.tu:    ld a,(tut_on)           ; το tutorial (menu.asm): η παρτίδα του χάρτη
         or a                    ; της εκκίνησης, με το πρώτο κύμα αργά
         jr z,.nt
         ld hl,TUT_COOL

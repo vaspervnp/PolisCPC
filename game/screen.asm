@@ -159,13 +159,17 @@ build_lines:
         ld a,b                  ; η σειρά: off AND #7FF, στη σελίδα #C000
         and 7
         or #C0
-        repeat 8
+        repeat 7                ; (στη σελίδα της: line_addr σε όριο 16)
         ld (hl),c
-        inc hl
+        inc l
         ld (hl),a
-        inc hl
+        inc l
         add a,8
         rend
+        ld (hl),c
+        inc l
+        ld (hl),a
+        inc hl
         ld a,c                  ; off += 80
         add a,80
         ld c,a

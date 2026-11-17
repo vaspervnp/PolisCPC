@@ -56,6 +56,30 @@ fog_hl: push hl
         pop hl
         ret
 
+; HL = δείκτης χάρτη (και έξω από τον χάρτη: συνεπές βήμα) -> col_fp = το
+; byte του στο FOG, col_fm = το bit του (scroll.asm, draw_column: προχωράνε
+; μαζί με το col_ptr — +96 = +12 bytes, +1 = το επόμενο bit). Κρατάει BC.
+fog_ptr:
+        ld a,l
+        and 7
+        add a,fog_bit & 255
+        ld e,a
+        ld d,fog_bit >> 8
+        ld a,(de)
+        ld (col_fm),a
+        ld de,-MAP
+        add hl,de
+        sra h
+        rr l
+        sra h
+        rr l
+        sra h
+        rr l
+        ld de,FOG
+        add hl,de
+        ld (col_fp),hl
+        ret
+
         if ($ & 255) > 248      ; (σε μία σελίδα: οι αναζητήσεις χωρίς carry)
         ds 256 - ($ & 255)
         endif
