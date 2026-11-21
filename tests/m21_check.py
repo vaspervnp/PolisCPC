@@ -17,6 +17,7 @@
 4. ΜΑΧΗ ΕΚΤΟΣ. Η ίδια σκηνή με την κάμερα μακριά: τα χτυπήματα γίνονται,
    αλλά στο C τίποτα.
 5. ΑΠΟΣΤΑΣΗ. Η μάχη στην άκρη της οθόνης: πιο σιγά από ό,τι στη μέση.
+   Το M τη σιωπά, και ξανά M την ξανανοίγει (στο παιχνίδι και στο μενού).
 6. ΜΕΝΟΥ. Από τη δισκέτα: στο μενού έναρξης παίζει το mus_menu (οι νότες
    του), και με το PLAY το mus_game.
 """
@@ -108,6 +109,28 @@ def music(g):
                                     loop))
 
 
+def press_m(c):
+    c.key_down('m')
+    c.run_frames(6)
+    c.key_up('m')
+    c.run_frames(6)
+
+
+def mute(c, name):
+    """M: η μουσική σιωπά (οι εντάσεις των A, B 0, το τραγούδι προχωράει)·
+    ξανά M: ακούγεται."""
+    press_m(c)
+    off = listen(c, 200)
+    press_m(c)
+    on = listen(c, 200)
+    silent = all(r[8] == 0 and r[9] == 0 for r in off)
+    moving = len({tone(r, 0) for r in off}) > 1
+    back = any(r[8] for r in on)
+    report(name, silent and moving and back,
+           'M: A, B σιωπηλά για 200 καρέ %s (οι νότες προχωράνε %s)· ξανά M: '
+           'ακούγεται %s' % (silent, moving, back))
+
+
 def click(g):
     c = g.c
     c.key_down(' ')
@@ -157,6 +180,7 @@ def menu():
     regs = listen(c, n + 20)
     got = {tone(r, 0) for r in regs if r[8]}
     want = periods('mus_menu', 0)
+    mute(c, 'M ΜΕΝΟΥ')
     c.key_down(CP.KEY_RETURN)                   # PLAY
     c.run_frames(4)
     c.key_up(CP.KEY_RETURN)
@@ -179,6 +203,7 @@ def main():
     g = M4.Game(False)
     g.tick(3)
     music(g)
+    mute(g.c, 'M')
     click(g)
     v_mid, hurt_mid, cam = battle(0, 0)
     report('ΣΤΗΝ ΟΘΟΝΗ', v_mid and hurt_mid,

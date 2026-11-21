@@ -1,6 +1,9 @@
 """Βίντεο του παιχνιδιού: 5 λεπτά από τη δισκέτα, με εικόνα και ήχο.
 
-    python3 tests/video.py [--dry] [--secs 300]
+    python3 tests/video.py [--dry] [--secs 300] [--bot]
+
+--bot: αντί για το σενάριο, ο «παίκτης» του M14 (tests/m14_game_check.py):
+ολόκληρη παρτίδα ως τη νίκη (για 10 λεπτά: --secs 600 --bot).
 
 -> build/polis_video.mp4   (1536x1088, 50 fps, ήχος AY 44,1 kHz)
 
@@ -139,26 +142,40 @@ class Rec:
                  '-tune', 'animation', '-pix_fmt', 'yuv420p',
                  os.path.join(BUILD, 'video_v.mp4')], stdin=subprocess.PIPE)
         self.in_game = False
-        raw = self.c.run_frames
-        self._raw = raw
+        self._raw_us = self.c.run_us
         self.c.run_frames = self.frames         # και οι βοηθοί των τεστ
+        self.c.run_us = self.us                 # (και τα M3.wait_uphase)
+        self.acc = 0                            # µs μέσα στο τρέχον καρέ
         self.t0 = time.time()
 
     def frames(self, n=1):
-        for _ in range(n):
-            if self.n >= self.limit:
-                raise Done()
-            self._raw(1)
-            self.n += 1
-            k = self.lib.cpcemu_audio_take(self.c._h, self.abuf, 8192)
-            self.audio.write(bytes(self.abuf)[:4 * k])
-            if self.ff:
-                self.ff.stdin.write(self.c.image().tobytes())
-            if self.dry and self.n % 750 == 0:
-                self.shot('t%03d' % (self.n // 50))
-            if self.n % 1500 == 0:
-                print('   %3d s βίντεο (%d s)' % (self.n // 50,
-                                                 time.time() - self.t0))
+        self.us(20000 * n)
+
+    def us(self, t):
+        """Ο CPC τρέχει t µs· κάθε 20 ms ένα καρέ του βίντεο, όποιος κι αν
+        τον τρέχει (και ο bot του M14, με run_us)."""
+        while t > 0:
+            step = min(t, 20000 - self.acc)
+            self._raw_us(step)
+            self.acc += step
+            t -= step
+            if self.acc >= 20000:
+                self.acc = 0
+                self.frame()
+
+    def frame(self):
+        if self.n >= self.limit:
+            raise Done()
+        self.n += 1
+        k = self.lib.cpcemu_audio_take(self.c._h, self.abuf, 8192)
+        self.audio.write(bytes(self.abuf)[:4 * k])
+        if self.ff:
+            self.ff.stdin.write(self.c.image().tobytes())
+        if self.dry and self.n % 750 == 0:
+            self.shot('t%03d' % (self.n // 50))
+        if self.n % 1500 == 0:
+            print('   %3d s βίντεο (%d s)' % (self.n // 50,
+                                             time.time() - self.t0))
 
     def close(self):
         self.audio.close()
@@ -566,6 +583,52 @@ def mux(secs):
     os.remove(a)
 
 
+def bot_game(p):
+    """--bot: ο «παίκτης» του M14 (tests/m14_game_check.py, Bot), που χτίζει
+    οικονομία και στρατό, αποκρούει τα κύματα και νικάει — με την επίθεση
+    στα BOT_FIRST s της πίστας, ώστε η νίκη να πέσει κοντά στο τέλος ενός
+    βίντεο 10 λεπτών."""
+    import m14_game_check as G
+    r, c, sym = p.r, p.c, p.sym
+    r.frames(120)
+    c.insert_disc(os.path.join(BUILD, 'polis.dsk'))
+    for ch in 'RUN"POLIS\n':
+        k = CP.KEY_RETURN if ch == '\n' else ch
+        c.key_down(k)
+        r.frames(4)
+        c.key_up(k)
+        r.frames(5)
+    M.wait_menu(c)
+    log('μενού στα %.1f s' % (r.n / 50))
+    p.wait(4)                                   # η μουσική του μενού
+    for k in [CP.KEY_RIGHT] * 3 + [CP.KEY_LEFT] * 3:
+        c.key_down(k)
+        r.frames(4)
+        c.key_up(k)
+        p.wait(0.9)
+    p.wait(1)
+    c.key_down(CP.KEY_RETURN)
+    r.frames(4)
+    c.key_up(CP.KEY_RETURN)
+    M.wait_phase(c, sym, 6, limit_ms=20000)
+    r.in_game = True
+    log('παιχνίδι στα %.1f s' % (r.n / 50))
+    G.FIRST = BOT_FIRST
+    G.log = lambda *a: log('  %.0f s βίντεο: %s' % (r.n / 50, ' '.join(
+        str(x) for x in a)))
+    bot = G.Bot(c, sym)
+    while not bot.ended():
+        bot.step()
+        bot.tick(4)
+    log('τέλος: %d στα %d s της πίστας (%.1f s βίντεο)'
+        % (bot.ended(), bot.sec(), r.n / 50))
+    r.shot('end')
+    p.wait(1000)
+
+
+BOT_FIRST = 200
+
+
 def main():
     dry = '--dry' in sys.argv
     secs = 300
@@ -574,7 +637,7 @@ def main():
     build_lib()
     r = Rec(secs * 50, dry)
     try:
-        scenario(Player(r))
+        (bot_game if '--bot' in sys.argv else scenario)(Player(r))
     except Done:
         pass
     r.shot('last')

@@ -97,6 +97,8 @@ the game. The game's sound effects come only from what you can see: a
 clash of weapons, an arrow, a building finished, a new unit. The closer
 it is to the middle of the screen, the louder you hear it; whatever
 happens off the screen is silent. Pressing **SPACE** makes a soft click.
+Press **M**, in the menu or in the game, to turn the music off or on again;
+the sound effects stay.
 
 ## 6. Controls
 
@@ -116,6 +118,7 @@ from a **menu** that opens in the middle of the screen, or from the
 | **RETURN** on your selected squad | open its menu (SPLIT SQUAD) |
 | **RETURN** while placing | build here |
 | **SPACE** while placing | cancel the placement |
+| **M** | music off / on |
 
 ### The menus
 
@@ -140,8 +143,7 @@ closes the menu. The game waits while a menu is open.
 Move the cursor down past the bottom of the map and it enters the buttons
 of the HUD. **Q A O P** move from button to button; the current one lights
 up, and its name appears at the top of the screen. **SPACE** or **RETURN**
-presses it. **Q** from the top row takes you back to the map; holding **A**
-in the bottom row scrolls the map down.
+presses it. **Q** from the top row takes you back to the map.
 
 | button | what it does |
 |---|---|
