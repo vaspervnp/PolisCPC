@@ -221,16 +221,8 @@ def main():
                 '%s\nbld_types:\n%s'
                 % (len(TYPES), START_AGE, MASK_PG, IMG0, cj['red_org'], keys,
                    ''.join(rows)))
-        keym = [MATRIX[t[1]] for t in TYPES] + [MATRIX[TRAIN_KEY],
-                                                 MATRIX['ESC'], MATRIX['U'],
-                                                 MATRIX['X']]
-        f.write('\n; τα πλήκτρα: οι τύποι (%s), μετά %s (εκπαίδευση), ESC, U '
-                '(έρευνα, M9) και X (χωρισμός ομάδας, M15)\n'
-                '; ως (γραμμή του πίνακα, μάσκα)\nBLD_RES     equ %d\n'
-                'bld_keym:\n%s'
-                % (''.join(t[1] for t in TYPES), TRAIN_KEY, BLD_RES,
-                   ''.join('        db %d, #%02X\n' % (r, 1 << b)
-                           for r, b in keym)))
+        # (M20: χωρίς τα πλήκτρα των κτιρίων — τα μενού, game/ui.asm)
+        f.write('\nBLD_RES     equ %d\n' % BLD_RES)
     print('data/bank6.bin  %d bytes (πόροι %d + %d τύποι κτιρίων, %d ελεύθερα, '
           'οι κόκκινοι στο #%04X)' % (len(blob), len(res), len(TYPES), free,
                                       cj['red_org']))

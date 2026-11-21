@@ -264,4 +264,5 @@ fdc_rd1:
 age3_name:  db "AGE3G   BIN"
 hopl_name:  db "HOPL    BIN"
 age4_name:  db "AGE4G   BIN"
+ui_name:    db "UI      BIN"      ; (main.asm, start: τα μενού, M20)
 menu_name:  db "MENU    BIN"     ; (main.asm, start: το μενού)

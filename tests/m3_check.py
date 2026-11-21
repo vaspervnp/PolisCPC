@@ -81,7 +81,12 @@ def wait_uphase(c, sym, want, limit_ms=500):
 
 
 def tick_time(c, sym):
-    """Περιμένει να ΑΡΧΙΣΕΙ ένα καρέ μονάδων και μετράει πόσο κρατάει."""
+    """Περιμένει να ΑΡΧΙΣΕΙ ένα καρέ μονάδων και μετράει πόσο κρατάει. Με
+    ένα μενού ανοιχτό (M20) το καρέ μονάδων δεν τρέχει: 2 καρέ, και 0."""
+    import ui_menu as UM
+    if UM.is_open(c):
+        c.run_frames(2)
+        return 0.0
     wait_uphase(c, sym, 4)
     wait_uphase(c, sym, 3)
     return wait_uphase(c, sym, 4) / 1000.0

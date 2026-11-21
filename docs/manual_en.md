@@ -63,7 +63,7 @@ only after 15 minutes.
 * **GREEK CAMPAIGN** and **EGYPTIAN CAMPAIGN** each have four levels (see
   section 12).
 * **TUTORIAL** teaches you the game step by step (see section 3).
-* **LOAD GAME** continues the game you saved with **V**. If there is no saved
+* **LOAD GAME** continues the game you saved with **SAVE GAME**. If there is no saved
   game, a new one starts.
 
 There are eight cultures: Egyptians, Greeks (the default), Babylonians,
@@ -85,25 +85,74 @@ The top of the screen is the world. The panel at the bottom is the HUD.
   digit shows the progress of the current unit, of the construction, or of
   the research.
 
+* **The eight buttons** to the right of the card (see section 6): BUILD,
+  TRAIN, RESEARCH, SPLIT SQUAD in the top row; NEXT AGE, IDLE VILLAGER,
+  SAVE GAME, CANCEL in the bottom row.
+
 When the game ends, the card shows the result: a **red flag** means you won
 and a **skull** means you lost.
 
+**Sound.** Soft music plays in the main menu and, a different tune, during
+the game. The game's sound effects come only from what you can see: a
+clash of weapons, an arrow, a building finished, a new unit. The closer
+it is to the middle of the screen, the louder you hear it; whatever
+happens off the screen is silent. Pressing **SPACE** makes a soft click.
+
 ## 6. Controls
+
+You need only a few keys: **Q A O P** (or the joystick, or the cursor
+keys in the menus), **SPACE** and **RETURN**. Everything else is chosen
+from a **menu** that opens in the middle of the screen, or from the
+**buttons** of the HUD.
 
 | key | action |
 |---|---|
 | **Q A O P** or joystick | move the cursor (at the edge of the screen the map scrolls) |
 | **cursor keys** | scroll the map |
 | **SPACE** or fire | select: a click picks the unit under the cursor; hold and drag for a box |
+| **SPACE** on one of your buildings | select it and open its menu |
 | **RETURN**, **ENTER**, **COPY** or fire 2 | command the selected units (see below) |
-| **C H B G S M R L F W** | with villagers selected: choose a building to place |
-| **N K D** | the same, for the Bronze Age buildings |
-| **RETURN** or **ENTER** | while placing: build here |
-| **ESC** | cancel the placement |
-| **T** | with a building selected: train a unit |
-| **U** | with a building selected: research its next technology |
-| **X** | with one squad selected: split it in two |
-| **V** | save the game to disc (about 2 seconds) |
+| **RETURN** on your selected villagers | open the BUILD menu |
+| **RETURN** on your selected squad | open its menu (SPLIT SQUAD) |
+| **RETURN** while placing | build here |
+| **SPACE** while placing | cancel the placement |
+
+### The menus
+
+![The BUILD menu](img/build.png)
+
+A menu lists what you can do, with the cost on the right. Move the arrow
+with **Q** / **A** (or the cursor keys) and choose with **RETURN** or
+**SPACE**. A greyed line is not possible right now: you lack the resources
+or the building it needs. **CLOSE**, the last line,
+closes the menu. The game waits while a menu is open.
+
+* **BUILD** (RETURN on your villagers) lists the buildings of your age.
+* **A building's menu** (SPACE on it) has **TRAIN** and the name of its
+  unit, if it trains one, and its technologies that you can research now.
+  While it researches, the line reads **RESEARCHING**.
+* **A squad's menu** (RETURN on it) has **SPLIT SQUAD**.
+
+### The HUD buttons
+
+![The cursor on RESEARCH](img/hud.png)
+
+Move the cursor down past the bottom of the map and it enters the buttons
+of the HUD. **Q A O P** move from button to button; the current one lights
+up, and its name appears at the top of the screen. **SPACE** or **RETURN**
+presses it. **Q** from the top row takes you back to the map; holding **A**
+in the bottom row scrolls the map down.
+
+| button | what it does |
+|---|---|
+| **BUILD** | with villagers selected: the BUILD menu |
+| **TRAIN** | with a building selected: train one unit |
+| **RESEARCH** | with a building selected: its menu |
+| **SPLIT SQUAD** | with one squad selected: split it in two |
+| **NEXT AGE** | the menu of your Town Center, with the next age |
+| **IDLE VILLAGER** | select a villager who has nothing to do, and move the view to them |
+| **SAVE GAME** | save the game to disc (about 2 seconds) |
+| **CANCEL** | cancel the placement of a building |
 
 On a PC emulator, **RETURN** is the main **Enter** key. The CPC's **ENTER**
 (on the numeric keypad) is the keypad Enter, and does the same everywhere.
@@ -119,6 +168,8 @@ What happens depends on what is under the cursor.
 * **An enemy building:** attack it until it falls.
 * **One of your own squads of the same kind:** the selected squads walk
   there and join it (see section 9).
+* **One of the units you have selected:** its menu (BUILD for villagers,
+  SPLIT SQUAD for a squad).
 
 Villagers carry their load to the nearest drop site:
 
@@ -131,30 +182,31 @@ not carrying out an order of yours. A villager who is attacked fights back.
 
 ## 7. Buildings
 
-To build, select one or more villagers, press the building's key, move the
-corner of the cursor to the spot, and press **RETURN**. The cost is paid at
+To build, select one or more villagers, press **RETURN** on them (or the
+**BUILD** button) and choose the building. Move the corner of the cursor to
+the spot and press **RETURN**. The cost is paid at
 once and a foundation appears. The selected villagers walk to it and build.
-When the building is finished, you hear a tone.
+When the building is finished, you hear a tone (if it is on the screen).
 
-| key | building | cost | needs | what it does |
-|---|---|---|---|---|
-| C | Town Center | 200 wood | – | villagers, drop site for all, the new ages |
-| H | House | 30 wood | – | +5 population |
-| B | Barracks | 125 wood | – | swordsmen |
-| G | Granary | 120 wood | – | drop site for food; Domestication |
-| S | Storage Pit | 120 wood | – | drop site for wood, gold, stone; weapons and armour |
-| M | Market | 150 wood | Granary | the gathering technologies |
-| R | Archery Range | 150 wood | Barracks | archers; Archery, Composite Bow |
-| L | Stable | 150 wood | Barracks | cavalry; needed for the Academy |
-| F | Farm | 75 wood | Market | when built, 3 × 3 field plots, 40 food each |
-| W | Tower | 150 stone | Granary | shoots arrows at enemies up to 11 tiles away |
-| N | Temple | 200 wood | Bronze Age | Medicine |
-| K | Government Center | 200 wood | Bronze Age, Market | |
-| D | Academy | 200 wood | Bronze Age, Stable | hoplites; Phalanx |
+| building | cost | needs | what it does |
+|---|---|---|---|
+| Town Center | 200 wood | – | villagers, drop site for all, the new ages |
+| House | 30 wood | – | +5 population |
+| Barracks | 125 wood | – | swordsmen |
+| Granary | 120 wood | – | drop site for food; Domestication |
+| Storage Pit | 120 wood | – | drop site for wood, gold, stone; weapons and armour |
+| Market | 150 wood | Granary | the gathering technologies |
+| Archery Range | 150 wood | Barracks | archers; Archery, Composite Bow |
+| Stable | 150 wood | Barracks | cavalry; needed for the Academy |
+| Farm | 75 wood | Market | when built, 3 × 3 field plots, 40 food each |
+| Tower | 150 stone | Granary | shoots arrows at enemies up to 11 tiles away |
+| Temple | 200 wood | Bronze Age | Medicine |
+| Government Center | 200 wood | Bronze Age, Market | |
+| Academy | 200 wood | Bronze Age, Stable | hoplites; Phalanx |
 
-To select a building, click on it with **SPACE**. **T** puts one unit in its
-queue, and the queue holds up to five. The cost is paid when you press the
-key.
+To select a building, click on it with **SPACE**: its menu opens.
+**TRAIN** puts one unit in its queue, and the queue holds up to five. The
+cost is paid when you choose it.
 
 **Population:** you can have up to 15 people, plus 5 for each House.
 
@@ -196,7 +248,8 @@ up to 20. A soldier on his own has no number. Villagers are always single.
 * **Joining:** select squads and press **RETURN** over one of your own
   squads of the same kind. They walk there and join it, up to 20; whoever
   does not fit stays as a squad of his own.
-* **Splitting:** select one squad of two or more and press **X**. Half of it
+* **Splitting:** select one squad of two or more, press **RETURN** on it
+  and choose **SPLIT SQUAD** (or use the button). Half of it
   steps onto the next free tile as a new squad.
 
 **In battle** a squad strikes with the attack of its soldiers added up, but
@@ -210,16 +263,16 @@ The enemy trains into squads too, and its waves come as squads.
 
 ## 10. Ages and technologies
 
-The game starts in the **Tool Age**. Select the Town Center and press **U**
-to advance:
+The game starts in the **Tool Age**. Click the Town Center (or press the
+**NEXT AGE** button) and choose the next age in its menu:
 
 * **Bronze Age:** 800 food. It unlocks the Temple, the Government Center and
   the Academy. The buildings of your culture take their new look.
 * **Iron Age:** 1000 food and 800 gold, in the Bronze Age. It unlocks Iron
   Spears and Ballistics.
 
-**U** on any other building researches the first of its technologies that
-you can have now. The bar of the card shows the progress.
+The menu of any other building lists the technologies you can research
+there now; choose one. The bar of the card shows the progress.
 
 | building | technology | cost | effect |
 |---|---|---|---|
@@ -249,8 +302,7 @@ game), building and training as usual. Then its first wave of 6 soldiers
 comes. If you strike it first, it waits no longer: the wave leaves as soon
 as it is ready. Every next one is two
 soldiers bigger, two minutes apart at least. When its berries run out it
-builds Farms too. When one of your units is
-struck, you hear a warning, at most once every ten seconds.
+builds Farms too.
 
 You **lose** when you have no units and no Town Center left. The enemy loses
 the same way. When the game ends, it stops, and the card next to the mini
@@ -294,4 +346,4 @@ You also win any level if you destroy the enemy completely.
   and gives your stone a use.
 * Build Granaries and Storage Pits next to the resources. Short trips mean
   more food and wood.
-* Save often with **V**.
+* Save often with the **SAVE GAME** button.

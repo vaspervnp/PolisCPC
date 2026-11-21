@@ -261,50 +261,6 @@ ai_seed:    db 61, 33           ; τροφή (θάμνοι)
 
 ; ------------------------------------------------------------ πλήκτρα
 
-; Από το cursor_input: τα πλήκτρα των κτιρίων, μόνο στο πάτημα.
-bld_input:
-        ld hl,bld_keym
-        ld c,0
-.k:     ld a,(hl)
-        call read_row
-        inc hl
-        and (hl)
-        inc hl
-        jr nz,.got
-        inc c
-        ld a,c
-        cp BT_N + 4
-        jr nz,.k
-        ld c,255
-.got:   ld hl,bk_prev
-        ld a,c
-        cp (hl)
-        ld (hl),a
-        ret z
-        inc a
-        ret z
-        dec a
-        cp BT_N
-        jr c,.type
-        jr z,bld_train
-        cp BT_N + 3             ; X: χωρισμός ομάδας (input.asm, M15)
-        jp z,sq_split
-        cp BT_N + 2             ; U: έρευνα στο επιλεγμένο κτίριο (bank7.asm)
-        jr nz,.esc
-        ld hl,res_start
-        jp far7
-.esc:   ld a,255                ; ESC
-        ld (bmode),a
-        jr cur_look
-.type:  ld (bn_t),a             ; ένας τύπος: αν υπάρχει χωρικός επιλεγμένος
-        call sel_villager       ; και ο τύπος χτίζεται
-        ret nc
-        ld a,(bn_t)
-        call bld_can
-        ret c
-        ld a,(bn_t)
-        ld (bmode),a
-
 ; Ο κέρσορας: γωνία όσο διαλέγεις θέση, αλλιώς βέλος.
 cur_look:
         ld hl,SPR_CURSOR
@@ -682,6 +638,8 @@ bld_job:
         cp (hl)
         ret c
         ld (iy+B_ST),1          ; έτοιμο: η εικόνα του
+        ld a,FX_DONE            ; και ο ήχος (M21: μόνο μέσα στην οθόνη)
+        call snd_bld
         ld (iy+B_PROG),0
         ld a,1                  ; και μπορεί να κρύβει μονάδες (occlude.asm)
         ld (occ_dirty),a

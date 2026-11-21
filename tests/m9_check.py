@@ -10,20 +10,20 @@
    ΧΩΡΑΦΙ (M14): έτοιμο, δεν είναι πια κτίριο· τα 9 πλακίδια της κάτοψης
    έχουν τον πόρο farm_plot (14). Ένας χωρικός, RETURN πάνω του: δουλειά
    τροφής, και η τροφή της μπάρας ανεβαίνει με το πρώτο άδειασμα.
-3. ΕΡΕΥΝΑ. Κλικ στο Κέντρο Πόλης, U: 800 τροφή, και η μπάρα της κάρτας
-   γεμίζει. Ξανά U: τίποτα (ερευνά ήδη).
+3. ΕΡΕΥΝΑ. Κλικ στο Κέντρο Πόλης, RESEARCH: 800 τροφή, και η μπάρα της κάρτας
+   γεμίζει. Ξανά RESEARCH: τίποτα (ερευνά ήδη).
 4. ΕΠΟΧΗ. Στο τέλος: το AGE3.BIN από τη δισκέτα (game/disk.asm) στην C6, η
    εποχή 3 στη μπάρα, ύψος και εικόνα της Χαλκού στο bld_types και στα
    κτίρια. Ξαναζωγραφίζονται ΜΟΝΟ όσα άλλαξαν (Κέντρο Πόλης, σπίτι), ένα-ένα.
    Η οθόνη μετά = ο κόσμος με τις εικόνες της Χαλκού (και τα πλακίδια του
    χωραφιού), pixel προς pixel.
 5. ΞΕΚΛΕΙΔΩΜΑ. N, K, D ανοίγουν τοποθέτηση.
-6. ΤΕΧΝΟΛΟΓΙΕΣ. U στη σιταποθήκη (Εξημέρωση: ο χωρικός κουβαλάει 15
+6. ΤΕΧΝΟΛΟΓΙΕΣ. RESEARCH στη σιταποθήκη (Εξημέρωση: ο χωρικός κουβαλάει 15
    τροφή) και στην αποθήκη (Εργαλειοποιία: ζημιά σπαθοφόρου 8 -> 10, μόνο
    της ομάδας 0) — ο πίνακας stats διαβάζεται από την C7 στο τέλος.
-7. ΟΠΛΙΤΗΣ. T στην ακαδημία: μια μονάδα σετ 4, με το σχέδιο του HOPL.BIN
+7. ΟΠΛΙΤΗΣ. TRAIN στην ακαδημία: μια μονάδα σετ 4, με το σχέδιο του HOPL.BIN
    (στη θέση 3 της C5: διαβάζεται στο τέλος), στην οθόνη pixel προς pixel.
-8. ΕΠΟΧΗ ΤΟΥ ΣΙΔΗΡΟΥ. Ξανά U στο Κέντρο Πόλης (1000 τροφή, 800 χρυσό): το
+8. ΕΠΟΧΗ ΤΟΥ ΣΙΔΗΡΟΥ. Ξανά RESEARCH στο Κέντρο Πόλης (1000 τροφή, 800 χρυσό): το
    AGE4.BIN, εποχή 4, ξαναζωγραφίζεται μόνο το Κέντρο Πόλης (όχι το
    σπίτι), και η οθόνη με τις εικόνες του Σιδήρου.
 9. ΧΡΟΝΟΣ. Τυπώνεται ως μέτρηση (όπως στο M3 και στο M8): τα καρέ χωρίς
@@ -39,6 +39,7 @@ import m4_check as M4                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 import make_bank6 as MB                         # noqa: E402
 import m3_check as M3                           # noqa: E402
@@ -65,17 +66,19 @@ def set_res(c, sym, v):
 
 
 def try_key(g, key):
-    """Το πλήκτρο ενός τύπου: ο τύπος που ανοίγει τοποθέτηση (ή 255), και ESC."""
-    M7.press(g, key)
+    """Ένας τύπος από το BUILD (M20· ως το M19 το πλήκτρο του, N K D): ο
+    τύπος που ανοίγει τοποθέτηση (ή 255), και SPACE (άκυρο)."""
+    UM.build(g.c, {'n': 'temple', 'k': 'gov_center', 'd': 'academy'}[key])
     m = g.c.peek(g.sym['BMODE'])
-    M7.press(g, CPCMOD.KEY_ESC)
+    if m != 255:
+        UM.cancel(g.c)
     return m
 
 
 def build(g, key, tile, typ):
     """Τοποθέτηση με τους επιλεγμένους χωρικούς, και αναμονή ως το τέλος."""
     c, sym = g.c, g.sym
-    M7.press(g, key)
+    UM.build(c, typ)
     g.move_cursor(*M6.tile_cursor(g, *tile))
     M7.press(g, CPCMOD.KEY_RETURN, 1)
     b = [b for b in M7.blds(c) if b['type'] == typ]
@@ -185,9 +188,9 @@ def main():
     # ------------------------------------------------- 3. έρευνα
     tc = click_bld(g, (32, 60))
     v0 = M6.hud_vals(c, sym)
-    M7.press(g, 'u')
+    UM.choose(c, UM.MA_TECH)                # το μενού του ανοίγει με το κλικ
     v1 = M6.hud_vals(c, sym)
-    M7.press(g, 'u')
+    UM.research(c)                          # ξανά: ερευνά ήδη (RESEARCHING)
     v2 = M6.hud_vals(c, sym)
     bars = []
     t0 = len(g.times)
@@ -212,7 +215,7 @@ def main():
                 break
     g.report('έρευνα', tc == 0 and v1[0] == v0[0] - 800 and v2 == v1 and
              bars[:3] == sorted(bars[:3]) and bars[0] is not None,
-             'κλικ στο Κέντρο Πόλης (θέση %s), U: τροφή %d -> %d· ξανά U: %s· '
+             'κλικ στο Κέντρο Πόλης (θέση %s), RESEARCH: τροφή %d -> %d· ξανά RESEARCH: %s· '
              'η μπάρα %s' % (tc, v0[0], v1[0], 'τίποτα' if v2 == v1 else v2,
                             bars))
 
@@ -240,7 +243,7 @@ def main():
     who = sorted(k for k in slots if slots[k] in redrawn)
     g.report('εποχή', loaded is not None and tab_ok and rec_ok and
              M6.hud_vals(c, sym)[5] == 3,
-             'σε %s καρέ από το U: το AGE3.BIN φορτώθηκε, εποχή %d, ύψος και '
+             'σε %s καρέ από το RESEARCH: το AGE3.BIN φορτώθηκε, εποχή %d, ύψος και '
              'εικόνα της Χαλκού στους %d τύπους και σε όλα τα κτίρια: %s'
              % (loaded, M6.hud_vals(c, sym)[5], len(MB.TYPES),
                 tab_ok and rec_ok))
@@ -265,7 +268,7 @@ def main():
     v0 = M6.hud_vals(c, sym)
     for slot in (3, 4):                     # σιταποθήκη, αποθήκη
         c.poke(sym['SEL_BLD'], slot)
-        M7.press(g, 'u')
+        UM.research(c)
     v1 = M6.hud_vals(c, sym)
     for k in range(800):
         g.tick(1)
@@ -280,7 +283,7 @@ def main():
     M7.fake_bld(c, sym, free, 'academy')
     c.poke(sym['SEL_BLD'], free)
     pop0 = M6.hud_vals(c, sym)[4]
-    M7.press(g, 't')
+    UM.train(c)
     hop, comp = None, False
     for k in range(400):
         g.tick(1)
@@ -297,7 +300,7 @@ def main():
             ('house', house['i0'], house['j0'])])
         comp = g.compose('hoplite')
     g.report('οπλίτης', hop is not None and comp,
-             'T στην ακαδημία: νέα μονάδα %s (σετ 4, από το HOPL.BIN στη '
+             'TRAIN στην ακαδημία: νέα μονάδα %s (σετ 4, από το HOPL.BIN στη '
              'θέση 3 της C5)· στην οθόνη pixel προς pixel'
              % (hop and hop['idx']))
 
@@ -309,7 +312,10 @@ def main():
               if b['type'] == 'town_center'][0]
         c.poke(sym['SEL_BLD'], tc)
     v0 = M6.hud_vals(c, sym)
-    M7.press(g, 'u')
+    if UM.is_open(c):                       # το κλικ άνοιξε το μενού του
+        UM.choose(c, UM.MA_TECH)
+    else:
+        UM.research(c)
     v1 = M6.hud_vals(c, sym)
     t4 = len(g.times)
     loaded4, red4, busy = None, [], 255
@@ -333,7 +339,7 @@ def main():
     g.report('Σιδήρου', loaded4 is not None and v1[0] == v0[0] - 1000 and
              v1[2] == v0[2] - 800 and who4 == changed4 and
              g.compose('iron'),
-             'U στο Κέντρο Πόλης: 1000 τροφή, 800 χρυσό· σε %s καρέ το '
+             'RESEARCH στο Κέντρο Πόλης: 1000 τροφή, 800 χρυσό· σε %s καρέ το '
              'AGE4.BIN, εποχή %d· άλλαξαν %s, ξαναζωγραφίστηκαν %s· η οθόνη '
              'με τις εικόνες του Σιδήρου'
              % (loaded4, M6.hud_vals(c, sym)[5], changed4, who4))
@@ -359,7 +365,7 @@ def main():
     st, c5 = c_read(c, sym)
     g.report('τεχνολογίες', v1t[0] == v0t[0] - 300 and v1t[1] == v0t[1] - 50 and
              cm == [15, 10, 10, 10] and st[5] == 10 and st[24 + 5] == 8,
-             'U στη σιταποθήκη και στην αποθήκη: τροφή %d -> %d, ξύλο %d -> %d· '
+             'RESEARCH στη σιταποθήκη και στην αποθήκη: τροφή %d -> %d, ξύλο %d -> %d· '
              'σε %d καρέ: φορτίο %s, ζημιά σπαθοφόρου %d (εχθρού %d)'
              % (v0t[0], v1t[0], v0t[1], v1t[1], kt + 1, cm, st[5], st[24 + 5]))
     slot3 = open(os.path.join(M4.M.ROOT, 'data', 'c5_slot3.bin'), 'rb').read()

@@ -31,7 +31,8 @@ MAX_CAM_Y   equ 623
 ; Όλος ο πίνακας πλήκτρων (γραμμές 0-9) στο keyrows, ΜΙΑ φορά ανά καρέ:
 ; η ρύθμιση του PSG/PPI γίνεται μία φορά, όχι ανά γραμμή.
 read_matrix:
-        ld bc,#F40E             ; PSG: καταχωρητής 14 (θύρα A)
+        di                      ; η διακοπή γράφει το AY (sound.asm, M21):
+        ld bc,#F40E             ; όχι ανάμεσα (όλοι οι καλούντες με ei)             ; PSG: καταχωρητής 14 (θύρα A)
         out (c),c
         ld bc,#F6C0
         out (c),c
@@ -56,6 +57,7 @@ read_matrix:
         out (c),c
         ld bc,#F600
         out (c),c
+        ei
         ret
 
 ; A = γραμμή του πίνακα πλήκτρων -> A = τα bits της, 1 = πατημένο (από το
@@ -1231,6 +1233,55 @@ mirror_column:
         jp nz,.row
         ld a,RAM_BASE
         jp setram
+
+; B = γραμμή, C = byte, D = πλάτος, E = ύψος: το ορθογώνιο από τον καθρέφτη
+; ξανά στην οθόνη (M20: το κλείσιμο ενός μενού, game/ui.asm).
+mirror_rect:
+        push bc
+        ld a,RAM_BG
+        call setram
+        pop bc
+.y:     push bc
+        push de
+        ld l,b
+        ld h,0
+        add hl,hl
+        push de
+        ld de,line_addr
+        add hl,de
+        pop de
+        ld a,(hl)
+        inc hl
+        ld h,(hl)
+        add a,c
+        ld l,a
+        call c,mr_wrap
+.x:     push hl
+        res 7,h
+        ld a,(hl)
+        pop hl
+        ld (hl),a
+        inc l
+        call z,mr_wrap
+        dec d
+        jr nz,.x
+        pop de
+        pop bc
+        inc b
+        dec e
+        jr nz,.y
+        ld a,RAM_BASE
+        jp setram
+; HL: το επόμενο byte πέρασε τα 256 — μέσα στο ίδιο κομμάτι των 2 KB.
+mr_wrap:
+        inc h
+        ld a,h
+        and 7
+        ret nz
+        ld a,h
+        sub 8
+        ld h,a
+        ret
 
 ; A = y: 8 ολόκληρες γραμμές στον καθρέφτη.
 mirror_rows:

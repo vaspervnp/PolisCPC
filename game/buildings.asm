@@ -861,7 +861,9 @@ tw_fire:
         add hl,de
         djnz .f
         ret
-.got:   ld a,(tw_i)
+.got:   ld a,FX_SHOOT           ; ο ήχος (M21)
+        call snd_bld
+        ld a,(tw_i)
         ld (hl),a
         inc hl
         ld a,(tw_b)
@@ -932,7 +934,9 @@ age_load:
 ; C0 και NC.
 bcopy_to:
         ld (BC_DST),a
-        rst 8
+        di                      ; (M21: η διακοπή ξαναβάζει το ram_now — όχι
+        rst 8                   ; μέσα στην αντιγραφή)
+        ei
         ret
 
 ; Μετά το age_apply: όσα κτίρια άλλαξαν εικόνα (έτοιμα, ο τύπος τους στο
@@ -982,6 +986,8 @@ age_step:
 ; που στέκεται κοντά (sq_join, M15), αλλιώς σε ελεύθερη θέση του πίνακα
 ; (ομάδα TEAM_FREE). Carry αν δεν υπάρχει θέση ή πλακίδιο.
 bld_spawn:
+        ld a,FX_NEW             ; ο ήχος (M21: μόνο μέσα στην οθόνη)
+        call snd_bld
         ld a,(iy+B_TYPE)
         call bt_hl
         ld de,BT_UNIT
@@ -1161,7 +1167,14 @@ bld_pick:
         jr nc,.n
         ld a,b
         ld (sel_bld),a
-        ret
+        ld a,(iy+B_OWN)         ; δικό σου, έτοιμο: το μενού του (M20)
+        or a
+        ret nz
+        ld a,(iy+B_ST)
+        or a
+        ret z
+        ld a,MK_BLD
+        jp um_open
 .n:     call bnext
         inc b
         ld a,b

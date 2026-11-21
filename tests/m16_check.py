@@ -19,7 +19,7 @@
 7. ΟΧΙ ΔΙΚΟΥΣ. Οι δικοί μας χωρικοί δίπλα του: ούτε ένα χτύπημα.
 8. ΤΟΥ ΑΝΤΙΠΑΛΟΥ. Ο ίδιος πύργος του αντιπάλου (B_OWN = 1): χτυπάει δικό
    μας χωρικό.
-9. ΣΙΔΗΡΟΥ. Στην Εποχή του Σιδήρου, U στον πύργο (Βαλλιστική) και στην
+9. ΣΙΔΗΡΟΥ. Στην Εποχή του Σιδήρου, RESEARCH στον πύργο (Βαλλιστική) και στην
    ακαδημία (Σιδερένια δόρατα, μετά τη Φάλαγγα): η ζημιά των πύργων του
    παίκτη 5 -> 9, του οπλίτη 10 -> 14.
 10. ΒΑΛΛΙΣΤΙΚΗ. Οι βολές του πύργου μετά: ζημιά 9-16.
@@ -38,6 +38,7 @@ import m9_check as M9                           # noqa: E402
 import make_bank6 as MB                         # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 
 C7_HP, C7_ORD = 0x7E00, 0x7F00
 U_TEAM, U_LOOK, U_SY = 28, 16, 13
@@ -96,7 +97,7 @@ def main():
 
     v = M6.VILLAGERS[0]
     M6.click_unit(g, v)
-    M7.press(g, 'w')
+    UM.build(c, 'tower')
     g.move_cursor(*M6.tile_cursor(g, *TOWER))
     M7.press(g, CPCMOD.KEY_RETURN, 1)
     tw = [b for b in M7.blds(c) if b['type'] == 'tower']
@@ -197,7 +198,7 @@ def main():
     st0 = S.c7_read(c, sym['STATS'] + 17)[0]
     for b in (slot, acad):
         c.poke(sym['SEL_BLD'], b)
-        M7.press(g, 'u')
+        UM.research(c)
     for t in range(1500):
         g.tick(1)
         if c.peek(sym['RES_N']) == 0:
@@ -207,7 +208,7 @@ def main():
     rd = S.c7_read(c, sym['RES_DONE'], 2)
     g.report('σιδήρου', (hit0, hit1, st0, st1) == (TW_DMG, TW_DMG + 4, 10, 14)
              and rd[1] & 0xC0 == 0xC0,
-             'U στον πύργο και στην ακαδημία: σε %d καρέ ζημιά πύργου %d -> '
+             'RESEARCH στον πύργο και στην ακαδημία: σε %d καρέ ζημιά πύργου %d -> '
              '%d, οπλίτη %d -> %d' % (t + 1, hit0, hit1, st0, st1))
     e2 = free_slot(c)
     put(c, e2, i0 + 7, j0 + 1, 1)

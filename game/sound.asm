@@ -1,84 +1,62 @@
-; sound.asm — ο ήχος (M12). Στον κύριο κώδικα από το M14 (ως τότε στην C7,
-; που γέμισε). Τον καλεί ΜΟΝΟ η C7 (hit, ζημιά κτιρίου, proj_on), άρα τρέχει
-; με την C7 στο #4000: εκεί διαβάζει τα κτίρια (brec_iy).
-
-; ------------------------------------------------------------ ήχος (M12)
-
-; Τέσσερα εφέ στο AY, ΟΛΑ με την περιβάλλουσα του chip (σχήμα 0: πέφτει και
-; σβήνει): μία εγγραφή καταχωρητών και τίποτα ανά καρέ. Ένα τη φορά· νέο
-; παίζει αν είναι ίσης ή μεγαλύτερης προτεραιότητας, ή αν τελείωσε το
-; προηγούμενο (snd_t, καρέ μονάδων). Οι τρεις έντασεις γράφονται πάντα: ένα
-; κανάλι που έμεινε στην περιβάλλουσα θα ξαναχτυπούσε με το νέο εφέ.
+; sound.asm — ο ήχος: η μουσική και τα εφέ (M12· από το M21 στη διακοπή).
+; Στον κύριο κώδικα: τον καλούν η διακοπή (snd_isr), η C7 (hit, ζημιά
+; κτιρίου, βέλη, proj_on), η σελίδα του HUD και το μενού.
 ;
-;   κλικ        το SPACE (επιλογή): ψηλός τόνος, A, ~25 ms
-;   χτύπημα     μονάδα ή κτίριο που χτυπιέται: θόρυβος, B, ~60 ms
-;   κτίριο      του παίκτη έτοιμο: τόνος, C, ~250 ms
-;   επίθεση     στον παίκτη, το πολύ μία στα SND_ALERT καρέ: χαμηλός τόνος
-;               με θόρυβο, A, ~0,6 s
+; ΜΟΝΟ Η ΔΙΑΚΟΠΗ ΓΡΑΦΕΙ ΣΤΟ AY (στο VSYNC, 50 Hz). Το πληκτρολόγιο
+; (read_matrix) περνάει κι αυτό από τις θύρες του AY: το διαβάζει με di.
+; Το mus_play / mus_stop (που μπορεί να τρέξουν με τις διακοπές κλειστές,
+; στο start) γράφουν με psg_lock = 1: η διακοπή χάνει εκείνο το καρέ.
 ;
-; Το R7 κρατάει πάντα τα bits 6-7 στο 0: η θύρα A του AY είναι είσοδος (το
-; πληκτρολόγιο, read_matrix).
-SND_CLICK   equ 0
-SND_HIT     equ 1
-SND_BUILD   equ 2
-SND_ALERT_S equ 3
-SND_ALERT   equ 250             ; καρέ μονάδων (10 s) ανάμεσα σε ειδοποιήσεις
+; ΚΑΝΑΛΙΑ. A: η μελωδία· B: το μπάσο (game/player.asm)· C: τα εφέ
+; (sound_fx.asm, fx_tick), με τόνο ή θόρυβο. Το R7 (fx_r7) γράφεται σε κάθε
+; καρέ: A και B τόνος, τα bits του C από το εφέ, τα 6-7 πάντα 0 (η θύρα A
+; του AY είναι είσοδος: το πληκτρολόγιο).
+;
+; Ο PLAYER ΕΙΝΑΙ ΔΥΟ ΦΟΡΕΣ (player.asm): στο μενού (mn_mus, με τη μουσική
+; του, στο MENU_AT) και στη σελίδα του HUD (hud_mus, με τη μουσική του
+; παιχνιδιού και τα εφέ, sound_fx.asm). Ο κύριος κώδικας δεν χωράει άλλο.
+; Η διακοπή καλεί όποιον δείχνει το mus_vec, με την C0 στο #4000 (ram_now:
+; ποια τράπεζα να ξαναβάλει μετά — setram).
+;
+; ΤΑ ΕΦΕ (M21). Μόνο ό,τι γίνεται ΜΕΣΑ στην οθόνη: το snd_at δίνει από τη
+; θέση στον κόσμο πόσο μακριά είναι από το κέντρο (εκτός: τίποτα), και η
+; ένταση του εφέ πέφτει με την απόσταση. Από όσα ζητήθηκαν σε ένα καρέ
+; παίζει το πιο δυνατό, και μόνο αν είναι πιο δυνατό από ό,τι ακούγεται
+; ήδη στο C.
+FX_CLICK    equ 0               ; το SPACE (όχι στον κόσμο: πάντα)
+FX_HIT      equ 1               ; μονάδα που χτυπιέται
+FX_BHIT     equ 2               ; κτίριο που χτυπιέται
+FX_SHOOT    equ 3               ; βέλος (τοξότης, πύργος)
+FX_DONE     equ 4               ; κτίριο έτοιμο
+FX_NEW      equ 5               ; νέα μονάδα από κτίριο
 
-; A = εφέ. Κρατάει BC, DE, HL, IX, IY.
-snd_play:
-        push hl
-        push de
-        push bc
-        ld l,a
-        ld h,0
-        ld de,snd_pri
-        add hl,de
-        ld b,(hl)               ; η προτεραιότητά του
-        ld e,a
-        ld a,(snd_t)
+; Από τη διακοπή (screen.asm), στο VSYNC: AF και BC είναι ήδη φυλαγμένοι.
+snd_isr:
+        ld a,(psg_lock)
         or a
-        jr z,.go
-        ld a,(snd_cur)
-        cp b
-        jr c,.go
-        jr nz,.out              ; παίζει κάτι σημαντικότερο
-        ld a,e                  ; ίσης: όχι ξανά αν μόλις άρχισε (M14: στη
-        ld hl,snd_len           ; μάχη, 9 καταχωρητές σε κάθε χτύπημα)
-        call tab_a
-        ld hl,snd_t
-        cp (hl)
-        jr z,.out
-.go:    ld a,b
-        ld (snd_cur),a
-        ld a,e
-        ld hl,snd_len
-        call tab_a
-        ld (snd_t),a
-        ld a,e                  ; HL = snd_fx + 18 x A
-        add a,a
-        add a,a
-        add a,a
-        add a,e
-        ld l,a
-        ld h,0
-        add hl,hl
-        ld de,snd_fx
-        add hl,de
-        ld b,9                  ; 9 ζεύγη (καταχωρητής, τιμή)
-.w:     ld a,(hl)
-        inc hl
-        ld c,(hl)
-        inc hl
-        push bc
+        ret nz
+        push de
+        push hl
+        push ix
+        ld a,(fx_r7)
+        ld c,a
+        ld a,7
         call psg_w
-        pop bc
-        djnz .w
-.out:   pop bc
-        pop de
+        ld a,(mus_vec + 1)
+        or a
+        jr z,.x
+        ld bc,GA * 256 + RAM_BASE
+        out (c),c
+        call mus_jp
+        ld a,(ram_now)
+        ld b,GA
+        out (c),a
+.x:     pop ix
         pop hl
+        pop de
         ret
 
-; A = καταχωρητής του AY, C = τιμή.
+; A = καταχωρητής του AY, C = τιμή. Κρατάει DE, HL.
 psg_w:  ld b,#F4
         out (c),a
         ld b,#F6
@@ -95,99 +73,184 @@ psg_w:  ld b,#F4
         out (c),a
         ret
 
-; Από το hit και τη ζημιά κτιρίου: A = η ομάδα του θύματος. Χτύπημα, και
-; στον παίκτη και ειδοποίηση (αν πέρασαν SND_ALERT καρέ). Κρατάει όλα εκτός
-; από AF.
-snd_struck:
-        and #7F
-        jr nz,.hit
-        ld a,(snd_al)
-        or a
-        jr nz,.hit
-        ld a,SND_ALERT
-        ld (snd_al),a
-        ld a,SND_ALERT_S
-        jp snd_play
-.hit:   ld a,SND_HIT
-        jp snd_play
-
-; Μία φορά ανά καρέ μονάδων (proj_on): οι μετρητές, το SPACE, το V (η
-; αποθήκευση: save_req), και τα κτίρια του παίκτη που έγιναν έτοιμα.
-snd_tick:
-        push iy
-        call .go
-        pop iy
-        ret
-.go:    ld hl,snd_t
+; HL = κεφαλίδα τραγουδιού, DE = ο player του (mn_mus.tick / hud_mus.tick).
+; Από τον κύριο κώδικα· η διακοπή δεν τον καλεί ώσπου να γραφτούν όλα.
+mus_play:
+        call mus_stop
         ld a,(hl)
-        or a
-        jr z,.t
-        dec (hl)
-.t:     ld hl,snd_al
-        ld a,(hl)
-        or a
-        jr z,.k
-        dec (hl)
-.k:     ld a,(keyrows + 6)      ; V: σώσε την παρτίδα (main.asm, save_go)
-        and #80
-        ld hl,snd_vp
+        inc hl
+        ld (mus_step),a
         ld c,(hl)
-        ld (hl),a
-        jr z,.sp
-        cp c
-        jr z,.sp
+        inc hl
+        ld b,(hl)
+        inc hl
+        ld (mus_ch),bc          ; A: ptr και αρχή
+        ld (mus_ch + 4),bc
+        ld c,(hl)
+        inc hl
+        ld b,(hl)
+        ld (mus_ch + 8),bc      ; B
+        ld (mus_ch + 12),bc
         ld a,1
-        ld (save_req),a
-.sp:    ld a,(keyrows + 5)      ; SPACE: γραμμή 5, bit 7
+        ld (mus_ch + 2),a
+        ld (mus_ch + 10),a
+        ld (mus_clk),a
+        ld (mus_vec),de
+        ret
+
+; Σιωπή: η διακοπή αφήνει τον player (το μενού φεύγει από τη μνήμη), οι
+; εντάσεις των A, B στο 0. Κρατάει DE, HL.
+mus_stop:
+        xor a
+        ld (mus_vec + 1),a
+        ld c,a
+        inc a
+        ld (psg_lock),a
+        ld a,8
+        call psg_w
+        ld a,9                  ; (ο C μένει 0: psg_w)
+        call psg_w
+        xor a
+        ld (psg_lock),a
+        ret
+
+; ------------------------------------------------------------ τα εφέ
+
+; HL = WX, DE = WY (κόσμος) -> carry αν είναι εκτός οθόνης, αλλιώς A =
+; πόσο μακριά από το κέντρο (|dx| / 8 + |dy| / 16, 0-8). Κρατάει B.
+snd_at: push bc
+        ld bc,(cam_x)
+        or a
+        sbc hl,bc
+        ld a,h
+        or a
+        jr nz,.out
+        ld a,l
+        cp 80
+        jr nc,.out
+        sub 40
+        jr nc,.x
+        neg
+.x:     rrca
+        rrca
+        rrca
+        and 7
+        ld c,a
+        ex de,hl
+        ld de,(cam_y)
+        or a
+        sbc hl,de
+        ld a,h
+        or a
+        jr nz,.out
+        ld a,l
+        cp 144
+        jr nc,.out
+        sub 72
+        jr nc,.y
+        neg
+.y:     rrca
+        rrca
+        rrca
+        rrca
+        and 15
+        add a,c                 ; (NC: ως 15)
+        pop bc
+        ret
+.out:   pop bc
+        scf
+        ret
+
+; A = εφέ στη θέση της μονάδας IY / της μονάδας IX / του κτιρίου IY.
+; Κρατάει όλα εκτός AF.
+snd_unit:
+        push hl
+        push de
+        push bc
+        ld l,(iy+U_WX)
+        ld h,(iy+U_WX+1)
+        ld e,(iy+U_WY)
+        ld d,(iy+U_WY+1)
+        jr snd_pos
+snd_ix: push hl
+        push de
+        push bc
+        ld l,(ix+U_WX)
+        ld h,(ix+U_WX+1)
+        ld e,(ix+U_WY)
+        ld d,(ix+U_WY+1)
+        jr snd_pos
+snd_bld:
+        push hl
+        push de
+        push bc
+        ld l,(iy+B_WX)
+        ld h,(iy+B_WX+1)
+        ld e,(iy+B_WYB)
+        ld d,(iy+B_WYB+1)
+snd_pos:
+        ld c,a
+        call snd_at
+        jr c,.no
+        ld b,a
+        ld a,c
+        call snd_req
+.no:    pop bc
+        pop de
+        pop hl
+        ret
+
+; A = εφέ, B = απόσταση από το κέντρο: η ένταση του, και αν είναι η
+; δυνατότερη του καρέ, το επόμενο εφέ (snd_pf, snd_pv). Κρατάει DE, HL.
+snd_req:
+        push hl
+        ld c,a
+        ld hl,fx_vol            ; (μέσα σε μία σελίδα)
+        add a,l
+        ld l,a
+        ld a,(hl)               ; η ένταση στο κέντρο
+        sub b
+        jr c,.no
+        jr z,.no
+        ld hl,snd_pv
+        cp (hl)
+        jr c,.no
+        jr z,.no
+        ld b,a
+        ld a,c
+        ld (snd_pf),a           ; πρώτα το εφέ, μετά η ένταση (η διακοπή
+        ld (hl),b               ; διαβάζει την ένταση)
+.no:    pop hl
+        ret
+
+fx_vol:     db 9, 13, 12, 11, 12, 11        ; η ένταση στο κέντρο (FX_*)
+        assert (fx_vol & 255) <= 250, 'fx_vol: one page'
+
+
+; Μία φορά ανά καρέ μονάδων (proj_on): το SPACE κάνει κλικ.
+snd_tick:
+        ld a,(keyrows + 5)      ; SPACE: γραμμή 5, bit 7
         and #80
         ld hl,snd_kp
         ld c,(hl)
         ld (hl),a
-        jr z,.b
-        cp c
-        ld a,SND_CLICK
-        call nz,snd_play
-.b:     ld c,0                  ; τα έτοιμα κτίρια του παίκτη
-        ld a,(bld_top)
-        or a
-        jr z,.cmp
-        ld b,a
-.l:     ld a,b
-        dec a
-        push bc
-        call brec_iy
-        pop bc
-        ld a,(iy+B_TYPE)
-        inc a
-        jr z,.n
-        ld a,(iy+B_OWN)
-        or a
-        jr nz,.n
-        ld a,(iy+B_ST)
-        or a
-        jr z,.n
-        inc c
-.n:     djnz .l
-.cmp:   ld hl,snd_nb
-        ld a,(hl)
-        ld (hl),c
-        cp 255                  ; η πρώτη φορά: μόνο μετράει
         ret z
         cp c
-        ret nc
-        ld a,SND_BUILD
-        jp snd_play
+        ret z
+        xor a                   ; FX_CLICK, στο κέντρο
+        ld b,a
+        jr snd_req
 
-;              R      R      R      R      R      R      R      R      R13
-snd_fx: db 0,#28, 1,0,   7,#3E, 8,16,  9,0,   10,0,  11,6,   12,0,  13,0    ; κλικ
-        db 6,#0C, 7,#2F, 8,0,   9,16,  10,0,  11,14, 12,0,  2,0,   13,0    ; χτύπημα
-        db 4,#A0, 5,0,   7,#3B, 8,0,   9,0,   10,16, 11,60, 12,0,  13,0    ; κτίριο
-        db 0,#80, 1,1,   6,#1F, 7,#36, 8,16,  9,0,   10,0,  11,#90, 13,0   ; επίθεση
-snd_pri:    db 2, 1, 3, 4
-snd_len:    db 2, 2, 7, 15
-snd_t:      db 0                ; καρέ ως το τέλος του εφέ που παίζει
-snd_cur:    db 0                ; η προτεραιότητά του
-snd_al:     db 0                ; καρέ ως την επόμενη ειδοποίηση
+snd_div:    db 6                ; οι διακοπές ως το επόμενο καρέ του ήχου
+ram_now:    db RAM_BASE         ; η τράπεζα στο #4000 (setram)
+psg_lock:   db 0                ; 1: ο κύριος κώδικας γράφει / διαβάζει το AY
+mus_jp:     db #C3              ; jp ο player (mus_vec = 0: σιωπή)
+mus_vec:    dw 0
+mus_clk:    db 0                ; καρέ ως το επόμενο βήμα
+mus_step:   db 0                ; καρέ ανά βήμα
+mus_ch:     db 0, 0, 0, 0, 0, 0, 10 * 4, 1      ; A: ptr, cnt, ένταση, -,
+            db 0, 0, 0, 0, 0, 0, 9 * 4, 0       ; αρχή, V0 (τέταρτα), οκτάβα
+snd_pf:     db 0                ; το εφέ που ζητήθηκε σε αυτό το καρέ
+snd_pv:     db 0                ; η ένταση του (0: κανένα)
 snd_kp:     db 0                ; το SPACE στο προηγούμενο καρέ
-snd_vp:     db 0                ; το V στο προηγούμενο καρέ
-snd_nb:     db 255              ; τα έτοιμα κτίρια του παίκτη (255: άγνωστο)
+fx_r7:      db #3C              ; το R7: A, B τόνος· C από το εφέ

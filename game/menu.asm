@@ -22,12 +22,18 @@
 
         include "../data/menu.asm"
         include "../data/title.asm"     ; TITLE_Z
+        include "../data/music_menu.asm"
+mn_mus:                         ; ο player της μουσικής (M21)
+        include "player.asm"
 
 TUT_COOL    equ 900             ; s: το πρώτο κύμα στο tutorial
 LV_FLAG     equ UNIT_TAB        ; #A5, #5A, εκστρατεία, πίστα (το units_init
                                 ; το σβήνει)
 
 menu:
+        ld hl,mus_menu          ; η μουσική του μενού (sound.asm, M21: στη
+        ld de,mn_mus            ; διακοπή — το mn_keys ανοίγει τις διακοπές)
+        call mus_play
         ld hl,LV_FLAG           ; η επόμενη πίστα της εκστρατείας (mod_camp)
         ld a,(hl)
         ld (hl),0
@@ -313,6 +319,7 @@ mn_text:
 ; -> NZ και τα πλήκτρα στο keyrows όταν πατήθηκε κάποιο του μενού που δεν
 ; κρατιόταν ήδη (βελάκια, ENTER, COPY, RETURN, SPACE).
 mn_keys:
+        ei                      ; (η μουσική· το disk_load / dzx0 τις κλείνουν)
         call wait_vsync
         call read_matrix
         ld a,(keyrows + 0)      ; πάνω (0), δεξιά (1), κάτω (2), ENTER (6)
@@ -342,7 +349,8 @@ mn_keys:
 
 ; Ως να αφεθούν όλα: αλλιώς το SPACE θα ήταν και το πρώτο κλικ του
 ; παιχνιδιού.
-mn_rel: call wait_vsync
+mn_rel: ei
+        call wait_vsync
         call read_matrix
         ld a,(keyrows + 0)
         ld hl,keyrows + 1

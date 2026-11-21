@@ -52,7 +52,11 @@ class Game:
         self.ok = True
 
     def tick(self, n=1):
+        import ui_menu as UM
         for _ in range(n):
+            if UM.is_open(self.c):      # (M20: μενού ανοιχτό — κανένα καρέ
+                self.c.run_frames(2)    # μονάδων να μετρηθεί)
+                continue
             cam = M2.cam(self.c, self.sym)
             self.times.append(M3.tick_time(self.c, self.sym))
             self.scrolled.append(M2.cam(self.c, self.sym) != cam)

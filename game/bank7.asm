@@ -770,8 +770,8 @@ atk_pose:
 hit:    ld a,(iy+U_TEAM)        ; ο αντίπαλος χτυπήθηκε: προκλήθηκε
         dec a
         call z,ai_prov
-        ld a,(iy+U_TEAM)        ; ο ήχος, και η ειδοποίηση (M12)
-        call snd_struck
+        ld a,FX_HIT             ; ο ήχος (M21: μόνο μέσα στην οθόνη)
+        call snd_unit
         ld l,(iy+U_IDX)
         ld h,C7_HP >> 8
 .a:     ld a,(hl)
@@ -863,7 +863,9 @@ proj_new:
         jr nz,.f
         scf
         ret
-.got:   ld a,(ix+U_TGT)
+.got:   ld a,FX_SHOOT           ; ο ήχος (M21)
+        call snd_ix
+        ld a,(ix+U_TGT)
         ld (hl),a
         inc hl
         ld a,(ix+U_IDX)         ; ο τοξότης (το C είναι ο μετρητής)
@@ -1532,34 +1534,38 @@ done_a: ld hl,(res_done)
         and 1
         ret
 
-; U: έρευνα στο επιλεγμένο κτίριο.
-res_start:
+; ΤΟ ΜΕΝΟΥ ΤΟΥ ΚΤΙΡΙΟΥ (M20, game/ui.asm): οι τεχνολογίες του επιλεγμένου
+; κτιρίου που γίνονται τώρα (res_list) και η έρευνα μίας (res_go). Ως τότε
+; το U ερευνούσε την πρώτη (res_start).
+
+; -> IY = το επιλεγμένο κτίριο, έτοιμο, του παίκτη· αλλιώς carry.
+res_bld:
         ld a,(sel_bld)
         cp 255
+        scf
         ret z
         call brec_iy
-        ld a,(iy+B_ST)          ; έτοιμο, του παίκτη
+        ld a,(iy+B_ST)
         or a
+        scf
         ret z
         ld a,(iy+B_OWN)
         or a
-        ret nz
-        ld a,(sel_bld)
-        call res_hl
-        ld a,(hl)
-        inc a
-        ret nz                  ; ερευνά ήδη
-        ld c,0
-.t:     push bc
-        ld a,c
+        ret z
+        scf
+        ret
+
+; IY = κτίριο, C = τεχνολογία -> NC αν γίνεται εδώ τώρα (ο τύπος, η εποχή,
+; το προαπαιτούμενο, όχι ήδη), με HL -> το κόστος της. Κρατάει BC.
+res_av: ld a,c
         call tech_hl
         ld a,(iy+B_TYPE)
         cp (hl)
-        jr nz,.n
+        jr nz,.no
         inc hl
         ld a,(hud_val + 10)     ; η εποχή
         cp (hl)
-        jr c,.n
+        ret c
         inc hl
         ld a,(hl)               ; το προαπαιτούμενο
         cp 255
@@ -1567,16 +1573,74 @@ res_start:
         push hl
         call done_a
         pop hl
-        jr z,.n
+        jr z,.no
 .p:     ld a,c
         push hl
         call done_a
         pop hl
-        jr nz,.n
-        inc hl                  ; το κόστος
-        call pay16
+        jr nz,.no
+        inc hl
+        or a
+        ret
+.no:    scf
+        ret
+
+; -> UI_T: πλήθος, η τεχνολογία που ερευνάται (255 καμία), και ανά μία που
+; γίνεται: ο αριθμός της, το κόστος (4 dw).
+res_list:
+        xor a
+        ld (UI_T),a
+        call res_bld
+        ret c
+        ld a,(sel_bld)
+        call res_hl
+        ld a,(hl)
+        ld (UI_T + 1),a
+        ld c,0
+.t:     call res_av
         jr c,.n
+        push bc
+        push hl
+        ld hl,UI_T
+        ld a,(hl)
+        inc (hl)
+        ld e,a                  ; UI_T + 2 + 9 n
+        add a,a
+        add a,a
+        add a,a
+        add a,e
+        add a,2
+        ld e,a
+        ld d,0
+        add hl,de
+        ld (hl),c
+        inc hl
+        ex de,hl
+        pop hl
+        ld bc,8
+        ldir
         pop bc
+.n:     inc c
+        ld a,c
+        cp T_N
+        jr nz,.t
+        ret
+
+; C = τεχνολογία (το far7 κρατάει το C): η έρευνά της στο επιλεγμένο
+; κτίριο, αν γίνεται και πληρώνεται (και το κτίριο δεν ερευνά ήδη).
+res_go: call res_bld
+        ret c
+        ld a,(sel_bld)
+        call res_hl
+        ld a,(hl)
+        inc a
+        ret nz                  ; ερευνά ήδη
+        call res_av
+        ret c
+        push bc
+        call pay16
+        pop bc
+        ret c
         ld a,(sel_bld)
         call res_hl
         ld (hl),c
@@ -1586,12 +1650,6 @@ res_start:
         ld (hl),0
         ld hl,res_n
         inc (hl)
-        ret
-.n:     pop bc
-        inc c
-        ld a,c
-        cp T_N
-        jr nz,.t
         ret
 
 ; HL = 4 x dw κόστος: αν τα έχεις, πληρώνει (και η μπάρα). Carry αν όχι.
@@ -2145,8 +2203,8 @@ bld_hit:
         sbc hl,bc
         ld (c_dy),hl
         call atk_pose
-        ld a,(iy+B_OWN)         ; ο ήχος, και η ειδοποίηση (M12)
-        call snd_struck
+        ld a,FX_BHIT            ; ο ήχος (M21: μόνο μέσα στην οθόνη)
+        call snd_bld
         call sq_dmgb            ; η ζημιά (της ομάδας, M15)
         ld c,b
         call bidx

@@ -35,6 +35,8 @@ import m2_check as M2                           # noqa: E402
 import m5_check as M5                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
+import ui_menu as UM                            # noqa: E402
+import make_bank6 as MB                         # noqa: E402
 import scene as S                               # noqa: E402
 import cpc as CP                                # noqa: E402
 
@@ -375,10 +377,12 @@ class Player:
             return False
         self.look(*M5.unit_tile(u))
         if not self.click_unit(k):
-            self.press(CP.KEY_ESC)
             return False
         self.tick(4)
-        self.press(key)
+        self.press(CP.KEY_RETURN)           # πάνω στον χωρικό: BUILD (M20)
+        typ = [t[1] for t in MB.TYPES].index(key.upper())
+        if not UM.choose(self.c, UM.MA_BUILD, typ):
+            return False
         self.tick(6)
         return self.at_tile(*tile)
 
@@ -389,8 +393,11 @@ class Player:
         self.tick(2)
         self.c.key_up(' ')
         self.tick(6)
-        for _ in range(n):
-            self.press('t')
+        for k in range(n):                  # το μενού του (M20): TRAIN
+            if k == 0:
+                UM.choose(self.c, UM.MA_TRAIN)
+            else:
+                UM.train(self.c)
             self.tick(8)
 
 

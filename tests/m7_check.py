@@ -2,20 +2,22 @@
 
     python3 tests/m7_check.py [--shots]
 
-Με τα πλήκτρα του παίκτη (Q A O P, SPACE, RETURN, B R T ESC):
+Με τα πλήκτρα του παίκτη (Q A O P, SPACE, RETURN) και τα μενού (M20,
+tests/ui_menu.py):
 
 1. ΑΡΧΗ. Το Κέντρο Πόλης είναι στον χάρτη: η οθόνη είναι pixel προς pixel
    ο κόσμος του mockup με την εικόνα του (src/make_bank6.py), και η κάτοψή
    του (30..33, 58..61) είναι εμπόδιο.
-2. ΔΕΝΤΡΟ. Με τους χωρικούς της πόλης επιλεγμένους, R (σκοπευτήριο) ΔΕΝ
-   ανοίγει τοποθέτηση: θέλει στρατώνα.
-3. ΣΤΡΑΤΩΝΑΣ. B, ο κέρσορας στο (37, 61), RETURN: θεμέλιο (το έδαφος της
+2. ΔΕΝΤΡΟ. Με τους χωρικούς της πόλης επιλεγμένους, στο BUILD το
+   σκοπευτήριο είναι αχνό (δεν διαλέγεται): θέλει στρατώνα.
+3. ΣΤΡΑΤΩΝΑΣ. BUILD, BARRACKS, ο κέρσορας στο (37, 61), RETURN: θεμέλιο (το έδαφος της
    κάτοψης γίνεται χώμα), ξύλο 200 -> 75, οι χωρικοί πάνε και τον χτίζουν.
    Όταν τελειώσει: η οθόνη = ο κόσμος με Κέντρο Πόλης ΚΑΙ στρατώνα, με τις
    μονάδες από πάνω, και η κάτοψη είναι εμπόδιο.
-4. ΔΕΝΤΡΟ ΞΑΝΑ. Τώρα (με αρκετό ξύλο) το R ανοίγει τοποθέτηση (ο κέρσορας
-   γίνεται γωνία)· ESC την κλείνει.
-5. ΔΥΟ ΣΠΑΘΟΦΟΡΟΙ. Κλικ στον στρατώνα, T δύο φορές: τροφή 200 -> 130, χρυσός
+4. ΔΕΝΤΡΟ ΞΑΝΑ. Τώρα (με αρκετό ξύλο) το BUILD δίνει τοποθέτηση
+   σκοπευτηρίου (ο κέρσορας γίνεται γωνία)· το SPACE την κλείνει.
+5. ΔΥΟ ΣΠΑΘΟΦΟΡΟΙ. Κλικ στον στρατώνα (ανοίγει το μενού του), TRAIN δύο
+   φορές: τροφή 200 -> 130, χρυσός
    100 -> 70. Βγαίνουν δύο σπαθοφόροι (σετ 1, ομάδα του παίκτη): οι
    σπαθοφόροι του παίκτη +2 ανθρώπους (M15: σε ομάδα που στέκεται ως 3
    πλακίδια από τον στρατώνα, αλλιώς νέα πιόνια δίπλα του), ο πληθυσμός
@@ -35,6 +37,7 @@ import m4_check as M4                           # noqa: E402
 import m5_check as M5                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 import make_bank6 as MB                         # noqa: E402
 
@@ -172,14 +175,14 @@ def main():
     c.key_up(' ')
     g.tick(2)
     sel = {u['idx'] for u in S.units(c) if u['fl'] & S.F_SEL}
-    press(g, 'r')
+    UM.build(c, 'archery')
     g.report('δέντρο', 0 in sel and c.peek(sym['BMODE']) == 255,
-             'επιλεγμένες %d (με τους χωρικούς)· R: το σκοπευτήριο θέλει '
-             'στρατώνα — καμία τοποθέτηση' % len(sel))
+             'επιλεγμένες %d (με τους χωρικούς)· BUILD: το σκοπευτήριο θέλει '
+             'στρατώνα — αχνό, καμία τοποθέτηση' % len(sel))
 
     # ------------------------------------------------- 3. στρατώνας
     vals0 = M6.hud_vals(c, sym)
-    press(g, 'b')
+    UM.build(c, 'barracks')
     mode = c.peek(sym['BMODE'])
     g.move_cursor(*M6.tile_cursor(g, *BARRACKS))
     press(g, CPCMOD.KEY_RETURN, 1)
@@ -194,7 +197,7 @@ def main():
                 if c.peek(S.UNIT_TAB + v * S.U_SIZE + M6.U_JOB) == 4]
     g.report('θεμέλιο', mode == MB.KEYS.index('barracks') and found and
              vals1[1] == vals0[1] - 125 and builders,
-             'B -> τύπος %d· θεμέλιο στο (%d, %d), ξύλο %d -> %d, χτίζουν οι '
+             'BUILD, BARRACKS -> τύπος %d· θεμέλιο στο (%d, %d), ξύλο %d -> %d, χτίζουν οι '
              'χωρικοί %s' % (mode, i0, j0, vals0[1], vals1[1], builders))
     nav.add(i0, j0, 3)
     for k in range(60):                     # η επανασχεδίαση του θεμελίου
@@ -229,13 +232,13 @@ def main():
     c.poke(sym['HUD_VAL'] + 2, 300 & 255)   # ξύλο για σκοπευτήριο (150): το
     c.poke(sym['HUD_VAL'] + 3, 300 >> 8)    # R ελέγχει και το κόστος
     c.poke(sym['HUD_DIRTY'], c.peek(sym['HUD_DIRTY']) | 2)   # και στη μπάρα
-    press(g, 'r')
+    UM.build(c, 'archery')
     m_r = c.peek(sym['BMODE'])
-    press(g, CPCMOD.KEY_ESC)
+    UM.cancel(c)
     g.report('δέντρο', m_r == MB.KEYS.index('archery') and
              c.peek(sym['BMODE']) == 255,
-             'με στρατώνα το R ανοίγει τοποθέτηση σκοπευτηρίου, το ESC την '
-             'κλείνει')
+             'με στρατώνα το BUILD δίνει τοποθέτηση σκοπευτηρίου, το SPACE '
+             'την κλείνει')
 
     # ------------------------------------------------- 5. δύο σπαθοφόροι
     fx, fy = 2 * (i0 + 2 - (j0 + 2)) + 192, 4 * (i0 + j0 + 4) + 4  # (38, 62)
@@ -249,8 +252,8 @@ def main():
     slot = [b for b in blds(c) if b['type'] == 'barracks'][0]['slot']
     picked = c.peek(sym['SEL_BLD'])
     v0 = M6.hud_vals(c, sym)
-    press(g, 't')
-    press(g, 't')
+    UM.choose(c, UM.MA_TRAIN)           # το μενού του ανοίγει με το κλικ
+    UM.train(c)
     v1 = M6.hud_vals(c, sym)
     qn = [b for b in blds(c) if b['type'] == 'barracks'][0]['qn']
     g.tick(20)
@@ -261,7 +264,7 @@ def main():
              'κτίριο: %s' % (cd[0], cd[1], bool(marked(c))))
     g.report('ουρά', picked == slot and qn == 2 and v1[0] == v0[0] - 70 and
              v1[2] == v0[2] - 30,
-             'κλικ στον στρατώνα (θέση %d), T x 2: ουρά %d, τροφή %d -> %d, '
+             'κλικ στον στρατώνα (θέση %d), TRAIN x 2: ουρά %d, τροφή %d -> %d, '
              'χρυσός %d -> %d' % (picked, qn, v0[0], v1[0], v0[2], v1[2]))
     before = {u['idx'] for u in S.units(c)
               if c.peek(S.UNIT_TAB + u['idx'] * S.U_SIZE + 28) != 255}
@@ -369,7 +372,7 @@ def main():
     c.poke(sym['HUD_DIRTY'], c.peek(sym['HUD_DIRTY']) | 7)
     sel = M6.click_unit(g, 0)
     v = min(sel)
-    press(g, 's')
+    UM.build(c, 'storage_pit')
     pit = (31, 72)
     g.move_cursor(*M6.tile_cursor(g, *pit))
     press(g, CPCMOD.KEY_RETURN, 1)
@@ -411,21 +414,22 @@ def main():
         g.tick(2)
         c.key_up(' ')
         g.tick(2)
+        UM.close(c)                     # (το μενού του κτιριού, αν άνοιξε)
         if c.peek(sym['SEL_BLD']) == slot:
             break
     pop = M6.hud_vals(c, sym)[4]
     for k in range(3):
-        press(g, 't')
+        UM.train(c)
     q1 = [b for b in blds(c) if b['type'] == 'barracks'][0]['qn']
     free = [k for k in range(BLD_MAX) if c.peek(BLD_SLOTS[k]) == 255]
     fake_bld(c, sym, free[0], 'house')
     for k in range(3):
-        press(g, 't')
+        UM.train(c)
     q2 = [b for b in blds(c) if b['type'] == 'barracks'][0]['qn']
     g.report('πληθυσμός', q1 == max(0, min(3, 15 - pop)) and
              q2 == max(0, min(q1 + 3, QMAX, 20 - pop)),
-             'πληθυσμός %d, όριο 15: T x 3 -> ουρά %d· με ένα σπίτι (όριο 20) '
-             'T x 3 -> ουρά %d (επιλογή %d)' % (pop, q1, q2,
+             'πληθυσμός %d, όριο 15: TRAIN x 3 -> ουρά %d· με ένα σπίτι (όριο 20) '
+             'TRAIN x 3 -> ουρά %d (επιλογή %d)' % (pop, q1, q2,
                                                 c.peek(sym['SEL_BLD'])))
 
     # ------------------------------------------------- 10. 28 κτίρια
@@ -434,19 +438,19 @@ def main():
         fake_bld(c, sym, k, 'house')
     sel = M6.click_unit(g, 3)
     house = (26, 66)
-    press(g, 'h')
+    UM.build(c, 'house')
     g.move_cursor(*M6.tile_cursor(g, *house))
     press(g, CPCMOD.KEY_RETURN, 1)
     n1 = len(blds(c, None))             # (και το Κέντρο του αντιπάλου, M10)
     last = [b for b in blds(c) if b['slot'] == BLD_MAX - 1]
-    press(g, 'h')
+    UM.build(c, 'house')
     g.move_cursor(*M6.tile_cursor(g, house[0] + 3, house[1]))
     press(g, CPCMOD.KEY_RETURN, 1)
     n2 = len(blds(c, None))
     g.tick(5)
     g.report('28 κτίρια', n1 == BLD_MAX and n2 == BLD_MAX and last and
              (last[0]['i0'], last[0]['j0']) == house,
-             'με %d θέσεις γεμάτες, το H βάζει θεμέλιο στην τελευταία (%s), '
+             'με %d θέσεις γεμάτες, το BUILD HOUSE βάζει θεμέλιο στην τελευταία (%s), '
              'και το επόμενο δεν χωράει: %d κτίρια' % (BLD_MAX - 1, last and
                                                        last[0]['slot'], n2))
 

@@ -6,7 +6,7 @@
 τη μοιράζεται με τον οπλίτη (σετ 4): 12 καρέ το καθένα (src/make_edges.py,
 src/horse8.py). Ελέγχει:
 
-1. ΕΚΠΑΙΔΕΥΣΗ. T στον στάβλο: μια νέα μονάδα σετ 5, με κόστος 70 τροφή και
+1. ΕΚΠΑΙΔΕΥΣΗ. TRAIN στον στάβλο: μια νέα μονάδα σετ 5, με κόστος 70 τροφή και
    50 χρυσό, και πληθυσμό +1.
 2. ΣΧΕΔΙΑΣΗ. Το ιππικό και ένας οπλίτης που περπατάνε στην οθόνη, και ο
    κόσμος γύρω τους: pixel προς pixel όπως το scene.py (η μισή θέση: 2
@@ -29,6 +29,7 @@ import m7_check as M7                           # noqa: E402
 import m8_check as M8                           # noqa: E402
 import m9_check as M9                           # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 
 C7_HP = 0x7E00
 U_LOOK, U_SY = 16, 13
@@ -37,7 +38,7 @@ U_LOOK, U_SY = 16, 13
 def train(g, slot, want_set):
     c, sym = g.c, g.sym
     c.poke(sym['SEL_BLD'], slot)
-    M7.press(g, 't')
+    UM.train(c)
     for k in range(400):
         g.tick(1)
         new = [u for u in S.units(c) if u['set'] == want_set and
@@ -67,7 +68,7 @@ def main():
     v1 = M6.hud_vals(c, sym)
     g.report('εκπαίδευση', cav is not None and v1[0] == v0[0] - 70 and
              v1[2] == v0[2] - 50 and v1[4] == v0[4] + 1,
-             'T στον στάβλο: νέα μονάδα %s (σετ 5)· τροφή %d -> %d, χρυσός '
+             'TRAIN στον στάβλο: νέα μονάδα %s (σετ 5)· τροφή %d -> %d, χρυσός '
              '%d -> %d, πληθυσμός %d -> %d'
              % (cav and cav['idx'], v0[0], v1[0], v0[2], v1[2], v0[4], v1[4]))
     if cav is None:

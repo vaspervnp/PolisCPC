@@ -15,7 +15,7 @@ CPC 6128.
    μπάρα (γεμάτη: 6 bytes CARD_FULL).
 3. ΣΒΗΣΙΜΟ. Χωρίς επιλογή: τα δύο ψηφία κενά, η μπάρα άδεια.
 4. ΕΚΠΑΙΔΕΥΣΗ (φάση 2). Ένας στρατώνας μακριά από τους στρατιώτες της
-   πόλης (και τέσσερα σπίτια: χώρος στον πληθυσμό), T x 3: ΕΝΑ νέο πιόνι
+   πόλης (και τέσσερα σπίτια: χώρος στον πληθυσμό), TRAIN x 3: ΕΝΑ νέο πιόνι
    σπαθοφόρων με πλήθος 3 (ο δεύτερος και ο τρίτος μπαίνουν στην ομάδα του
    πρώτου, που στέκεται δίπλα)· ο πληθυσμός +3.
 5. ΓΕΜΑΤΗ. Η ομάδα με πλήθος SQ_MAX: ο επόμενος γίνεται νέο πιόνι του 1.
@@ -39,7 +39,7 @@ CPC 6128.
     της φεύγει.
 15. ΠΕΡΙΣΣΕΥΟΥΝ. Οι 12 στους 13: μπαίνουν 7 (20), οι 5 μένουν, χωρίς
     εντολή.
-16. ΧΩΡΙΣΜΟΣ. Η ομάδα των 20 επιλεγμένη, X: 10 και 10, η νέα στο διπλανό
+16. ΧΩΡΙΣΜΟΣ. Η ομάδα των 20 επιλεγμένη, SPLIT SQUAD: 10 και 10, η νέα στο διπλανό
     πλακίδιο, του ίδιου σετ.
 17. ΠΛΗΘΥΣΜΟΣ. Ούτε η ένωση ούτε ο χωρισμός τον αλλάζουν.
 18. ΚΥΜΑ (φάση 5, νέα παρτίδα με τον αντίπαλο του M10). Το πρώτο κύμα: τον
@@ -62,6 +62,7 @@ import make_map as MM                           # noqa: E402
 import m5_check as M5                           # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 
 SQ_N, SQ_MAX = 0x3F00, 20
 HUD_PAGE = 0x4000
@@ -103,14 +104,14 @@ def people(c):
 
 
 def train(g, slot, n):
-    """T x n στον στρατώνα και αναμονή ως το τέλος της ουράς -> οι νέες
+    """TRAIN x n στον στρατώνα και αναμονή ως το τέλος της ουράς -> οι νέες
     θέσεις του πίνακα (δείκτες)."""
     c, sym = g.c, g.sym
     before = {k for k in range(S.UNITS)
               if c.peek(S.UNIT_TAB + k * S.U_SIZE + U_TEAM) != 255}
     c.poke(sym['SEL_BLD'], slot)
     for _ in range(n):
-        M7.press(g, 't')
+        UM.train(c)
     for _ in range(400 * n):
         g.tick(1)
         if c.peek(sym['BQ_TOT']) == 0:
@@ -142,7 +143,7 @@ def phase2(g):
     a = new[0] if len(new) == 1 else None
     g.report('εκπαίδευση', a is not None and S.unit(c, a)['set'] == 1 and
              c.peek(SQ_N + a) == 2 and pop1 == pop0 + 3,
-             'T x 3: νέα πιόνια %s, πλήθος %s· πληθυσμός %d -> %d'
+             'TRAIN x 3: νέα πιόνια %s, πλήθος %s· πληθυσμός %d -> %d'
              % (new, [c.peek(SQ_N + k) + 1 for k in new], pop0, pop1))
 
     if a is not None:
@@ -370,7 +371,7 @@ def phase4(g, away):
 
     sel = M6.click_unit(g, B)
     before = {k for k in range(S.UNITS) if team(c, k) != 255}
-    M7.press(g, 'x')
+    UM.split(c)
     g.tick(5)
     new = [k for k in range(S.UNITS) if k not in before and team(c, k) == 0]
     t0, t1 = M5.unit_tile(S.unit(c, B)), new and M5.unit_tile(S.unit(c, new[0]))
@@ -378,7 +379,7 @@ def phase4(g, away):
     g.report('χωρισμός', sel == {B} and len(new) == 1 and cnt(c, B) == 10 and
              cnt(c, new[0]) == 10 and S.unit(c, new[0])['set'] == 1 and
              max(abs(a - b) for a, b in zip(t0, t1)) <= 1,
-             'X στην %d (20): %d, νέα %s με %s, στο %s (η παλιά στο %s)'
+             'SPLIT SQUAD στην %d (20): %d, νέα %s με %s, στο %s (η παλιά στο %s)'
              % (B, cnt(c, B), new, [cnt(c, k) for k in new], t1, t0))
     g.report('πληθυσμός', all(p == q == pop0 for p, q in pops),
              'μπάρα / άθροισμα: %s (πριν %d)' % (pops, pop0))

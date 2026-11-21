@@ -30,6 +30,8 @@ import m3_check as M3                           # noqa: E402
 import m4_check as M4                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
+import ui_menu as UM                            # noqa: E402
+import make_bank6 as MB                         # noqa: E402
 import m12_check as M12                         # noqa: E402
 import scene as S                               # noqa: E402
 import cpc as CP                                # noqa: E402
@@ -106,8 +108,8 @@ class Bot:
     # ---------------------------------------------------- χρόνος, κατάσταση
     def tick(self, n=1):
         for _ in range(n):
-            if self.c.peek(self.sym['GAME_END']):
-                self.c.run_frames(2)
+            if self.c.peek(self.sym['GAME_END']) or UM.is_open(self.c):
+                self.c.run_frames(2)    # (M20: και με μενού ανοιχτό)
                 continue
             cam = M2.cam(self.c, self.sym)
             pend = self.pend()
@@ -261,32 +263,40 @@ class Bot:
 
     def build(self, v, key, tile):
         """-> True χτίστηκε, False η θέση δεν δέχτηκε, None ο χωρικός δεν
-        επιλέχτηκε (ξανά αργότερα)."""
+        επιλέχτηκε (ξανά αργότερα). Ο τύπος από το BUILD (M20· key: το
+        γράμμα του ως το M19)."""
         n0 = len(M7.blds(self.c))
         if not self.select_unit(v):
             return None
-        self.press(key)
+        if UM.is_open(self.c):
+            UM.close(self.c)
+        typ = [t[1] for t in MB.TYPES].index(key.upper())
+        if not UM.build(self.c, typ):
+            return False
         if not self.cursor_tile(*tile):
-            self.press(CP.KEY_ESC)
+            UM.cancel(self.c)
             return False
         self.press(CP.KEY_RETURN, 1)
         ok = len(M7.blds(self.c)) > n0
         if not ok:
-            self.press(CP.KEY_ESC)
+            UM.cancel(self.c)
         return ok
 
     def train(self, b):
         if not self.cursor_tile(b['i0'] + 1, b['j0'] + 1):
             return False
         q = b['qn']
-        self.press(' ')
-        self.press('t')
+        self.press(' ')                 # το μενού του (M20): TRAIN
+        if not UM.choose(self.c, UM.MA_TRAIN):
+            return False
         nb = [x for x in M7.blds(self.c) if x['slot'] == b['slot']]
         return bool(nb) and nb[0]['qn'] > q
 
     # ---------------------------------------------------- αποφάσεις
     def step(self):
         c = self.c
+        if UM.is_open(c):               # (M20: ένα κλικ σε κτίριο το άνοιξε)
+            UM.close(c)
         food, wood, gold, stone, pop = M6.hud_vals(c, self.sym)[:5]
         blds = M7.blds(c)
         ready = [b for b in blds if b['st']]

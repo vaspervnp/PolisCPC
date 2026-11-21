@@ -30,6 +30,7 @@ import m4_check as M4                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 import make_tutor as MT                         # noqa: E402
 import cpc as CP                                # noqa: E402
 from cpc import CPC                             # noqa: E402
@@ -169,8 +170,9 @@ def main():
     check(c, sym, 3, shots, f)
     close(c, sym)
     quiet(c, sym, 3)
-    M6.click_unit(g, 3)
-    M7.press(g, 'h')
+    M6.click_unit(g, 3)                         # RETURN πάνω του: BUILD (M20)
+    M7.press(g, CP.KEY_RETURN, 1)
+    UM.choose(c, UM.MA_BUILD, 1)                # HOUSE
     g.move_cursor(*M6.tile_cursor(g, *HOUSE))
     M7.press(g, CP.KEY_RETURN, 1)
     # ---- 4: χωρικός από το Κέντρο Πόλης
@@ -179,15 +181,16 @@ def main():
     close(c, sym)
     quiet(c, sym, 4)
     g.move_cursor(*M6.tile_cursor(g, *TC))
-    M7.press(g, ' ')
-    M7.press(g, 't')
+    M7.press(g, ' ')                            # το μενού του, TRAIN
+    UM.choose(c, UM.MA_TRAIN)
     # ---- 5: στρατώνας
     f = wait_window(c, sym)
     check(c, sym, 5, shots, f)
     close(c, sym)
     quiet(c, sym, 5)
     M6.click_unit(g, 6)
-    M7.press(g, 'b')
+    M7.press(g, CP.KEY_RETURN, 1)
+    UM.choose(c, UM.MA_BUILD, 2)                # BARRACKS
     g.move_cursor(*M6.tile_cursor(g, *BARRACKS))
     M7.press(g, CP.KEY_RETURN, 1)
     # ---- 6: σπαθοφόρος
@@ -202,7 +205,7 @@ def main():
             break
     g.move_cursor(*M6.tile_cursor(g, *BARRACKS))
     M7.press(g, ' ')
-    M7.press(g, 't')
+    UM.choose(c, UM.MA_TRAIN)
     # ---- 7: ο εχθρός· το τέλος
     f = wait_window(c, sym)
     check(c, sym, 7, shots, f)

@@ -118,7 +118,49 @@ def wait_phase(c, sym, want, limit_ms=4000):
         t += STEP_US
         if t > limit_ms * 1000:
             raise RuntimeError('phase %d δεν ήρθε σε %d ms' % (want, limit_ms))
+    ui_poke(c, sym)
     return t
+
+
+# (οι διευθύνσεις: game/main.asm — UI_S, UI_C = μετά τα HI_B, HI_C)
+UI_PARTS = [(0x7230, 'ui.bin'), (0x6D80, 'ui_a.bin'), ('HIB_END', 'ui_b.bin'),
+            ('HIC_END', 'ui_c.bin'), ('HIA_END', 'ui_d.bin'),
+            ('HUD_MUS', 'ui_e.bin'), ('FX_TICK', 'ui_f.bin'),  # ο ήχος (M21)
+            ('MUS_GAME', 'ui_g.bin')]
+
+
+def ui_syms():
+    """Οι διευθύνσεις του UI.BIN που δεν έχει το snapshot (build/ui_sym.asm,
+    από το build.sh)."""
+    out = {}
+    for line in open(os.path.join(BUILD, 'ui_sym.asm')):
+        name, _, val = line.split()
+        out[name.upper()] = int(val[1:], 16)
+    return out
+
+
+def ui_poke(c, sym):
+    """Τα μενού (M20, game/ui.asm) στις κρυφές σειρές του HUD: από τη
+    δισκέτα τα φορτώνει το start (UI.BIN) μετά το hud_init· στο snapshot των
+    ελέγχων, εδώ — μία φορά (η γραμματοσειρά, στο UI_F, είναι η υπογραφή)."""
+    us = ui_syms()
+    parts = [((sym[k] if k in sym else us[k]) if isinstance(k, str) else k,
+              open(os.path.join(BUILD, f), 'rb').read()) for k, f in UI_PARTS]
+    a, font = parts[1]
+    if c.read_ram(a, 16) == font[:16]:
+        return
+    for a, b in parts:
+        c.write_ram(a, b)
+    # η μουσική του παιχνιδιού (M21: στη δισκέτα το mus_play του start)
+    hdr = c.read_ram(us['MUS_GAME'], 5)
+    st = sym['MUS_CH']
+    for ch, ptr in ((0, hdr[1:3]), (8, hdr[3:5])):
+        c.write_ram(st + ch, ptr)
+        c.write_ram(st + ch + 4, ptr)
+        c.write_ram(st + ch + 2, [1])
+    c.write_ram(sym['MUS_STEP'], hdr[:1])
+    c.write_ram(sym['MUS_CLK'], [1])
+    c.write_ram(sym['MUS_VEC'], us['HUD_MUS'].to_bytes(2, 'little'))
 
 
 def render_at(c, sym, cam_x, cam_y):

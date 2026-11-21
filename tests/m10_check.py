@@ -50,6 +50,7 @@ import m7_check as M7                           # noqa: E402
 import m8_check as M8                           # noqa: E402
 import m9_check as M9                           # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 from cpc import KEY_RETURN                      # noqa: E402
 
 C7_ORD = 0x7F00                 # game/bank7.asm (equ: όχι στα σύμβολα)
@@ -251,11 +252,12 @@ def victory(shots):
     # ------------------------------------------------------ 9. όχι δικό σου
     hud0 = [word(c, sym['HUD_VAL'] + 2 * k) for k in range(4)]
     sel = M9.click_bld(g, (59, 28))
-    M7.press(g, 't')
+    menu = UM.is_open(c)                # (M20: όχι δικό σου, κανένα μενού)
     g.tick(5)
     q = M7.blds(c, 1)[0]['qn']
     hud1 = [word(c, sym['HUD_VAL'] + 2 * k) for k in range(4)]
-    g.report('όχι δικό', sel == etc['slot'] and q == 0 and hud1 == hud0,
+    g.report('όχι δικό', sel == etc['slot'] and q == 0 and hud1 == hud0 and
+             not menu,
              'κλικ: επιλεγμένο το %d (του αντιπάλου: %d), T: ουρά %d, μπάρα '
              '%s -> %s' % (sel, etc['slot'], q, hud0, hud1))
 

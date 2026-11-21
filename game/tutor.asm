@@ -60,6 +60,8 @@ tut_run:
         ld (tut_win),a
         inc a
         ld (redraw),a
+        ld a,255                ; το ίδιο πάτημα δεν είναι και του παιχνιδιού
+        ld (cin_prev),a         ; (input.asm: πρώτα να αφεθεί)
         ld a,(tut_step)
         cp TUT_STEPS - 1
         ret c

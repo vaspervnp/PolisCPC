@@ -1143,6 +1143,26 @@ rr----rr
 --------
 """
 
+# Η δισκέτα του SAVE GAME (M20, 2026-11-21: τα κουμπιά του HUD, mockup.BUTTONS).
+CMD_SAVE = """
+KKKKKKK-
+KiKddKiK
+KiKddKiK
+KiKKKKiK
+KiiiiiiK
+KiiiiiiK
+KiKKKKiK
+KiKyyKiK
+KiKyyKiK
+KiKKKKiK
+KiiiiiiK
+KKKKKKKK
+--------
+--------
+--------
+--------
+"""
+
 COMMANDS = [
     ('move',     'κίνηση',            CMD_MOVE,     'μονάδα'),
     ('attack',   'επίθεση',           CMD_ATTACK,   'μονάδα'),

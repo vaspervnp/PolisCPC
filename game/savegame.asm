@@ -140,9 +140,7 @@ mod_load:
 ; IX = κομμάτι: η τράπεζα του στο #4000.
 sv_bank:
         ld a,(ix+0)
-        ld b,GA
-        out (c),a
-        ret
+        jp setram               ; (M21: και το ram_now της διακοπής)
 
 ; BC = πόσα μένουν -> DE = ο buffer (sv_p), BC = min(πόσα, ό,τι χωράει).
 sv_room:

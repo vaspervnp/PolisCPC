@@ -51,7 +51,22 @@ TER = {k: i for i, (k, _, _, _) in enumerate(T.TERRAIN)}
 TER_ART = {k: a for k, _, a, _ in T.TERRAIN}
 RES_ART = {k: a for k, _, a, _, _ in T.RESOURCES}
 HUD_ART = dict([(k, a) for k, _, a in T.ICONS] +
-               [(k, a) for k, _, a, _ in T.COMMANDS])
+               [(k, a) for k, _, a, _ in T.COMMANDS] + [('save', T.CMD_SAVE)])
+
+# Τα κουμπιά του HUD (M20, 2026-11-21): 2 σειρές x 4, στη θέση των 16 του
+# σχεδίου (τα περισσότερα ήταν για λειτουργίες που δεν έγιναν). (εικονίδιο,
+# η ετικέτα στην κορυφή του χάρτη — game/ui.asm, src/make_ui.py)
+BUTTONS = [('build', 'BUILD'), ('eject', 'TRAIN'), ('research', 'RESEARCH'),
+           ('patrol', 'SPLIT SQUAD'), ('age_up', 'NEXT AGE'),
+           ('idle', 'IDLE VILLAGER'), ('save', 'SAVE GAME'),
+           ('cancel', 'CANCEL')]
+BTN_PEN, BTN_HI = 't', 'c'              # το φόντο του κουμπιού· φωτισμένο
+
+
+def btn_xy(k):
+    """Το εικονίδιο του κουμπιού k: (x, y) σε pixels οθόνης (το πλαίσιο: x-1
+    ως x+8, y ως y+16)."""
+    return 44 + (k % 4) * 28, 162 + (k // 4) * 18
 
 # Ψηφία 3x5. Στο Mode 0 είναι 6x5 μονάδες οθόνης — στενά και ευανάγνωστα.
 DIGITS = ['111101101101111', '010110010010111', '111001111100111',
@@ -438,12 +453,12 @@ def hud_background(numbers=True):
         for x in range(26, 38):
             img[181][x] = gfx.PEN['n'] if x < 35 else gfx.PEN['r']
 
-    # 16 κουμπιά, 8 στη σειρά x 2 σειρές
-    for i, (k, _, _, _) in enumerate(T.COMMANDS):
-        ox, oy = 44 + (i % 8) * 14, 162 + (i // 8) * 18
+    # τα κουμπιά (M20: BUTTONS, 2 x 4)
+    for i, (k, _) in enumerate(BUTTONS):
+        ox, oy = btn_xy(i)
         for y in range(oy, oy + 17):
             for x in range(ox - 1, ox + 9):
-                img[y][x] = gfx.PEN['t'] if i != 1 else gfx.PEN['i']
+                img[y][x] = gfx.PEN[BTN_PEN]
         gfx.stamp(img, T.hud(HUD_ART[k]), ox, oy)
     return img
 

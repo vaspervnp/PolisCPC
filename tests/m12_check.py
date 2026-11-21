@@ -2,13 +2,7 @@
 
     python3 tests/m12_check.py [--shots]
 
-ΗΧΟΣ (από το snapshot, όπως οι άλλοι έλεγχοι):
-1. ΚΛΙΚ. SPACE: το εφέ του κλικ στους καταχωρητές του AY (τόνος στο A, η
-   περιβάλλουσα).
-2. ΚΤΙΡΙΟ. Ένα ακόμα έτοιμο κτίριο του παίκτη (ο μετρητής του snd_tick
-   μηδενίζεται): το εφέ του κτιρίου (τόνος στο C).
-3. ΜΑΧΗ. Η σκηνή του M8 (6 εναντίον 6): χτυπήματα (θόρυβος στο B) και
-   ειδοποίηση επίθεσης στον παίκτη, το πολύ μία στα 10 s.
+(Ο ΗΧΟΣ ως το M20 ήταν εδώ· από το M21: tests/m21_check.py.)
 
 ΑΠΟ ΤΗ ΔΙΣΚΕΤΑ (RUN"POLIS):
 4. ΜΕΝΟΥ. Η οθόνη του μενού pixel προς pixel = η εικόνα του
@@ -54,7 +48,6 @@ SIG = b'POLIS-M12'
 STACK_LOW = 0xBF00
 FOG, FOG_LEN = 0x5F80, 1152
 C7_CODE = 0x67A0                # game/main.asm: ο κώδικας της C7 (M14: ήταν #6800)
-ALERT_GAP = 250                 # καρέ μονάδων (bank7.asm, SND_ALERT)
 ok = True
 
 
@@ -62,53 +55,6 @@ def report(name, good, what):
     global ok
     print('%-10s %-9s %s' % (name, 'OK' if good else 'ΑΠΟΤΥΧΙΑ', what))
     ok &= bool(good)
-
-
-def fx(c):
-    """Ποιο εφέ γράφτηκε τελευταίο στο AY (από το R7 του)."""
-    r = c.psg_regs()
-    return {0x3E: 'κλικ', 0x2F: 'χτύπημα', 0x3B: 'κτίριο',
-            0x36: 'επίθεση'}.get(r[7], '?'), r
-
-
-# ---------------------------------------------------------------- ήχος
-
-def sound():
-    g = M4.Game('--shots' in sys.argv)
-    c, sym = g.c, g.sym
-    g.tick(3)
-    c.key_down(' ')
-    g.tick(2)
-    c.key_up(' ')
-    g.tick(1)
-    name, r = fx(c)
-    report('ΚΛΙΚ', name == 'κλικ' and r[0] == 0x28 and r[8] == 16 and
-           r[9] == 0 and r[10] == 0 and r[11] == 6,
-           'SPACE: %s, R0 #%02X, έντασεις %s, περιβάλλουσα %d'
-           % (name, r[0], r[8:11], r[11]))
-    g.tick(5)
-    c.write_ram(sym['SND_NB'], [0])        # (sound.asm: κύρια RAM, M14)
-    g.tick(2)
-    name, r = fx(c)
-    report('ΚΤΙΡΙΟ', name == 'κτίριο' and r[4] == 0xA0 and r[10] == 16 and
-           r[8] == 0 and r[9] == 0,
-           'ένα ακόμα έτοιμο κτίριο του παίκτη: %s, R4 #%02X, έντασεις %s'
-           % (name, r[4], r[8:11]))
-    M8.setup(c, sym)
-    hits, alerts, prev_al = 0, [], 0
-    for f in range(1500):
-        g.tick(1)
-        name, r = fx(c)
-        if name == 'χτύπημα' and r[9] == 16:
-            hits += 1
-        al = c.read_ram(sym['SND_AL'], 1)[0]
-        if al > prev_al:
-            alerts.append(f)
-        prev_al = al
-    gaps = [b - a for a, b in zip(alerts, alerts[1:])]
-    report('ΜΑΧΗ', hits and alerts and all(x >= ALERT_GAP for x in gaps),
-           '%d καρέ με χτύπημα στο AY· ειδοποιήσεις στα καρέ %s (ανά >= %d)'
-           % (hits, alerts, ALERT_GAP))
 
 
 # ---------------------------------------------------------------- δισκέτα
@@ -184,10 +130,19 @@ def compare(c, sym, data):
     # ό,τι γράφει η ίδια η επανασχεδίαση / ο χρόνος / ο οδηγός: όχι παρτίδα
     allowed = {sym[k] + i for k, n in (('PHASE', 1), ('UPHASE', 1),
                                        ('INT_T', 1), ('INT_N', 1),
-                                       ('DK_RES', 7), ('HUD_DIRTY', 1))
+                                       ('DK_RES', 7), ('HUD_DIRTY', 1),
+                                       ('CAND_K', 1), ('CAND_C', 1))
                for i in range(n)}
     allowed |= {v for k, v in sym.items() if k.startswith(('RG_', 'BB_'))
                 and '.' not in k}
+    # ο ήχος (M21): η διακοπή συνεχίζει τη μουσική και τα εφέ
+    us = M.ui_syms()
+    allowed |= {sym[k] + i for k, n in (('MUS_CLK', 1), ('MUS_CH', 16),
+                                       ('SND_PV', 1), ('SND_PF', 1),
+                                       ('SND_KP', 1), ('FX_R7', 1),
+                                       ('PSG_LOCK', 1), ('SND_DIV', 1),
+                                       ('RAM_NOW', 1)) for i in range(n)}
+    allowed |= {us['FX_V4'], us['FX_DEC']}
     off, out = len(SIG), {}
     for name, bank, addr, n in segments(sym):
         saved, cur = data[off:off + n], memory(c, bank, addr, n)
@@ -223,10 +178,10 @@ def units_pos(c):
 
 
 def wait_save(c, sym):
-    """V ως την επανασχεδίαση μετά την αποθήκευση -> καρέ (50 Hz)."""
-    c.key_down('v')
-    c.run_frames(4)
-    c.key_up('v')
+    """SAVE GAME (το κουμπί του HUD, M20· ως το M19 το V) ως την
+    επανασχεδίαση μετά την αποθήκευση -> καρέ (50 Hz)."""
+    import ui_menu as UM
+    assert UM.hud_button(c, UM.HB_SAVE, leave=False), 'SAVE GAME'
     for f in range(3000):
         c.run_frames(1)
         if c.peek(sym['PHASE']) != 6:
@@ -305,7 +260,7 @@ def disk():
     screen_a = M2.decode_scrolled(c, sym)
     report('ΑΠΟΘΗΚΕΥΣΗ', blob.startswith(SIG) and
            not any(diffs.values()),
-           'V: το SAVE.BIN αρχίζει με %s· διαφορές με τη μνήμη: %s'
+           'SAVE GAME: το SAVE.BIN αρχίζει με %s· διαφορές με τη μνήμη: %s'
            % (blob[:len(SIG)], {k: len(v) if k != 'κύρια' else
                                 names(sym, v) for k, v in diffs.items()}))
 
@@ -355,13 +310,12 @@ def disk():
            n.read_ram(sym['AGE3_NAME'], 5) == b'AGE3G',
            'καθαρή δισκέτα, ΦΟΡΤΩΣΗ: νέο παιχνίδι, πόροι %s' % vals[:4])
 
-    print('ΧΡΟΝΟΣ     μέτρηση   αποθήκευση %.1f s (το V ως την οθόνη)· '
+    print('ΧΡΟΝΟΣ     μέτρηση   αποθήκευση %.1f s (το SAVE GAME ως την οθόνη)· '
           'φόρτωμα %.1f s (το RETURN ως την οθόνη, με τις εικόνες της '
           'Χαλκού)' % (t_save / 50.0, t_load / 50.0))
 
 
 def main():
-    sound()
     disk()
     print('M12', 'OK' if ok else 'ΑΠΟΤΥΧΙΑ')
     sys.exit(0 if ok else 1)

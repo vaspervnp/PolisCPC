@@ -19,7 +19,28 @@ rm -f build/polis.dsk
 # κανονικά περάσματα.
 rasm game/main.asm -DC7RAW=1 -o build/c7raw -sz > /dev/null
 rasm game/main.asm -o build/polis -s -sz
+# (M20) τα σύμβολα των μενού για το snapshot — εδώ το polis.sym είναι «τράπεζα:διεύθυνση ΟΝΟΜΑ»
+grep -E ' ((UM|HB)_[A-Z0-9_]+|HUD_MUS|FX_TICK|FX_V4|FX_DEC|MUS_GAME)$' build/polis.sym | awk '{split($1, a, ":"); print tolower($2) " equ #" a[2]}' > build/ui_sym.asm
+grep -q '^um_go ' build/ui_sym.asm || { echo 'build/ui_sym.asm: τα σύμβολα των μενού;'; exit 1; }
+cp build/polis.sym build/polis_dsk.sym
 rasm game/main.asm -DSNA=1 -o build/polis -sz -v2 -ss
+# (M21) ο κύριος κώδικας ΙΔΙΟΣ στη δισκέτα και στο snapshot: οι έλεγχοι
+# διαβάζουν τα σύμβολα του ενός και τρέχουν το άλλο (και το BOOT του πρώτου
+# περάσματος καλεί τον κύριο κώδικα)
+python3 - <<'PY'
+def syms(p):
+    out = {}
+    for line in open(p):
+        f = line.split()
+        if len(f) >= 3 and f[2] == 'B0' and not f[1].startswith('#1'):
+            v = int(f[1][1:], 16)
+            if v < 0x3F00:
+                out[f[0]] = v
+    return out
+a, b = syms('build/polis_dsk.sym'), syms('build/polis.sym')
+bad = sorted((a[k], k, b[k]) for k in a if k in b and a[k] != b[k])
+assert not bad, 'δισκέτα / snapshot: άλλες διευθύνσεις, πρώτη %s στο #%04X / #%04X' % (bad[0][1], bad[0][0], bad[0][2])
+PY
 rasm game/main.asm -DSNA=1 -DBARS=1 -o build/m0_bars -sz -v2
 cmp -s build/c7.bin build/c7chk.bin || { echo 'ο κώδικας της C7 άλλαξε ανάμεσα στα περάσματα (build/c7.bin)'; exit 1; }
 cmp -s build/boot.bin build/bootchk.bin || { echo 'ο κώδικας του BOOT άλλαξε ανάμεσα στα περάσματα (build/boot.bin)'; exit 1; }
@@ -55,6 +76,7 @@ PY
 # Τα αρχεία χωρίς κεφαλίδα AMSDOS (M12, src/dsk.py): οι εποχές ανά
 # πολιτισμό και ο οπλίτης, συμπιεσμένα ZX0 (M13: τα φορτώνει το disk_load
 # στην οθόνη, και το dzx0 στη θέση τους).
+cat build/ui.bin build/ui_a.bin build/ui_b.bin build/ui_c.bin build/ui_d.bin build/ui_e.bin build/ui_f.bin build/ui_g.bin > build/ui_all.bin   # (M20)
 python3 src/dsk.py build/polis.dsk \
     $(for c in E G B A R P F K; do echo --zx0 AGE3$c.BIN data/age3$c.bin --zx0 AGE4$c.BIN data/age4$c.bin; done) \
     --zx0 HOPL.BIN data/c5_slot3.bin \
@@ -62,6 +84,7 @@ python3 src/dsk.py build/polis.dsk \
     --zx0 TITLE.BIN data/title.bin \
     --zx0 MENU.BIN build/menu.bin \
     --zx0 TUTOR.BIN build/tutor.bin \
+    --zx0 UI.BIN build/ui_all.bin \
     --empty PROG.BIN 1024 \
     --empty SAVE.BIN 43008
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

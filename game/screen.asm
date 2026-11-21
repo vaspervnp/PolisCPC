@@ -67,10 +67,8 @@ int_handler:
         ld (int_n),a
         ld a,(split_req)        ; το split ανοίγει ΜΟΝΟ εδώ: αν ανοίξει σε
         ld (split_on),a         ; τυχαία στιγμή, το R4=20 του Β μπορεί να
-        pop bc                  ; πέσει σε σειρά > 20 και το καρέ δεν
-        pop af                  ; τελειώνει ώσπου να τυλίξει ο μετρητής
-        ei
-        ret
+        jr .out                 ; πέσει σε σειρά > 20 και το καρέ δεν
+                                ; τελειώνει ώσπου να τυλίξει ο μετρητής
 .count: ld a,(int_t)
         inc a
         ld (int_t),a
@@ -81,7 +79,15 @@ int_handler:
         jr z,.fa
         cp 5
         jr z,.fb
-.out:   pop bc
+; Ο ήχος (sound.asm, M21) μία στις 6 διακοπές, μετά τα splits: 50 Hz ακόμα
+; κι αν μια διακοπή καθυστέρησε (di) και έχασε το VSYNC — δεν χάνεται καμία.
+.out:   ld a,(snd_div)
+        dec a
+        jr nz,.s
+        call snd_isr
+        ld a,6
+.s:     ld (snd_div),a
+        pop bc
         pop af
         ei
         ret
@@ -137,7 +143,7 @@ int_handler:
         out (c),c
         ld bc,#BD00
         out (c),c
-        jr .out
+        jp .out
 
 ; D = καταχωρητής, E = τιμή.
 crtc_w: ld b,CRTC_SEL

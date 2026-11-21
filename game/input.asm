@@ -25,7 +25,16 @@ IN_FIRE     equ 4
 IN_CMD      equ 5
 
 cursor_input:
-        call bld_input          ; τα πλήκτρα των κτιρίων (buildings.asm)
+        call read_cin
+        ld (cin),a
+        ld a,(hb_on)            ; ο κέρσορας στα κουμπιά του HUD (ui_hud.asm,
+        or a                    ; M20)
+        jp nz,hb_keys
+        jr cin_move
+
+; -> A = D = τα πλήκτρα του κέρσορα (cin: IN_*, 1 = πατημένο), από το
+; keyrows (M20: και τα μενού, game/ui.asm).
+read_cin:
         ld a,9                  ; joystick: 0 πάνω, 1 κάτω, 2 αριστερά,
         call read_row           ; 3 δεξιά, 4 fire 2, 5 fire 1
         ld e,a
@@ -76,8 +85,9 @@ cursor_input:
         jr z,.k7
         set IN_CMD,d
 .k7:    ld a,d
-        ld (cin),a
+        ret
 
+cin_move:
         bit IN_LEFT,d           ; ο κέρσορας, και η κύλιση στις άκρες
         jr z,.nl
         ld a,(cur_x)
@@ -112,8 +122,9 @@ cursor_input:
         add a,CUR_DY
         cp VIEW_H - 16 + 1
         jr c,.dok
-        ld a,1
-        ld (sdy),a
+        push de                 ; κάτω από τον χάρτη: τα κουμπιά (M20· ως
+        call hb_enter           ; τότε ο χάρτης κυλούσε — τώρα από την κάτω
+        pop de                  ; σειρά των κουμπιών)
         ld a,VIEW_H - 16
 .dok:   ld (cur_y),a
 .nd:
@@ -130,7 +141,16 @@ cursor_input:
         ld b,a                  ; B = πατήθηκαν
         bit IN_FIRE,b
         jr z,.nf
+        ld a,(bmode)            ; διαλέγεις θέση για κτίριο: SPACE = άκυρο
+        inc a                   ; (M20, αντί για το ESC)
+        jr z,.fs
+        ld a,255
+        ld (bmode),a
         push bc
+        call cur_look
+        pop bc
+        jr .nf
+.fs:    push bc
         call cur_world          ; η γωνία του κουτιού εδώ
         ld hl,(cw_x)
         ld (ANCHOR_REC + U_WX),hl
@@ -141,6 +161,9 @@ cursor_input:
         ld (anc_force),a
         pop bc
 .nf:    bit IN_FIRE,c
+        jr z,.nrel
+        ld a,(box_on)           ; (όχι μετά από ένα άκυρο)
+        or a
         jr z,.nrel
         push bc
         xor a
@@ -250,23 +273,8 @@ do_select:
         ld a,255                ; κανένα κτίριο (το κλικ μπορεί να βρει)
         ld (sel_bld),a
         call cur_world
-        ld a,(sel_n)
-        or a
-        jr z,.d0
-        ld b,a
-        ld hl,SELLIST
-.d:     ld e,(hl)
-        inc hl
-        ld d,(hl)
-        inc hl
-        push de
-        pop ix
-        res F_SEL,(ix+U_FL)
-        set F_REDRAW,(ix+U_FL)
-        djnz .d
-        xor a
-        ld (sel_n),a
-.d0:        ld hl,(cw_x)            ; κλικ ή κουτί;
+        call sel_none
+        ld hl,(cw_x)            ; κλικ ή κουτί;
         ld de,(ANCHOR_REC + U_WX)
         or a
         sbc hl,de
@@ -288,33 +296,9 @@ do_select:
         ld a,l
         cp 8
         jr nc,.box
-        ; ΚΛΙΚ: από τη μπροστινή (τέλος του ORDER) προς τα πίσω
-        ld a,(ord_n)
-        or a
-        jp z,bld_pick
-        ld b,a
-        add a,a
-        ld l,a
-        ld h,0
-        ld de,ORDER
-        add hl,de
-.cl:    dec hl
-        ld d,(hl)
-        dec hl
-        ld e,(hl)
-        push de
-        pop ix
-        ld a,(cur_x)
-        sub (ix+U_SX)
-        cp 4
-        jr nc,.cn
-        ld a,(cur_y)
-        sub (ix+U_SY)
-        cp 16
-        jr nc,.cn
-        jp unit_select
-.cn:    djnz .cl
-        jp bld_pick             ; καμία μονάδα: κτίριο;
+        call cur_unit           ; ΚΛΙΚ: η μονάδα κάτω από τον κέρσορα,
+        jp c,unit_select        ; αλλιώς κτίριο;
+        jp bld_pick
 .box:   ; ΚΟΥΤΙ: x0..x1, y0..y1 στον κόσμο
         ld hl,(cw_x)
         ld de,(ANCHOR_REC + U_WX)
@@ -391,6 +375,78 @@ unit_select:
         ld (hl),d
         ret
 
+; Καμία επιλεγμένη μονάδα.
+sel_none:
+        ld a,(sel_n)
+        or a
+        ret z
+        ld b,a
+        ld hl,SELLIST
+.d:     ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        push de
+        pop ix
+        res F_SEL,(ix+U_FL)
+        set F_REDRAW,(ix+U_FL)
+        djnz .d
+        xor a
+        ld (sel_n),a
+        ret
+
+; -> carry και IX = η μονάδα κάτω από τον κέρσορα, από τη μπροστινή (τέλος
+; του ORDER) προς τα πίσω· NC αν καμία.
+cur_unit:
+        ld a,(ord_n)
+        or a
+        ret z
+        ld b,a
+        add a,a
+        ld l,a
+        ld h,0
+        ld de,ORDER
+        add hl,de
+.cl:    dec hl
+        ld d,(hl)
+        dec hl
+        ld e,(hl)
+        push de
+        pop ix
+        ld a,(cur_x)
+        sub (ix+U_SX)
+        cp 4
+        jr nc,.cn
+        ld a,(cur_y)
+        sub (ix+U_SY)
+        cp 16
+        ret c
+.cn:    djnz .cl
+        or a
+        ret
+
+; RETURN πάνω σε μια ΔΙΚΗ ΣΟΥ επιλεγμένη (M20): το μενού της — χωρικός: τα
+; κτίρια· μία ομάδα στρατιωτών: ο χωρισμός. Carry αν άνοιξε.
+cmd_menu:
+        call cur_unit
+        ret nc
+        bit F_SEL,(ix+U_FL)
+        jr z,.no
+        push ix
+        pop iy
+        call is_villager        ; (boot.asm)
+        ld a,MK_BUILD
+        jr z,.open
+        ld a,(sel_n)            ; στρατιώτης: μία ομάδα μόνη της
+        dec a
+        jr nz,.no
+        ld a,MK_SQUAD
+.open:  call um_open
+        scf
+        ret
+.no:    or a
+        ret
+
 ; RETURN: οι επιλεγμένες στον κέρσορα, σε σχηματισμό 4 στηλών (5 bytes)
 ; και σειρών (12 γραμμές), με τον κέρσορα στο κέντρο της πρώτης σειράς.
 ; Πάνω σε πόρο, οι χωρικοί αντί γι' αυτό πάνε να μαζέψουν (gather.asm).
@@ -402,6 +458,8 @@ do_command:
         ld a,(sel_n)
         or a
         ret z
+        call cmd_menu
+        ret c
         ld hl,ord_cmd           ; εχθρός κάτω από τον κέρσορα: επίθεση
         call far7               ; (bank7.asm)· και η κίνηση ως εκεί
         ld hl,(cw_x)            ; το κελί του στόχου, και το flow field του

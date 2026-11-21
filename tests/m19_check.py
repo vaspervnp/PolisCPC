@@ -33,6 +33,7 @@ import m8_check as M8                           # noqa: E402
 import m9_check as M9                           # noqa: E402
 import m10_check as M10                         # noqa: E402
 import scene as S                               # noqa: E402
+import ui_menu as UM                            # noqa: E402
 
 C7_HP = 0x7E00
 C7_ORD = 0x7F00
@@ -130,7 +131,7 @@ def main():
     M9.set_res(c, sym, 3000)                    # ο παίκτης στον Χαλκό
     tc = [b['slot'] for b in M7.blds(c) if b['type'] == 'town_center'][0]
     c.poke(sym['SEL_BLD'], tc)
-    M7.press(g, 'u')
+    UM.research(c)
     for s in range(200):
         second()
         if M6.hud_vals(c, sym)[5] == 3:

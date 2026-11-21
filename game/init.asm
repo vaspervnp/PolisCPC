@@ -384,7 +384,6 @@ bld_init:
         ld a,255
         ld (bmode),a
         ld (sel_bld),a
-        ld (bk_prev),a
         ld (rq_n),a
         xor a                   ; το Κέντρο Πόλης, έτοιμο
         ld de,(lv_h + H_TC)   ; (D = i, E = j)
