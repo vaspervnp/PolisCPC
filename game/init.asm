@@ -75,6 +75,15 @@ lv_init:
         ld de,hud_val
         ld bc,8
         ldir
+        assert H_SEED == H_RES + 8, 'H_SEED'
+        ld de,ai_seed           ; (M22) οι πρώτες πηγές του αντιπάλου, οι
+        ld bc,8                 ; πιο κοντινές στο σπίτι του (make_levels.py)
+        ldir
+        ld hl,(lv_h + H_HOME)   ; και το σπίτι, για το sn_ctr (ui_hud_d.asm)
+        ld a,l
+        ld (sn_home + 1),a
+        ld a,h
+        ld (sn_home),a
         ld a,(lv_h + H_CULT)
         or a
         ret z

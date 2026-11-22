@@ -40,7 +40,8 @@ LAND = mockup.LAND
 MAGIC = (0xA5, 0x5A)
 # (από το ROUTE ως το ARG: ένα κομμάτι, όπως είναι στη C7 — lv_c7, bank7.asm)
 FIELDS = [('MAGIC', 2), ('TC', 2), ('AITC', 2), ('TOWN', 4), ('AIU', 4),
-          ('CAM', 4), ('RES', 8), ('ROUTE', 6), ('SPOTS', 24), ('HOME', 2),
+          ('CAM', 4), ('RES', 8), ('SEED', 8), ('ROUTE', 6), ('SPOTS', 24),
+          ('HOME', 2),
           ('COOL', 2), ('CULT', 1), ('CAMP', 1), ('NUM', 1), ('PROG', 2),
           ('OBJ', 1), ('ARG', 2), ('TEXT', 50)]
 OFF = {}
@@ -329,14 +330,36 @@ def build(lv):
     hdr = header(obj=OBJ[obj], arg=arg, tc=pt, aitc=at, town=town, aiu=aiu,
                  cam=camera(pt), res=res0, route=route, spots=spots,
                  home=(at[0] + 2, at[1] + 2), cool=cool, cult=CAMP_CULT[camp],
+                 seed=seeds(res, (at[0] + 2, at[1] + 2)),
                  camp=0, num=n, text=[
                      (60, None, MN.PEN_HI, '%s %d/4' % (CAMP_NAMES[camp], n)),
                      (100, None, MN.PEN_TEXT, text)])
     return grd, res, hdr
 
 
+def seeds(res, home):
+    """(M22) Οι πρώτες πηγές του αντιπάλου (game/boot.asm, ai_seed): ανά
+    είδος (τροφή, ξύλο, χρυσός, πέτρα) η πιο κοντινή στο «σπίτι» του (i, j)
+    — όχι πια οι σταθερές του χάρτη του mockup, που στις πίστες της
+    εκστρατείας ήταν μακριά από το Κέντρο του."""
+    import terrain as T
+    kind = {r[0]: MM.res_kind(k) for k, r in enumerate(T.RESOURCES)}
+    best = [None] * 4
+    for j in range(N):
+        for i in range(N):
+            r = res[j][i]
+            if r is None or r in ('fish', 'whale') or kind.get(r) is None:
+                continue
+            k = kind[r]
+            d = max(abs(i - home[0]), abs(j - home[1]))
+            if best[k] is None or d < best[k][0]:
+                best[k] = (d, i, j)
+    assert all(best), best
+    return [(i, j) for _, i, j in best]
+
+
 def header(obj, arg, tc, aitc, town, aiu, cam, res, route, spots, home, cool,
-           cult, camp, num, text):
+           cult, camp, num, text, seed=((61, 33), (52, 32), (75, 36), (79, 43))):
     """Τα H_LEN bytes της κεφαλίδας (το CAMP και το PROG τα γράφει το
     μενού όταν φορτώνει την πίστα)."""
     def w(v):
@@ -346,6 +369,8 @@ def header(obj, arg, tc, aitc, town, aiu, cam, res, route, spots, home, cool,
     out += w(cam[0]) + w(cam[1] & 0xFFFF)
     for v in res:
         out += w(v)
+    for p in seed:
+        out += list(p)
     for p in route:
         out += list(p)
     for p in spots:
@@ -375,7 +400,8 @@ def main():
     hdr = header(obj=0, arg=0, tc=d['tc'], aitc=d['aitc'], town=d['town'],
                  aiu=d['aiu'], cam=d['cam'], res=d['res'], route=d['route'],
                  spots=d['spots'], home=d['home'], cool=d['cool'], cult=None,
-                 camp=0, num=0, text=[])
+                 camp=0, num=0, text=[],
+                 seed=seeds(mockup.make_map()[1], d['home']))
     with open(os.path.join(DATA, 'lvdef.asm'), 'w') as f:
         f.write('; lvdef.asm — ΠΑΡΑΓΕΤΑΙ από src/make_levels.py: η κεφαλίδα '
                 'της παρτίδας χωρίς\n; εκστρατεία (ο χάρτης του mockup, οι '

@@ -154,6 +154,11 @@ def ui_poke(c, sym):
         return
     for a, b in parts:
         c.write_ram(a, b)
+    # (M22) το σπίτι του αντιπάλου για το sn_ctr (init.asm, lv_init: πριν από
+    # εδώ — j, i), από το lv_home της C7 (i, j)
+    import scene as _sc
+    hi, hj = bytes(_sc.c7_read(c, sym['LV_HOME'], 2))
+    c.write_ram(us['SN_HOME'], bytes([hj, hi]))
     # (M22) η σημαία στην κορυφή της C6 (init.asm, ui_load)
     import scene
     end = open(os.path.join(HERE, '..', 'data', 'ui_end.bin'), 'rb').read()

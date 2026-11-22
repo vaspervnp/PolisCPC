@@ -320,7 +320,8 @@ src_next:
         ret z
         ld a,SRC_R
 sn_try: ld (sn_r),a
-        call job_src            ; D = si, E = sj
+        call sn_ctr             ; D = si, E = sj· και το κέντρο της απόστασης
+                                ; (M22, ui_hud_d.asm)
         ld a,255
         ld (sn_best),a
         ld l,(ix+U_IDX)
@@ -371,14 +372,14 @@ sn_try: ld (sn_r),a
         ld a,(sn_kind)
         cp e
         jr nz,.nc
-        ld a,(sn_r)             ; max(|i - si|, |dj|)
-        ld e,a
-        ld a,(sn_i0)
-        add a,e
-        sub c
-        call abs_a
-        ld e,a
-        ld a,(sn_dj)
+        ld a,(sn_ci)            ; max(|i - ci|, |j - cj|): το κέντρο είναι
+        sub c                   ; η παλιά πηγή — ή, για τον αντίπαλο, το
+        call abs_a              ; σπίτι του (M22: ανάμεσα σε όσες είναι
+        ld e,a                  ; κοντά στην παλιά, η πιο κοντινή στο
+        ld a,(sn_cj)            ; Κέντρο του)
+        ld d,a
+        ld a,(sn_j)
+        sub d
         call abs_a
         cp e
         jr c,.m

@@ -300,7 +300,8 @@ there now; choose one. The bar of the card shows the progress.
 ## 11. The enemy, victory and defeat
 
 The enemy plays red. It gathers, builds Houses and Barracks, trains soldiers
-and sends them against your Town Center in waves. After four minutes it
+and sends them against your Town Center in waves. Its villagers gather near
+their own Town Center, and go further only when nothing is left close by. After four minutes it
 also builds a Stable and trains cavalry, and once you reach the Bronze Age
 it builds an Academy and trains hoplites too. In a single game (PLAY)
 the enemy first stays in its own city for 5 to 10 minutes (different each
