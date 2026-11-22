@@ -123,10 +123,13 @@ def wait_phase(c, sym, want, limit_ms=4000):
 
 
 # (οι διευθύνσεις: game/main.asm — UI_S, UI_C = μετά τα HI_B, HI_C)
+END_IC = 0x7FBC                          # game/main.asm (M22: equ, όχι στο .sym)
 UI_PARTS = [(0x7230, 'ui.bin'), (0x6D80, 'ui_a.bin'), ('HIB_END', 'ui_b.bin'),
             ('HIC_END', 'ui_c.bin'), ('HIA_END', 'ui_d.bin'),
             ('HUD_MUS', 'ui_e.bin'), ('FX_TICK', 'ui_f.bin'),  # ο ήχος (M21)
-            ('MUS_GAME', 'ui_g.bin')]
+            ('MUS_GAME', 'ui_g.bin'),
+            ('HB_DRAW', 'ui_h.bin'), ('HB_UPD', 'ui_i.bin'),   # (M22) τα
+            ('UI_IC_0', 'ui_j.bin'), ('UI_IC_TAB', 'ui_k.bin')]  # κουμπιά
 
 
 def ui_syms():
@@ -151,6 +154,18 @@ def ui_poke(c, sym):
         return
     for a, b in parts:
         c.write_ram(a, b)
+    # (M22) η σημαία στην κορυφή της C6 (init.asm, ui_load)
+    import scene
+    end = open(os.path.join(HERE, '..', 'data', 'ui_end.bin'), 'rb').read()
+    p = scene.bank_ram(c, 6)
+    for k, v in enumerate(end):
+        p[END_IC - 0x4000 + k] = v
+    # και τα εικονίδια των κουμπιών στην C5 (SPR_ARROW #7380, OCC_E + 1600)
+    p = scene.bank_ram(c, 5)
+    for a, f in ((0x7380, 'ic_c5a.bin'), (0x7400 + 1600, 'ic_c5b.bin')):
+        for k, v in enumerate(open(os.path.join(HERE, '..', 'data', f),
+                                   'rb').read()):
+            p[a - 0x4000 + k] = v
     # η μουσική του παιχνιδιού (M21: στη δισκέτα το mus_play του start)
     hdr = c.read_ram(us['MUS_GAME'], 5)
     st = sym['MUS_CH']

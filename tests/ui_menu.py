@@ -33,6 +33,7 @@ def syms():
 
 
 U = syms()
+U['HB_VIS'] = M.symbols()['HB_VIS']    # (M22: στον κύριο κώδικα)
 
 
 def rb(c, a):
@@ -174,6 +175,11 @@ HB_BUILD, HB_TRAIN, HB_RESEARCH, HB_SPLIT, HB_AGE, HB_IDLE, HB_SAVE, \
     HB_CANCEL = range(8)
 
 
+def visible(c, k):
+    """(M22) Φαίνεται τώρα το κουμπί k (hb_vis, game/hudvis.asm);"""
+    return bool(rb(c, U['HB_VIS']) >> k & 1)
+
+
 def hud_enter(c, limit=400):
     """Ο κέρσορας κάτω ως τα κουμπιά (κρατημένο A ώσπου hb_on)."""
     c.key_down('a')
@@ -203,10 +209,12 @@ def hud_button(c, k, key=' ', leave=True):
         i = rb(c, U['HB_I'])
         if i == k:
             break
+        # (M22) μόνο τα φανερά: το Q / A πάει στο πιο κοντινό φανερό της
+        # άλλης σειράς, το O / P πηδάει τα κρυμμένα
         if i // 4 != k // 4:
             tap(c, 'a' if k >= 4 else 'q')
         else:
-            tap(c, 'p' if k > i else 'o')
+            tap(c, 'p' if k % 4 > i % 4 else 'o')
     if rb(c, U['HB_I']) != k:
         return False
     tap(c, key)

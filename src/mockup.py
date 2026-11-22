@@ -61,6 +61,7 @@ BUTTONS = [('build', 'BUILD'), ('eject', 'TRAIN'), ('research', 'RESEARCH'),
            ('idle', 'IDLE VILLAGER'), ('save', 'SAVE GAME'),
            ('cancel', 'CANCEL')]
 BTN_PEN, BTN_HI = 't', 'c'              # το φόντο του κουμπιού· φωτισμένο
+HUD_BG = 'K'                            # το φόντο του HUD (και κουμπί κρυμμένο, M22)
 
 
 def btn_xy(k):
@@ -432,7 +433,7 @@ def frame(world, grd, res, cam, hud_bg):
 def hud_background(numbers=True):
     """Το HUD. Με numbers=False χωρίς τους αριθμούς της μπάρας: στο
     παιχνίδι τους γράφει ο Z80 (M6, game/gather.asm)."""
-    img = gfx.blank(W, H, gfx.PEN['K'])
+    img = gfx.blank(W, H, gfx.PEN[HUD_BG])
     for x in range(W):
         img[MAP_H][x] = gfx.PEN['t']
 

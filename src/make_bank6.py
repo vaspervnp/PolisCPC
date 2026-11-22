@@ -198,7 +198,7 @@ def main():
                 % (AGE_AT, 4 * len(TYPES), max(sizes),
                    ''.join(l for _, l in CULTURES)))
     blob += bytes(free) + red
-    assert len(blob) <= 0x4000
+    assert len(blob) <= 0x3FBC, 'C6: πάνω στη σημαία (END_IC #7FBC, M22)'
     with open(os.path.join(DATA, 'bank6.bin'), 'wb') as f:
         f.write(blob)
     keys = ''.join('BTY_%s equ %d\n' % (t[0].upper(), k)

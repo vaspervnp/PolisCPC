@@ -44,7 +44,7 @@ import cpc as CP                                # noqa: E402
 from cpc import CPC                             # noqa: E402
 
 D = M.BUILD
-SIG = b'POLIS-M12'
+SIG = b'POLIS-M21'
 STACK_LOW = 0xBF00
 FOG, FOG_LEN = 0x5F80, 1152
 C7_CODE = 0x67A0                # game/main.asm: ο κώδικας της C7 (M14: ήταν #6800)

@@ -241,16 +241,5 @@ snd_tick:
         ld b,a
         jr snd_req
 
-snd_div:    db 6                ; οι διακοπές ως το επόμενο καρέ του ήχου
-ram_now:    db RAM_BASE         ; η τράπεζα στο #4000 (setram)
-psg_lock:   db 0                ; 1: ο κύριος κώδικας γράφει / διαβάζει το AY
-mus_jp:     db #C3              ; jp ο player (mus_vec = 0: σιωπή)
-mus_vec:    dw 0
-mus_clk:    db 0                ; καρέ ως το επόμενο βήμα
-mus_step:   db 0                ; καρέ ανά βήμα
-mus_ch:     db 0, 0, 0, 0, 0, 0, 10 * 4, 1      ; A: ptr, cnt, ένταση, -,
-            db 0, 0, 0, 0, 0, 0, 9 * 4, 0       ; αρχή, V0 (τέταρτα), οκτάβα
-snd_pf:     db 0                ; το εφέ που ζητήθηκε σε αυτό το καρέ
-snd_pv:     db 0                ; η ένταση του (0: κανένα)
-snd_kp:     db 0                ; το SPACE στο προηγούμενο καρέ
-fx_r7:      db #3C              ; το R7: A, B τόνος· C από το εφέ
+; (οι μεταβλητές snd_div ... fx_r7: main.asm, μετά το zeros — M22, για το
+; align 16 του line_addr)

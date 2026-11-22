@@ -316,9 +316,29 @@ sv_close:
         ei
         ret
 
-; D = τροχιά, E = τομέας: ο buffer (512 bytes) στον τομέα. Όπως το
-; fdc_rd1 (disk.asm), με το «write data» και τα bytes προς το FDC.
+; D = τροχιά, E = τομέας: ο buffer (512 bytes) στον τομέα. Ως 3 φορές αν
+; το FDC δώσει σφάλμα, όπως το fdc_read (disk.asm).
 fdc_write:
+        ld b,3
+.tr:    push bc
+        push de
+        push hl
+        call fdc_wr1
+        ld a,(dk_res + 1)       ; ST1: MA NW ND OR DE (όχι το EN)
+        and #37
+        ld c,a
+        ld a,(dk_res + 2)       ; ST2: MD BC WC DD
+        and #33
+        or c
+        pop hl
+        pop de
+        pop bc
+        ret z
+        djnz .tr
+        ret
+
+; Όπως το fdc_rd1 (disk.asm), με το «write data» και τα bytes προς το FDC.
+fdc_wr1:
         ld a,#0F                ; seek
         call fdc_out
         xor a
@@ -450,7 +470,8 @@ sv_seg: db RAM_BASE
         db RAM_RES
         dw FOG, FOG_LEN
         db 0
-sv_sig:     db "POLIS-M12"      ; η υπογραφή: πρώτη στο αρχείο
+sv_sig:     db "POLIS-M21"      ; η υπογραφή: πρώτη στο αρχείο (με την έκδοση
+                                ; της διάταξης: μια παλιά παρτίδα = καμία)
 SIG_LEN     equ $ - sv_sig
 sv_name:    db "SAVE    BIN"
 sv_prog:    db "PROG    BIN"

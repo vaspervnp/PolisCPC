@@ -44,7 +44,3 @@ ul_4: db 8, 15, 6, 25, 21, 0, 2, 8, 6  ; NEXT AGE
 ul_5: db 13, 10, 5, 13, 6, 0, 23, 10, 13, 13, 2, 8, 6, 19  ; IDLE VILLAGER
 ul_6: db 9, 20, 2, 23, 6, 0, 8, 2, 14, 6  ; SAVE GAME
 ul_7: db 6, 4, 2, 15, 4, 6, 13  ; CANCEL
-UB_PEN_L    equ #88
-UB_PEN_R    equ #44
-UB_HI_L    equ #AA
-UB_HI_R    equ #55

@@ -85,9 +85,10 @@ The top of the screen is the world. The panel at the bottom is the HUD.
   digit shows the progress of the current unit, of the construction, or of
   the research.
 
-* **The eight buttons** to the right of the card (see section 6): BUILD,
+* **The buttons** to the right of the card (see section 6): BUILD,
   TRAIN, RESEARCH, SPLIT SQUAD in the top row; NEXT AGE, IDLE VILLAGER,
-  SAVE GAME, CANCEL in the bottom row.
+  SAVE GAME, CANCEL in the bottom row. A button shows only when it can do
+  something right now; the others are left empty.
 
 When the game ends, the card shows the result: a **red flag** means you won
 and a **skull** means you lost.
@@ -141,20 +142,23 @@ closes the menu. The game waits while a menu is open.
 ![The cursor on RESEARCH](img/hud.png)
 
 Move the cursor down past the bottom of the map and it enters the buttons
-of the HUD. **Q A O P** move from button to button; the current one lights
-up, and its name appears at the top of the screen. **SPACE** or **RETURN**
-presses it. **Q** from the top row takes you back to the map.
+of the HUD. **Q A O P** move from button to button, skipping the empty
+places; the current one lights up, and its name appears at the top of the
+screen. **SPACE** or **RETURN** presses it. **Q** from the top row (or
+from under an empty place) takes you back to the map.
 
-| button | what it does |
-|---|---|
-| **BUILD** | with villagers selected: the BUILD menu |
-| **TRAIN** | with a building selected: train one unit |
-| **RESEARCH** | with a building selected: its menu |
-| **SPLIT SQUAD** | with one squad selected: split it in two |
-| **NEXT AGE** | the menu of your Town Center, with the next age |
-| **IDLE VILLAGER** | select a villager who has nothing to do, and move the view to them |
-| **SAVE GAME** | save the game to disc (about 2 seconds) |
-| **CANCEL** | cancel the placement of a building |
+A button appears only when it makes sense:
+
+| button | appears when | what it does |
+|---|---|---|
+| **BUILD** | villagers are selected | the BUILD menu |
+| **TRAIN** | one of your buildings that trains units is selected | train one unit |
+| **RESEARCH** | one of your buildings with technologies is selected | its menu |
+| **SPLIT SQUAD** | one of your squads (2 or more) is selected | split it in two |
+| **NEXT AGE** | before the Iron Age | the menu of your Town Center, with the next age |
+| **IDLE VILLAGER** | a villager of yours has nothing to do | select them, and move the view to them |
+| **SAVE GAME** | always | save the game to disc (about 2 seconds) |
+| **CANCEL** | a building is being placed | cancel the placement |
 
 On a PC emulator, **RETURN** is the main **Enter** key. The CPC's **ENTER**
 (on the numeric keypad) is the keypad Enter, and does the same everywhere.

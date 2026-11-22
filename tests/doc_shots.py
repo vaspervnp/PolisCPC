@@ -4,12 +4,12 @@
 
 town.png      η πόλη στην αρχή
 build.png     το μενού BUILD (RETURN σε επιλεγμένο χωρικό)
-hud.png       ο κέρσορας στα κουμπιά του HUD: το RESEARCH φωτισμένο, η
-              ετικέτα του στην κορυφή
+hud.png       ο κέρσορας στα κουμπιά του HUD, με το Κέντρο Πόλης επιλεγμένο:
+              το RESEARCH φωτισμένο, η ετικέτα του στην κορυφή
 squad.png, battle.png
-              μόνο η λωρίδα των κουμπιών του HUD ξανά (από το town.png): είναι
-              ίδια σε κάθε στιγμή του παιχνιδιού, και ως το M19 είχε 16
-              κουμπιά
+              μόνο η λωρίδα των κουμπιών του HUD ξανά, όπως είναι με μια ομάδα
+              επιλεγμένη (M22: φαίνονται μόνο όσα έχουν νόημα· ως το M19 είχε
+              16 κουμπιά)
 tutorial.png  το build/m14_step3.png (python3 tests/m14_check.py --shots)
 """
 import os
@@ -23,6 +23,7 @@ import m4_check as M4                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
 import ui_menu as UM                            # noqa: E402
+import scene as S                               # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 
 IMG = os.path.join(HERE, '..', 'docs', 'img')
@@ -51,14 +52,27 @@ def main():
     shot(c, 'build.png')
     UM.close(c)
 
-    UM.hud_enter(c)
-    UM.tap(c, 'p')
-    UM.tap(c, 'p')
+    UM.hud_button(c, UM.HB_AGE, leave=False)    # (M22) το Κέντρο επιλεγμένο:
+    UM.wait_open(c)                             # φαίνονται TRAIN, RESEARCH
+    UM.close(c)
+    for _ in range(8):
+        i = UM.rb(c, UM.U['HB_I'])
+        if i == UM.HB_RESEARCH:
+            break
+        UM.tap(c, 'q' if i >= 4 else 'p')
     g.tick(4)
     shot(c, 'hud.png')
 
-    new = Image.open(os.path.join(IMG, 'town.png')).convert('RGB')
-    strip = new.crop(BUTTONS_BOX)
+    # (M22) η λωρίδα με μια ομάδα επιλεγμένη (όπως στο m20_check.py)
+    UM.hud_leave(c)
+    sold = [k for k, u in enumerate(S.units(c)) if u['team'] == 0 and
+            u['set'] == 1 and u['sy'] < 130]
+    c.poke(0x3F00 + sold[0], 3)         # SQ_N: μια ομάδα των 4 (M15)
+    M6.click_unit(g, sold[0])
+    g.tick(4)
+    tmp = os.path.join(M4.M.BUILD, 'doc_squad_hud.png')
+    c.screenshot(tmp, aspect=True)
+    strip = Image.open(tmp).convert('RGB').crop(BUTTONS_BOX)
     for name in ('squad.png', 'battle.png'):
         path = os.path.join(IMG, name)
         im = Image.open(path).convert('RGB')

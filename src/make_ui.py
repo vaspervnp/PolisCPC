@@ -63,6 +63,126 @@ def db_str(label, s):
                                     len(g), ''.join(', %d' % k for k in g), s)
 
 
+def res_mask():
+    """Οι τύποι κτιρίων με τουλάχιστον μία τεχνολογία (game/bank7.asm, TECH
+    BTY_...): για το RESEARCH (M22)."""
+    import re
+    src = open(os.path.join(gfx.OUT, 'game', 'bank7.asm')).read()
+    types = {t[0]: i for i, t in enumerate(MB.TYPES)}
+    m = 0
+    for name in re.findall(r'^\s*TECH BTY_([A-Z_]+),', src, re.M):
+        m |= 1 << types[name.lower()]
+    assert m, 'TECH'
+    return m
+
+
+# (M22) Τα εικονίδια των κουμπιών που κρύβονται όταν δεν έχουν νόημα (όλα
+# εκτός από το SAVE GAME), μόνο οι γραμμές τους με σχέδιο: δύο κενά της C5
+# (το αχρησιμοποίητο βέλος SPR_ARROW, και μετά τα 1.600 bytes των
+# περιγραμμάτων OCC_E ως το #700 — game/main.asm, cursor_gfx) και δύο
+# περιοχές της σελίδας του HUD (UI_J, UI_K), και ο πίνακάς τους (ui_ic_tab:
+# dw γραμμές, db η πρώτη, db πόσες· το hb_draw τα αντιγράφει με το rst 8).
+IC_C5 = [('ic_c5a.bin', 'SPR_ARROW', 128, ['eject', 'age_up']),
+         ('ic_c5b.bin', 'OCC_E + 1600', 0x700 - 1600,
+          ['research', 'cancel', 'idle'])]
+IC_HUD = [('ui_j.asm', 56, ['build']), ('ui_k.asm', 48, ['patrol'])]
+
+
+def icons(head, mockup, cpcimg):
+    keys = [k for k, _ in mockup.BUTTONS]
+    rows = {}
+    for art in keys:
+        ic = mockup.T.hud(mockup.HUD_ART[art])
+        bg = gfx.PEN[mockup.BTN_PEN]
+        px = [[bg if p is None else p for p in r] for r in ic]
+        used = [y for y, r in enumerate(ic) if any(p is not None for p in r)]
+        y0, y1 = used[0], used[-1] + 1
+        rows[art] = (y0, y1 - y0, bytes(
+            cpcimg.mode0_byte(px[y][2 * x], px[y][2 * x + 1])
+            for y in range(y0, y1) for x in range(4)))
+    placed = set()
+    equs = []
+    for name, at, cap, arts in IC_C5:
+        blob = b''
+        for art in arts:
+            equs.append('ui_ic_%d     equ %s + %d    ; %s (C5)\n'
+                        % (keys.index(art), at, len(blob), art))
+            blob += rows[art][2]
+            placed.add(art)
+        assert len(blob) <= cap, '%s: %d > %d' % (name, len(blob), cap)
+        with open(os.path.join(DATA, name), 'wb') as f:
+            f.write(blob + bytes(cap - len(blob)))
+        print(os.path.join(DATA, name), len(blob), 'από', cap)
+    hud = {}
+    for name, cap, arts in IC_HUD:
+        out = []
+        size = 0
+        for art in arts:
+            y0, n, data = rows[art]
+            out.append('ui_ic_%d:  ; %s, γραμμές %d-%d\n'
+                       % (keys.index(art), art, y0, y0 + n - 1))
+            for k in range(0, len(data), 4):
+                out.append('        db %s\n' % ', '.join(
+                    '#%02X' % x for x in data[k:k + 4]))
+            size += len(data)
+            placed.add(art)
+        assert size <= cap, '%s: %d > %d' % (name, size, cap)
+        hud[name] = out
+    assert placed == set(keys) - {'save'}, placed
+    tab = ['; ο πίνακας των εικονιδίων (UI_K)\n'] + equs + ['ui_ic_tab:\n']
+    for k, art in enumerate(keys):
+        if art in placed:
+            y0, n, _ = rows[art]
+            tab.append('        dw ui_ic_%d\n        db %d, %d\n' % (k, y0, n))
+        else:
+            tab.append('        dw 0\n        db 0, 0         ; %s: πάντα\n'
+                       % art)
+    print(write('ui_j.asm', head + ''.join(hud['ui_j.asm'])))
+    print(write('ui_k.asm', head + ''.join(tab + hud['ui_k.asm'])))
+
+
+def end_icon(name):
+    """(M22) Εικονίδιο του παλιού πάνελ των εντολών (terrain.COMMANDS): οι
+    γραμμές του, με το διάφανο = το φόντο του HUD."""
+    import mockup
+    T = mockup.T
+    bg = gfx.PEN[mockup.HUD_BG]
+    art = [a for n, _, a, _ in T.COMMANDS if n == name][0]
+    return [[bg if p is None else p for p in r] for r in T.hud(art)]
+
+
+def end_bytes(name):
+    """Το εικονίδιο σε bytes Mode 0, 4 x 16 (όπως στην κάρτα του HUD)."""
+    import cpcimg
+    return bytes(cpcimg.mode0_byte(r[2 * x], r[2 * x + 1])
+                 for r in end_icon(name) for x in range(4))
+
+
+SKULL_PEN = 9
+
+
+def end_icons():
+    """(M22) Η κάρτα του HUD στο τέλος της παρτίδας (main.asm, hud_end): η
+    σημαία της νίκης (4 x 16 bytes, όλα τα χρώματα) στο τέλος του UI.BIN —
+    το ui_load (init.asm) τη γράφει στο END_IC της C6· η νεκροκεφαλή της
+    ήττας (ένα χρώμα, SKULL_PEN: 1 bit ανά pixel, 16 bytes) στο hb_skull
+    (data/ui_skull.asm, στο κομμάτι του ήχου). Ως το M19 ήταν εικονίδια του
+    πάνελ των 16 εντολών, που το M20 το κατάργησε."""
+    import mockup
+    flag = end_bytes('rally')
+    with open(os.path.join(DATA, 'ui_end.bin'), 'wb') as f:
+        f.write(flag)
+    bg = gfx.PEN[mockup.HUD_BG]
+    rows = end_icon('delete')
+    assert {p for r in rows for p in r} <= {bg, SKULL_PEN}, 'νεκροκεφαλή'
+    bits = [sum(128 >> x for x in range(8) if r[x] == SKULL_PEN)
+            for r in rows]
+    print(write('ui_skull.asm', '; ΠΑΡΑΓΕΤΑΙ από src/make_ui.py (M22): η '
+                'νεκροκεφαλή της ήττας, 1 bit ανά pixel (pen %d)\nhb_skull:'
+                '   db %s\n' % (SKULL_PEN, ', '.join('#%02X' % b
+                                                     for b in bits))))
+
+
 def write(name, text):
     path = os.path.join(DATA, name)
     with open(path, 'w') as f:
@@ -124,17 +244,28 @@ def main():
         icon = mockup.T.hud(mockup.HUD_ART[art])
         assert all(px != gfx.PEN[mockup.BTN_HI] for row in icon for px in row), \
             'BTN_HI στο εικονίδιο ' + art
-    for name, pen in (('UB_PEN', mockup.BTN_PEN), ('UB_HI', mockup.BTN_HI)):
+    v = [head, '; τα pens των κουμπιών και ποια κτίρια έχουν έρευνες (M22: ο\n'
+         '; κύριος κώδικας, hb_tick — και στο snapshot)\n']
+    for name, pen in (('UB_PEN', mockup.BTN_PEN), ('UB_HI', mockup.BTN_HI),
+                      ('UB_BG', mockup.HUD_BG)):
         q = gfx.PEN[pen]
-        b.append('%s_L    equ #%02X\n%s_R    equ #%02X\n'
+        v.append('%s_L    equ #%02X\n%s_R    equ #%02X\n'
                  % (name, cpcimg.mode0_byte(q, 0) & 0xAA,
                     name, cpcimg.mode0_byte(0, q) & 0x55))
+    v.append('UB_RES      equ #%04X           ; bit = τύπος κτιρίου με έρευνες\n'
+             % res_mask())
+    q = SKULL_PEN
+    v.append('UB_SK_L     equ #%02X\nUB_SK_R     equ #%02X  ; η νεκροκεφαλή (hud_end)\n'
+             % (cpcimg.mode0_byte(q, 0) & 0xAA, cpcimg.mode0_byte(0, q) & 0x55))
+    icons(head, mockup, cpcimg)
+    end_icons()
     c = [head, '; οι τεχνολογίες, με τη σειρά του techs\n',
          'ui_tech:    dw %s\n' % ', '.join('ut_%d' % k
                                          for k in range(len(TECHS)))]
     for k, s_ in enumerate(TECHS):
         c.append(db_str('ut_%d' % k, s_))
-    for name, part in (('ui_a.asm', a), ('ui_b.asm', b), ('ui_c.asm', c)):
+    for name, part in (('ui_a.asm', a), ('ui_b.asm', b), ('ui_c.asm', c),
+                       ('ui_vis.asm', v)):
         print(write(name, ''.join(part)))
     stale = os.path.join(DATA, 'ui.asm')
     if os.path.exists(stale):

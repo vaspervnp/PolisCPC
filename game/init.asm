@@ -637,3 +637,71 @@ load_cont:
         ld a,l
         ld (hud_dirty),a
         ret
+
+; (M22) Το τέλος της εκκίνησης, από το start με HL = hud_z (ετικέτα του
+; κύριου κώδικα μετά από μπλοκ LZX0: ο rasm θα την έδινε λάθος εδώ) και
+; A = 1 στη δισκέτα (τα μενού από το UI.BIN), 0 στο snapshot (τα γράφει ο
+; έλεγχος). Ζούσε στον κύριο κώδικα· εδώ τρέχει μία φορά, από την οθόνη.
+; Το clear_screen (που σβήνει και το INIT) μένει στο start.
+init_go:
+        push af
+        call hud_init           ; το HUD -> #4000, μέσω της οθόνης
+        pop af
+        or a
+        call nz,ui_load
+        ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
+        ld b,16
+.z:     ld (hl),0
+        inc hl
+        djnz .z
+        call units_init
+        ld hl,hp_init           ; η υγεία όλων (bank7.asm)
+        call far7
+        call bld_init           ; το Κέντρο Πόλης στον χάρτη, πριν την εύρεση
+        call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
+        call gather_init        ; οι πηγές, και οι αριθμοί του HUD
+        jp fog_init             ; ο εξερευνημένος χάρτης (M11)
+
+; Τα μενού (M20) στις κρυφές σειρές του HUD, ΜΕΤΑ το hud_init που τις
+; καθαρίζει: το UI.BIN αποσυμπιεσμένο στο UI_TMP, και τα κομμάτια του στη
+; σειρά, στις θέσεις τους (ui_parts: διεύθυνση, μήκος).
+ui_load:
+        ld hl,ui_name
+        call disk_load
+        di
+        ld hl,LOAD_AT
+        ld de,UI_TMP
+        call dzx0
+        ld hl,UI_TMP
+        ld ix,ui_parts
+.p:     ld e,(ix+0)
+        ld d,(ix+1)
+        ld c,(ix+2)
+        ld b,(ix+3)
+        ldir
+        ld de,4
+        add ix,de
+        ld a,(ix+1)
+        or a
+        jr nz,.p
+        ld a,RAM_RES            ; (M22) στο τέλος: η σημαία της νίκης στην
+        call setram             ; κορυφή της C6 (main.asm, hud_end)
+        ld de,END_IC
+        ld bc,64
+        ldir
+        ld a,RAM_SPR            ; και εικονίδια των κουμπιών στην C5: στη
+        call setram             ; θέση του βέλους, και μετά τα περιγράμματα
+        ld de,SPR_ARROW         ; των καρέ (make_ui.py, hudvis.asm)
+        ld bc,128
+        ldir
+        ld de,OCC_E + 4 * 25 * 16
+        ld bc,#700 - 4 * 25 * 16
+        ldir
+        ld a,RAM_BASE
+        jp setram
+ui_parts:
+        dw UI_AT, UI_LEN, UI_F, UIA_LEN, UI_S, UIB_LEN, UI_C, UIC_LEN
+        dw UI_D, UID_LEN, SNDA_AT, SNDA_LEN, SNDB_AT, SNDB_LEN
+        dw SNDC_AT, SNDC_LEN
+        dw UI_H, UIH_LEN, UI_I, UII_LEN, UI_J, UIJ_LEN, UI_K, UIK_LEN
+        db 0, 0                 ; (το high byte 0: τέλος)

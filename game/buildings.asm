@@ -892,7 +892,7 @@ tw_fire:
         inc hl
         ld (hl),d
         ret
-tw_b:   db 255                  ; ο πύργος που σημαδεύει (255 κανένας)
+; (tw_b: main.asm, μετά το zeros — M22, για το align 16)
 tw_q:   db 0
 tw_i:   db 0
 tw_d:   dw 0

@@ -40,19 +40,27 @@ hb_swap:
 .n2:    inc hl
         djnz .x
         pop hl
-        ld a,h                  ; η επόμενη γραμμή: + #800, και μετά την
-        add a,8                 ; όγδοη + 80 από την αρχή
-        cp #80
-        jr c,.n
-        sub #40
-        ld h,a
-        ld a,l
-        add a,80
-        ld l,a
-        ld a,h
-        adc a,0
-.n:     ld h,a
+        call hb_nl              ; η επόμενη γραμμή (ui_hud_k.asm)
         dec c
         jr nz,.y
         ret
 
+
+; (M22) A = κουμπί της άλλης σειράς -> C = το ίδιο αν φαίνεται, αλλιώς το
+; πιο κοντινό φανερό της σειράς του (στήλες A, A^1, A^2, A^3), και carry·
+; κανένα: NC, το C όπως ήταν.
+hb_vrow:
+        ld e,0
+.l:     push af
+        xor e
+        call hb_vk
+        jr c,.y
+        pop af
+        inc e
+        bit 2,e
+        jr z,.l
+        ret
+.y:     ld c,a
+        pop af
+        scf
+        ret

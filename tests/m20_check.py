@@ -64,6 +64,34 @@ def btn_bytes(c, k):
     return out
 
 
+_HUD = []
+
+
+def btn_expect(k, shown):
+    """(M22) Τα bytes του πλαισίου k: όπως στο HUD του σχεδίου (φανερό,
+    χωρίς φωτισμό), ή το φόντο του HUD (κρυμμένο)."""
+    import cpcimg
+    if not shown:
+        return bytes([0xC0] * 6 * 17)
+    if not _HUD:
+        _HUD.append(mockup.hud_background(numbers=False))
+    img = _HUD[0]
+    ox, oy = mockup.btn_xy(k)
+    return bytes(cpcimg.mode0_byte(img[y][2 * bx], img[y][2 * bx + 1])
+                 for y in range(oy, oy + 17)
+                 for bx in range(ox // 2 - 1, ox // 2 + 5))
+
+
+def vis(c):
+    return UM.rb(c, UM.U['HB_VIS'])
+
+
+def frames_ok(c):
+    """Κάθε πλαίσιο όπως λέει το hb_vis (κανένα φωτισμένο)."""
+    v = vis(c)
+    return all(btn_bytes(c, k) == btn_expect(k, v >> k & 1) for k in range(8))
+
+
 def tc_queue(c):
     return [b for b in M7.blds(c) if b['type'] == 'town_center'][0]['qn']
 
@@ -75,14 +103,18 @@ def squads(c):
 
 def label_ok(c, sym, k):
     """Η λωρίδα της ετικέτας: μελάνι μόνο μέσα στα κελιά του κειμένου
-    (κεντραρισμένο), και στο πρώτο και στο τελευταίο κελί."""
+    (κεντραρισμένο), και στο πρώτο και στο τελευταίο κελί. (Μια μονάδα που
+    περνάει από τη λωρίδα ζωγραφίζεται από πάνω της: έξω από τα κελιά
+    μετράει μόνο το pen των γραμμάτων.)"""
     rows = M4.M2.decode_scrolled(c, sym)[:8]
     bg = rows[7][0]
     n = len(mockup.BUTTONS[k][1])
     x0 = (80 - 3 * n) // 2 * 2
     x1 = x0 + 6 * n
-    outside = all(rows[y][x] == bg for y in range(8) for x in range(160)
-                  if not x0 <= x < x1)
+    ink = {rows[y][x] for y in range(7) for x in range(x0, x1)} - {bg}
+    outside = len(ink) == 1 and all(
+        rows[y][x] not in ink for y in range(8) for x in range(160)
+        if not x0 <= x < x1)
     first = any(rows[y][x] != bg for y in range(7) for x in range(x0, x0 + 6))
     last = any(rows[y][x] != bg for y in range(7) for x in range(x1 - 6, x1))
     return outside and first and last
@@ -155,16 +187,17 @@ def main():
                                        c.peek(sym['SAVE_REQ'])))
 
     # ------------------------------------------------ 5. κουμπιά
+    # (M22) με χωρικό επιλεγμένο φαίνονται μόνο BUILD, NEXT AGE, IDLE
+    # VILLAGER, SAVE GAME (0x71), τα άλλα είναι φόντο· ο κέρσορας περνάει
+    # μόνο από τα φανερά: P (κανένα δεξιά), A, P, P, P (το CANCEL κρυμμένο),
+    # O, Q (πάνω από το IDLE το TRAIN είναι κρυμμένο: το BUILD)
+    g.tick(4)
+    v0, f0 = vis(c), frames_ok(c)
     before = [btn_bytes(c, k) for k in range(8)]
     entered = UM.hud_enter(c)
-    seen, lit, labels = [], [], []
-    for k in list(range(4)) + list(range(7, 3, -1)):
-        if k == 7:
-            UM.tap(c, 'a')
-        elif k < 4 and k:
-            UM.tap(c, 'p')
-        elif k >= 4:
-            UM.tap(c, 'o')
+    seen, lit, labels = [UM.rb(c, UM.U['HB_I'])], [], []
+    for key in 'pappppoq':
+        UM.tap(c, key)
         g.tick(2)
         i = UM.rb(c, UM.U['HB_I'])
         seen.append(i)
@@ -172,14 +205,14 @@ def main():
                    all(btn_bytes(c, j) == before[j] for j in range(8)
                        if j != i))
         labels.append(label_ok(c, sym, i))
-        if g.shots and k == 2:
+        if g.shots and key == 'a':
             c.screenshot(os.path.join(M4.M.BUILD, 'm20_hud.png'),
                          aspect=True)
-    g.report('κουμπιά', entered and seen == [0, 1, 2, 3, 7, 6, 5, 4] and
-             all(lit) and all(labels),
-             'A στην κάτω άκρη: στα κουμπιά %s· O P A: %s· φωτισμένο μόνο '
-             'το τρέχον %s· ετικέτα %s' % (entered, seen, all(lit),
-                                          labels))
+    g.report('κουμπιά', entered and v0 == 0x71 and f0 and
+             seen == [0, 0, 4, 5, 6, 6, 6, 5, 0] and all(lit) and all(labels),
+             'χωρικός: φανερά #%02X, τα πλαίσια σωστά %s· A: στα κουμπιά %s· '
+             'P A P P P P O Q: %s· φωτισμένο μόνο το τρέχον %s· ετικέτα %s'
+             % (v0, f0, entered, seen, all(lit), labels))
 
     # ------------------------------------------------ 6. πράξεις
     out = []
@@ -203,6 +236,9 @@ def main():
     tc = [b for b in M7.blds(c) if b['type'] == 'town_center'][0]['slot']
     rs = UM.rows(c) if ok else []
     UM.close(c)
+    g.tick(2)
+    seen_vis = [('Κέντρο', vis(c), 0x77)]   # (M22) + TRAIN, RESEARCH (και ο
+    #                                         χωρικός του IDLE: BUILD)
     out.append(('NEXT AGE', ok and c.peek(sym['SEL_BLD']) == tc and
                 any(a == UM.MA_TECH for a, _, _ in rs),
                 'μενού του Κέντρου (θέση %d): %s' %
@@ -225,7 +261,11 @@ def main():
     ok = UM.wait_open(c) and UM.rb(c, UM.U['UM_KIND']) == UM.MK_BUILD
     UM.choose(c, UM.MA_BUILD, house)
     bm = c.peek(sym['BMODE'])
+    g.tick(2)
+    seen_vis.append(('τοποθέτηση', vis(c), 0xF1))   # + CANCEL
     UM.hud_button(c, UM.HB_CANCEL, leave=False)
+    g.tick(2)
+    seen_vis.append(('CANCEL', vis(c), 0x71))
     out.append(('BUILD', ok and bm == house, 'μενού BUILD, HOUSE -> %d' % bm))
     out.append(('CANCEL', c.peek(sym['BMODE']) == 255,
                 'bmode %d' % c.peek(sym['BMODE'])))
@@ -236,10 +276,15 @@ def main():
             u['set'] == 1 and u['sy'] < 130]
     c.poke(0x3F00 + sold[0], 3)         # SQ_N: μια ομάδα των 4 (M15)
     M6.click_unit(g, sold[0])
+    g.tick(2)
+    seen_vis.append(('ομάδα', vis(c), 0x78))       # SPLIT SQUAD
     UM.hud_button(c, UM.HB_SPLIT, leave=False)
     g.tick(4)
     out.append(('SPLIT', squads(c) == n0 + 1, 'ομάδες %d -> %d'
                 % (n0, squads(c))))
+    out.append(('νόημα', all(v == w for _, v, w in seen_vis),
+                '(M22) τα φανερά: %s' % ', '.join(
+                    '%s #%02X (#%02X)' % x for x in seen_vis)))
     for name, good, what in out:
         g.report(name, good, what)
 
@@ -251,11 +296,12 @@ def main():
     UM.hud_leave(c)
     g.tick(6)
     back = not UM.rb(c, UM.U['HB_ON'])
-    same = [btn_bytes(c, k) == before[k] for k in range(8)]
+    same = frames_ok(c)
     comp = g.compose('m20_back')
-    g.report('πίσω', back and all(same) and comp,
-             'Q: στον χάρτη %s· τα πλαίσια όπως ήταν %s· η οθόνη = φόντο + '
-             'μονάδες %s' % (back, all(same), comp))
+    g.report('πίσω', back and same and comp,
+             'Q: στον χάρτη %s· τα πλαίσια όπως λέει το hb_vis (#%02X), κανένα '
+             'φωτισμένο %s· η οθόνη = φόντο + μονάδες %s'
+             % (back, vis(c), same, comp))
 
     print('M20 (τα μενού και τα κουμπιά): %s' % ('OK' if g.ok else
                                                   'ΑΠΟΤΥΧΙΑ'))

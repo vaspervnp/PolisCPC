@@ -103,8 +103,9 @@ def black(c):
 
 
 # Το τέλος στο HUD (main.asm, hud_end): στην κάρτα (4 bytes x 16 γραμμές από
-# τη γραμμή END_TOP) η σημαία (νίκη) ή η νεκροκεφαλή (ήττα) του πάνελ.
-END_Y, END_WIN_X, END_LOSE_X, END_TOP = 36, 57, 64, 19
+# τη γραμμή END_TOP) η σημαία (νίκη) ή η νεκροκεφαλή (ήττα): M22, από το
+# data/ui_end.bin (ως το M19 από το πάνελ των εντολών).
+END_TOP = 19
 
 
 def hud_block(c, y0, x):
@@ -116,9 +117,10 @@ def hud_block(c, y0, x):
 
 def hud_end(c):
     """-> 'win', 'lose' ή None: τι δείχνει η κάρτα του HUD."""
-    card = hud_block(c, END_TOP, M6.MM.CARD_X)
-    for name, x in (('win', END_WIN_X), ('lose', END_LOSE_X)):
-        if card == hud_block(c, END_Y, x):
+    import make_ui
+    card = b''.join(hud_block(c, END_TOP, M6.MM.CARD_X))
+    for name, icon in (('win', 'rally'), ('lose', 'delete')):
+        if card == make_ui.end_bytes(icon):
             return name
     return None
 

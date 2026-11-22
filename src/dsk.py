@@ -126,6 +126,13 @@ class Dsk:
         return BLOCKS - len(self.used_blocks())
 
     def save(self):
+        # ο rasm δηλώνει 42 τροχιές, οι δύο τελευταίες χωρίς τομείς (μέγεθος
+        # 0): μερικοί emulators / το iDSK τις θεωρούν χαλασμένες. Η κεφαλίδα
+        # μόνο με τις διαμορφωμένες.
+        n = self.ntracks
+        while n and self.d[0x34 + n - 1] == 0:
+            n -= 1
+        self.d[0x30] = n
         open(self.path, 'wb').write(self.d)
 
 

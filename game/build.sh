@@ -20,7 +20,7 @@ rm -f build/polis.dsk
 rasm game/main.asm -DC7RAW=1 -o build/c7raw -sz > /dev/null
 rasm game/main.asm -o build/polis -s -sz
 # (M20) τα σύμβολα των μενού για το snapshot — εδώ το polis.sym είναι «τράπεζα:διεύθυνση ΟΝΟΜΑ»
-grep -E ' ((UM|HB)_[A-Z0-9_]+|HUD_MUS|FX_TICK|FX_V4|FX_DEC|MUS_GAME)$' build/polis.sym | awk '{split($1, a, ":"); print tolower($2) " equ #" a[2]}' > build/ui_sym.asm
+grep -E ' ((UM|HB|UI_IC)_[A-Z0-9_]+|HUD_MUS|FX_TICK|FX_V4|FX_DEC|MUS_GAME|UI_BTN|UI_END|UI[A-K]_END|SND[A-C]_END)$' build/polis.sym | awk '{split($1, a, ":"); if (a[1] != "260") print tolower($2) " equ #" a[2]}' > build/ui_sym.asm   # (όχι του κύριου κώδικα, 260: M22 hudvis.asm)
 grep -q '^um_go ' build/ui_sym.asm || { echo 'build/ui_sym.asm: τα σύμβολα των μενού;'; exit 1; }
 cp build/polis.sym build/polis_dsk.sym
 rasm game/main.asm -DSNA=1 -o build/polis -sz -v2 -ss
@@ -76,7 +76,7 @@ PY
 # Τα αρχεία χωρίς κεφαλίδα AMSDOS (M12, src/dsk.py): οι εποχές ανά
 # πολιτισμό και ο οπλίτης, συμπιεσμένα ZX0 (M13: τα φορτώνει το disk_load
 # στην οθόνη, και το dzx0 στη θέση τους).
-cat build/ui.bin build/ui_a.bin build/ui_b.bin build/ui_c.bin build/ui_d.bin build/ui_e.bin build/ui_f.bin build/ui_g.bin > build/ui_all.bin   # (M20)
+cat build/ui.bin build/ui_a.bin build/ui_b.bin build/ui_c.bin build/ui_d.bin build/ui_e.bin build/ui_f.bin build/ui_g.bin build/ui_h.bin build/ui_i.bin build/ui_j.bin build/ui_k.bin data/ui_end.bin data/ic_c5a.bin data/ic_c5b.bin > build/ui_all.bin   # (M20)
 python3 src/dsk.py build/polis.dsk \
     $(for c in E G B A R P F K; do echo --zx0 AGE3$c.BIN data/age3$c.bin --zx0 AGE4$c.BIN data/age4$c.bin; done) \
     --zx0 HOPL.BIN data/c5_slot3.bin \

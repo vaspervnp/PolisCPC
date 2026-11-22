@@ -35,31 +35,28 @@ hb_keys:
         ld b,a                  ; B = μόλις πατήθηκαν
         ld a,(hb_i)
         ld c,a
-        bit IN_LEFT,b
+        bit IN_LEFT,b           ; (M22: μόνο στα φανερά — hudvis.asm)
         jr z,.l
-        and 3
-        jr z,.l
-        dec c
+        ld d,-1
+        call hb_step
 .l:     bit IN_RIGHT,b
         jr z,.r
-        ld a,c
-        and 3
-        cp 3
-        jr z,.r
-        inc c
+        ld d,1
+        call hb_step
 .r:     bit IN_UP,b
         jr z,.u
         ld a,c
         sub 4
-        jr c,hb_off             ; πάνω από την πρώτη σειρά: ο χάρτης
-        ld c,a
+        jr c,hb_off             ; πάνω από την πρώτη σειρά: ο χάρτης —
+        call hb_vrow            ; και όταν η πρώτη δεν έχει κανένα φανερό
+        jr nc,hb_off
 .u:     ld a,c
         cp 4                    ; (κάτω από τη δεύτερη: τίποτα — ο χάρτης
         jr nc,.d                ; κυλάει με τα βελάκια)
         bit IN_DOWN,b
         jr z,.d
         add a,4
-        ld c,a
+        call hb_vrow            ; (το πιο κοντινό φανερό από κάτω)
 .d:     ld a,(hb_i)
         cp c
         call nz,hb_move

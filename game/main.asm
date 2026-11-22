@@ -129,55 +129,13 @@ start:
         call dzx0               ; αποθήκευση (savegame.asm, M12) και οι
                                 ; ρουτίνες της σελίδας του HUD
         ld hl,hud_z             ; (από εδώ: ο rasm δίνει λάθος τιμή στις
-        call hud_init           ; ετικέτες των συμπιεσμένων μέσα στο init_z)
-                                ; το HUD -> #4000, μέσω της οθόνης
-        ifndef SNA
-        ld hl,ui_name           ; τα μενού (M20) στις κρυφές σειρές του
-        call disk_load          ; HUD, ΜΕΤΑ το hud_init που τις καθαρίζει
-        di
-        ld hl,LOAD_AT           ; τέσσερα κομμάτια στη σειρά: ο κώδικας και
-        ld de,UI_TMP            ; τα δεδομένα, στις θέσεις τους
-        call dzx0
-        ld hl,UI_TMP
-        ld de,UI_AT
-        ld bc,UI_LEN
-        ldir
-        ld de,UI_F
-        ld bc,UIA_LEN
-        ldir
-        ld de,UI_S
-        ld bc,UIB_LEN
-        ldir
-        ld de,UI_C
-        ld bc,UIC_LEN
-        ldir
-        ld de,UI_D
-        ld bc,UID_LEN
-        ldir
-        ld de,SNDA_AT            ; ο ήχος του παιχνιδιού (M21)
-        ld bc,SNDA_LEN
-        ldir
-        ld de,SNDB_AT
-        ld bc,SNDB_LEN
-        ldir
-        ld de,SNDC_AT
-        ld bc,SNDC_LEN
-        ldir
-        else                    ; (στο snapshot τα γράφει ο έλεγχος:
-        ds 59 + 24,0            ; tests/m1_check.py, wait_phase)
+                                ; ετικέτες των συμπιεσμένων μέσα στο init_z)
+        ifndef SNA              ; το HUD, τα μενού (UI.BIN: στο snapshot τα
+        ld a,1                  ; γράφει ο έλεγχος, tests/m1_check.py), οι
+        else                    ; μονάδες, τα κτίρια, η ομίχλη — στο INIT
+        ld a,0                  ; (init.asm, M22: τρέχουν μία φορά)
         endif
-        ld hl,VOID16            ; το «πλακίδιο» εκτός χάρτη της κύλισης
-        ld b,16
-.z:     ld (hl),0
-        inc hl
-        djnz .z
-        call units_init
-        ld hl,hp_init           ; η υγεία όλων (bank7.asm)
-        call far7
-        call bld_init           ; το Κέντρο Πόλης στον χάρτη, πριν την εύρεση
-        call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
-        call gather_init        ; οι πηγές, και οι αριθμοί του HUD
-        call fog_init           ; ο εξερευνημένος χάρτης (M11)
+        call init_go
         call clear_screen       ; (και ο κώδικας της εκκίνησης στο INIT)
         ld de,#067F             ; R6 = 127, μία φορά (screen.asm)
         call crtc_w
@@ -243,9 +201,7 @@ frame:
         ld a,3
         ld (uphase),a           ; 3 = τρέχει το καρέ μονάδων (tests/m3_check.py)
         call units_tick
-        ld a,(hb_on)            ; η ετικέτα του κουμπιού (ui_hud.asm, M20)
-        or a
-        call nz,hb_label
+        call hb_tick            ; τα κουμπιά του HUD και η ετικέτα (M22)
         ld a,(save_req)         ; SAVE GAME (ui_hud_e.asm): η παρτίδα στη
         or a                    ; δισκέτα, στο τέλος του καρέ (M12)
         call nz,save_go
@@ -310,44 +266,53 @@ border:
         ret
 
 ; Το τέλος της παρτίδας (ai_end, με call0): στην κάρτα του HUD η σημαία
-; (νίκη) ή η νεκροκεφαλή (ήττα) από το πάνελ των εντολών, πάνω από το
-; ψηφίο της. Το περιθώριο μένει μαύρο.
-END_Y       equ 36              ; γραμμή του HUD: η 2η σειρά των εντολών
-END_WIN_X   equ 57              ; rally (η σημαία), byte
-END_LOSE_X  equ 64              ; delete (η νεκροκεφαλή)
-END_TOP     equ 19              ; η κάρτα: 4 bytes x 16 γραμμές από εδώ
+; (νίκη) ή η νεκροκεφαλή (ήττα), πάνω από το ψηφίο της. Το περιθώριο μένει
+; μαύρο. (M22: ως το M19 ήταν εικονίδια του πάνελ των 16 εντολών. Η σημαία
+; στην κορυφή της C6, END_IC — τη γράφει το ui_load από το UI.BIN — με το
+; rst 8· η νεκροκεφαλή 1 bit ανά pixel, hb_skull στη σελίδα του HUD.)
+END_IC      equ #7FBC           ; 64 bytes στην C6: η σημαία
+END_TOP     equ 19              ; η πρώτη γραμμή της κάρτας στο HUD
 hud_end:
         ld a,(game_end)
-        ld hl,HUD_PAGE + (END_Y & 7) * #800 + (END_Y >> 3) * 80 + END_WIN_X
         dec a
-        jr z,.s
-        ld hl,HUD_PAGE + (END_Y & 7) * #800 + (END_Y >> 3) * 80 + END_LOSE_X
-.s:     ld de,HUD_PAGE + (END_TOP & 7) * #800 + (END_TOP >> 3) * 80 + CARD_X
+        ld hl,END_IC
+        ld de,HUD_PAGE + (END_TOP & 7) * #800 + (END_TOP >> 3) * 80 + CARD_X
         ld b,16
-.l:     push bc
-        push hl
+        jr nz,.sk               ; (το BC_SRC είναι πάντα C6, για το age_load:
+.l:     push bc                 ; και το hb_draw το ξαναβάζει)
         push de
         ld bc,4
-        ldir
-        pop hl
-        call .nl
+        ld a,RAM_BASE
+        call bcopy_to
+        pop de
         ex de,hl
-        pop hl
-        call .nl
+        call hb_nl
+        ex de,hl
         pop bc
         djnz .l
         ret
-.nl:    ld a,h                  ; η γραμμή από κάτω (όπως το next_line,
-        add a,#08               ; που υπάρχει μόνο στο BARS)
-        ld h,a
-        and #38
-        ret nz
-        ld a,l
-        add a,80
-        ld l,a
-        ld a,h
-        adc a,#C0
-        ld h,a
+.sk:    ld hl,hb_skull
+.k:     push bc
+        push de
+        ld c,(hl)
+        inc hl
+        ld b,4
+.p:     ld a,UB_BG_L | UB_BG_R
+        sla c
+        jr nc,.q
+        xor UB_BG_L ^ UB_SK_L
+.q:     sla c
+        jr nc,.r
+        xor UB_BG_R ^ UB_SK_R
+.r:     ld (de),a
+        inc de
+        djnz .p
+        pop de
+        ex de,hl
+        call hb_nl
+        ex de,hl
+        pop bc
+        djnz .k
         ret
 
         ifdef BARS            ; μόνο στην οθόνη ελέγχου του M0
@@ -443,6 +408,27 @@ zeros:  ds 16                   ; «πλακίδιο» έξω από τον χά
                                                         ; πλακίδια)
 mus_mask:   db 15               ; 0: η μουσική κλειστή (M, player.asm· εδώ
 mus_km:     db 0                ; και όχι στο sound.asm: το align 16)
+hb_vis:     db 255              ; (M22, hudvis.asm) τα φανερά κουμπιά: όλα
+hb_ik:      db 0                ; στην αρχή, όπως το HUD· ο αδρανής χωρικός:
+hb_if:      db 0                ; η επόμενη μονάδα, βρέθηκε σε αυτόν τον γύρο,
+hb_idf:     db 0                ; βρέθηκε στον προηγούμενο (1 << 5)
+hb_ph:      db 0                ; η φάση των καρέ (hb_tick)
+tw_b:       db 255              ; ο πύργος που σημαδεύει (255 κανένας, buildings.asm)
+; του ήχου (sound.asm)
+snd_div:    db 6                ; οι διακοπές ως το επόμενο καρέ του ήχου
+ram_now:    db RAM_BASE         ; η τράπεζα στο #4000 (setram)
+psg_lock:   db 0                ; 1: ο κύριος κώδικας γράφει / διαβάζει το AY
+mus_jp:     db #C3              ; jp ο player (mus_vec = 0: σιωπή)
+mus_vec:    dw 0
+mus_clk:    db 0                ; καρέ ως το επόμενο βήμα
+mus_step:   db 0                ; καρέ ανά βήμα
+mus_ch:     db 0, 0, 0, 0, 0, 0, 10 * 4, 1      ; A: ptr, cnt, ένταση, -,
+            db 0, 0, 0, 0, 0, 0, 9 * 4, 0       ; αρχή, V0 (τέταρτα), οκτάβα
+snd_pf:     db 0                ; το εφέ που ζητήθηκε σε αυτό το καρέ
+snd_pv:     db 0                ; η ένταση του (0: κανένα)
+snd_kp:     db 0                ; το SPACE στο προηγούμενο καρέ
+fx_r7:      db #3C              ; το R7: A, B τόνος· C από το εφέ
+        include "hudvis.asm"    ; (M22: μετά το align 16, όχι πριν)
 
 ; ---------------------------------------------------------- μεταβλητές
 cam_x:      dw 98               ; bytes κόσμου, ζυγό — η πόλη του παίκτη
@@ -761,6 +747,7 @@ res_gfx     equ #4000
 ; Ως εδώ ό,τι χρειάζεται το παιχνίδι ΟΣΟ ΤΡΕΧΕΙ: πριν το παράθυρο τράπεζας.
 code_end:
         ifndef BARS             ; (η οθόνη ελέγχου του M0 δεν γράφει ποτέ στο
+        print "CODE_END ", {hex4}code_end
         assert code_end <= SQ_N, 'code past SQ_N'     ; #4000: ούτε HUD ούτε
         endif                   ; τράπεζες — ο κώδικας της μπορεί να το περάσει)
 
@@ -832,8 +819,10 @@ res_z:
 cursor_gfx:                     ; -> C5, SPR_CURSOR: κέρσορας, αγκύλες, γωνία,
         lzx0
         incbin "../data/cursor.bin"     ; το βέλος, και τα περιγράμματα των
-        incbin "../data/arrow.bin"      ; καρέ (src/make_edges.py)
-        incbin "../data/occ_edges.bin"
+        incbin "../data/arrow.bin"      ; καρέ (src/make_edges.py) — M22: στο
+        incbin "../data/occ_edges.bin"  ; βέλος και στο κενό μετά τα 1.600 bytes
+                                        ; του OCC_E το ui_load (init.asm) γράφει
+                                        ; εικονίδια των κουμπιών
         lzclose
 ; Τα μεταγλωττισμένα sprites (src/make_compiled.py) -> τράπεζα C7.
 cmp_z:
@@ -1082,6 +1071,10 @@ UI_S        equ HI_B + HIB_LEN  ; κτίρια, μονάδες, λέξεις: μ
 UI_C        equ HI_C + HIC_LEN  ; οι τεχνολογίες: μετά τα HI_C, ως το PORTAL
 UI_D        equ HI_A + HIA_LEN  ; τα κουμπιά του HUD: μετά τα HI_A, ως το PX
 UI_TMP      equ SCREEN + #1000  ; το UI.BIN αποσυμπιεσμένο, πριν μοιραστεί
+UI_H        equ BKT0 + 196      ; (M22) τα κουμπιά που κρύβονται: μετά τους
+UI_I        equ BKT1 + 196      ; κάδους (pathing.asm), ως το τέλος της οκτάδας
+UI_J        equ HUD_PAGE + #1000 + HUD_ROWS * 80 ; ως το RPOSE
+UI_K        equ HUD_PAGE + #2800 + HUD_ROWS * 80 ; ως το RPOSE2
 SNDA_AT      equ SVM_STORE + SVM_LEN ; ο ήχος (sound_fx.asm, M21): ως το BKT0
 SNDB_AT     equ SRC_TAB + SRC_N * 4 ; τα εφέ: ως το #7000
 SNDC_AT     equ BOOT + BOOT_LEN ; η μουσική του παιχνιδιού: ως το J_SI
@@ -1115,6 +1108,7 @@ uid_end:
 hud_mus:
         call fx_tick            ; πρώτα τα εφέ, μετά η μουσική
         include "player.asm"
+        include "../data/ui_skull.asm"  ; (M22: η κάρτα της ήττας, hud_end)
 snda_end:
         org SNDB_AT
         include "sound_fx.asm"
@@ -1122,6 +1116,20 @@ sndb_end:
         org SNDC_AT
         include "../data/music_game.asm"
 sndc_end:
+        org UI_H
+        include "ui_hud_h.asm"
+uih_end:
+        org UI_I
+        include "ui_hud_i.asm"
+uii_end:
+        org UI_J
+        include "../data/ui_j.asm"
+        include "ui_hud_j.asm"
+uij_end:
+        org UI_K
+        include "../data/ui_k.asm"
+uik_end:
+        endif
 UI_LEN      equ ui_end - UI_AT
 UIA_LEN     equ uia_end - UI_F
 UIB_LEN     equ uib_end - UI_S
@@ -1130,6 +1138,13 @@ UID_LEN     equ uid_end - UI_D
 SNDA_LEN    equ snda_end - SNDA_AT
 SNDB_LEN    equ sndb_end - SNDB_AT
 SNDC_LEN    equ sndc_end - SNDC_AT
+UIH_LEN     equ uih_end - UI_H
+UII_LEN     equ uii_end - UI_I
+UIJ_LEN     equ uij_end - UI_J
+UIK_LEN     equ uik_end - UI_K
+        ifndef SNA
+        assert uih_end <= #5000 && uii_end <= #5800, 'ui_h / ui_i past the 8th row'
+        assert uij_end <= RPOSE && uik_end <= RPOSE2, 'ui_j / ui_k past RPOSE'
         assert sndc_end <= J_SI, 'music_game past J_SI'
         assert snda_end <= BKT0, 'sound_fx past BKT0'
         assert sndb_end <= #7000, 'fx_tab past #7000'
@@ -1138,7 +1153,7 @@ SNDC_LEN    equ sndc_end - SNDC_AT
         assert uia_end <= SRC_TAB, 'ui_a past SRC_TAB'
         assert uib_end <= PN, 'ui_b past PN'
         assert uic_end <= PORTAL, 'ui_c past PORTAL'
-        assert UI_TMP >= LOAD_AT + #800 && UI_TMP + UI_LEN + UIA_LEN + UIB_LEN + UIC_LEN + UID_LEN + SNDA_LEN + SNDB_LEN + SNDC_LEN <= #10000, 'UI_TMP'
+        assert UI_TMP >= LOAD_AT + #800 && UI_TMP + UI_LEN + UIA_LEN + UIB_LEN + UIC_LEN + UID_LEN + SNDA_LEN + SNDB_LEN + SNDC_LEN + UIH_LEN + UII_LEN + UIJ_LEN + UIK_LEN + 64 + #700 - 4 * 25 * 16 + 128 <= INIT, 'UI_TMP over INIT (ui_load)'
         ifndef C7RAW
         save 'build/ui.bin',UI_AT,UI_LEN
         save 'build/ui_a.bin',UI_F,UIA_LEN
@@ -1148,6 +1163,10 @@ SNDC_LEN    equ sndc_end - SNDC_AT
         save 'build/ui_e.bin',SNDA_AT,SNDA_LEN
         save 'build/ui_f.bin',SNDB_AT,SNDB_LEN
         save 'build/ui_g.bin',SNDC_AT,SNDC_LEN
+        save 'build/ui_h.bin',UI_H,UIH_LEN
+        save 'build/ui_i.bin',UI_I,UII_LEN
+        save 'build/ui_j.bin',UI_J,UIJ_LEN
+        save 'build/ui_k.bin',UI_K,UIK_LEN
         endif
         endif
 

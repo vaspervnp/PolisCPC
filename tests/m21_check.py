@@ -95,11 +95,15 @@ def music(g):
     # ένα τραγούδι μετά: οι ίδιες νότες με την ίδια σειρά (όχι στο ίδιο
     # ακριβώς καρέ: μια διακοπή που πέφτει σε μακρύ di χάνεται, ~1 στα 700
     # καρέ — και για τον μετρητή του χρόνου, int_t)
-    ch = [i for i in range(51, len(seq)) if seq[i] != seq[i - 1]]
+    # (M22) και ένα καρέ που έπεσε ΜΕΣΑ στη διακοπή: ο τόνος του A γραμμένος,
+    # του B και οι εντάσεις όχι ακόμα — δεν μετράει ως νότα, και η επόμενη
+    # έρχεται ένα καρέ αργότερα (±1)
+    ch = [i for i in range(51, len(seq) - 1) if seq[i] != seq[i - 1] and
+          seq[i + 1] == seq[i]]
     m = sum(1 for i in ch if i < 50 + n)
     st = [seq[i] for i in ch]
     gaps = [b - a for a, b in zip(ch, ch[1:])]
-    loop = st[:m] == st[m:2 * m] and all(g % 16 in (0, 15) for g in gaps)
+    loop = st[:m] == st[m:2 * m] and all(g % 16 in (0, 1, 15) for g in gaps)
     report('ΜΟΥΣΙΚΗ', got[0] <= want[0] and got[1] <= want[1] and
            len(got[0]) >= len(want[0]) - 1 and len(got[1]) >= 4 and
            max(vols) <= 10 and loop,
