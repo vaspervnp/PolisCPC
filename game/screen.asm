@@ -119,6 +119,19 @@ int_handler:
         ld a,(scr_s)
         inc b
         out (c),a
+        ld a,(CS_PEND)          ; (2026-11-23) η στήλη της οριζόντιας κύλισης
+        or a                    ; στη θέση της ΤΩΡΑ: η δέσμη είναι κάτω από
+        jr z,.out               ; τον χάρτη, και η νέα αρχή μετράει από το
+        xor a                   ; επόμενο καρέ — ούτε καρέ με τη στήλη στην
+        ld (CS_PEND),a          ; άλλη άκρη (scroll.asm, h_column). Με ei: ~4
+        push de                 ; ms, και η διακοπή του VSYNC δεν περιμένει
+        push hl
+        ei
+        ld a,#C0
+        call cs_copy
+        di
+        pop hl
+        pop de
         jr .out
 .fa:    ld a,(split_on)         ; μέσα στο Α (σειρά ~4): το Α και το επόμενο Β
         or a
@@ -176,8 +189,8 @@ build_lines:
         inc l
         ld (hl),a
         inc hl
-        ld a,c                  ; off += 80
-        add a,80
+        ld a,c                  ; off += 80 (2 για τη στήλη της κύλισης:
+.st:    add a,80                ; h_column, scroll.asm)
         ld c,a
         jr nc,.nc
         inc b

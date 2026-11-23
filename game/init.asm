@@ -663,6 +663,8 @@ init_go:
 .z:     ld (hl),0
         inc hl
         djnz .z
+        ld hl,CS_PEND           ; (B = 0) καμία στήλη της κύλισης ακόμα για
+        ld (hl),b               ; τη διακοπή (fog.asm)
         call units_init
         ld hl,hp_init           ; η υγεία όλων (bank7.asm)
         call far7

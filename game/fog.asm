@@ -26,6 +26,14 @@ FD_SZ       equ 3               ; ...). 2026-11-17: ΑΜΕΣΗ διεύθυνσ�
                                 ; (δεκάδες πλακίδια φανερώνονται μαζί)
         assert FD_TAB >= BUF_A + #800 + 80 && FD_TAB + FD_N * FD_SZ <= UNIT_TAB, 'FD_TAB'
         assert (FD_TAB & 255) + FD_N * FD_SZ <= 256, 'FD_TAB: one page'
+
+; (2026-11-23) Η στήλη της οριζόντιας κύλισης (scroll.asm, h_column /
+; cs_copy, και η διακοπή: screen.asm): στο κενό μετά το FD_TAB — κύρια
+; RAM, ορατή σε κάθε τράπεζα (ο κύριος κώδικας είναι γεμάτος).
+CS_SRC      equ #ADE0           ; dw: η στήλη στην κρυφή μνήμη (offset)
+CS_DST      equ #ADE2           ; dw: ... και η θέση της
+CS_PEND     equ #ADE4           ; db: 1 = η διακοπή τη γράφει στην οθόνη
+        assert FD_TAB + FD_N * FD_SZ <= CS_SRC && CS_PEND < UNIT_TAB, 'CS_SRC'
 FOG_T       equ 5               ; 1/300 s από την αρχή του καρέ: ως εκεί
         assert FOG + FOG_LEN <= CMP_RED, 'FOG over CMP_RED'
         assert AGE_AT + AGE_MAX <= FOG, 'age file over FOG'

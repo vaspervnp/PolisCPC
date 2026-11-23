@@ -19,6 +19,14 @@
    είναι σωστή, και όταν σβηστούν, να μένει ακριβώς το φόντο — άρα και ο
    καθρέφτης του φόντου (C4) ακολούθησε την κύλιση.
 
+5. ΑΚΡΕΣ (2026-11-23). Καρέ προς καρέ (στο VSYNC, όπως βγαίνει, το
+   framebuffer), με το δεξί / αριστερό βελάκι πατημένο: η άκρη που ΔΕΝ
+   αποκαλύπτει νέο έδαφος (αριστερή / δεξιά) δείχνει ό,τι έδειχνε το
+   προηγούμενο καρέ στην ίδια θέση του κόσμου. Ως τότε η νέα στήλη
+   φαινόταν 1-2 καρέ στην ΑΛΛΗ άκρη (η μνήμη της είναι η αρχή της επόμενης
+   σειράς χαρακτήρων): 31-59 στα 160 καρέ. Ανοχή: μονάδες που βγαίνουν από την
+   άκρη (ως 6 καρέ, ως 150 pixels).
+
 4. ΧΡΟΝΟΣ — ΜΕΤΡΗΣΗ, όχι κριτήριο (βλ. milestones.md, M2): το καρέ με
    κύλιση και τις 16 μονάδες, και η λωρίδα μόνη της ανά κατεύθυνση, με την
    κάμερα του χειρότερου βήματος. Πάνω από 40 ms το καρέ των 25 Hz χάνει ένα
@@ -147,6 +155,56 @@ def expect_cam(c, sym, keys, n):
     return x, y
 
 
+FB_W, FB_X0, FB_Y0 = 1024, 64, 37     # ο χάρτης στο framebuffer (4 x 1)
+
+
+def vsync(c, sym):
+    """Ως τη διακοπή του VSYNC (int_n -> 0, γραμμή ~242): οι γραμμές του
+    χάρτη όλες από το ίδιο καρέ."""
+    while c.peek(sym['INT_N']) == 0:
+        c.run_us(256)
+    while c.peek(sym['INT_N']) != 0:
+        c.run_us(256)
+
+
+def fb_map(c):
+    fb = c.framebuffer()
+    return [fb[(FB_Y0 + y) * FB_W + FB_X0 + 1:(FB_Y0 + y + 1) * FB_W:4][:160]
+            for y in range(M.VIEW_H)]
+
+
+def edges(sym, frames=160):
+    """(5) Η άκρη απέναντι από τη νέα στήλη, καρέ προς καρέ."""
+    out, good = [], True
+    for key, xs, name in (('R', range(0, 4), 'δεξιά'),
+                          ('L', range(156, 160), 'αριστερά')):
+        c = CPC()
+        c.run_frames(5)
+        assert M.load_sna(c), 'quickload'
+        c.poke(sym['AI_ON'], 0)
+        M.wait_phase(c, sym, 6, limit_ms=8000)
+        vsync(c, sym)
+        prev = fb_map(c)
+        c.key_down(KEYS[key])
+        bad, worst, steps = 0, 0, 0
+        for _ in range(frames):
+            vsync(c, sym)
+            cur = fb_map(c)
+            s = max((-4, 0, 4), key=lambda s: sum(
+                cur[y][12:148] == prev[y][12 + s:148 + s]
+                for y in range(0, M.VIEW_H, 2)))
+            steps += s != 0
+            n = sum(1 for y in range(M.VIEW_H) for x in xs
+                    if 0 <= x + s < 160 and cur[y][x] != prev[y][x + s])
+            bad += n > 40
+            worst = max(worst, n)
+            prev = cur
+        good &= steps > 10 and bad <= 6 and worst <= 150
+        out.append('%s %d βήματα: %d καρέ με την άλλη άκρη (>40 pixels), '
+                   'χειρότερο %d' % (name, steps, bad, worst))
+    return good, '· '.join(out)
+
+
 def main():
     shots = '--shots' in sys.argv
     sym = M.symbols()
@@ -168,9 +226,9 @@ def main():
     for k in range(3):
         for _ in range(4):
             times.append(M3.tick_time(c, sym))
-        if c.peek(sym['H_PEND']):           # η στήλη έτοιμη, η κάμερα όχι
-            times.append(M3.tick_time(c, sym))  # ακόμα: η άκρη 4 pixels
-        cx, cy = cam(c, sym)                    # δείχνει ήδη το νέο έδαφος
+        if c.peek(sym['H_PEND']):           # η στήλη έτοιμη (στην κρυφή
+            times.append(M3.tick_time(c, sym))  # μνήμη), η κάμερα όχι ακόμα
+        cx, cy = cam(c, sym)
         exp = S.expected(c, sym, M.reference(world, cx, cy))
         good = diff(decode_scrolled(c, sym), exp, 'units%d' % k, c, shots)
         print('μονάδες  %-9s κύλιση δεξιά ενώ κινούνται, κάμερα (%d,%d)'
@@ -240,6 +298,10 @@ def main():
             fresh.save(os.path.join(M.BUILD, 'm2_fresh.png'))
     print('οθόνη    %-9s μετά την κύλιση = σχεδίαση από την αρχή (με HUD)'
           % ('OK' if good else 'ΑΠΟΤΥΧΙΑ'))
+    ok &= good
+
+    good, what = edges(sym)
+    print('άκρες    %-9s %s' % ('OK' if good else 'ΑΠΟΤΥΧΙΑ', what))
     ok &= good
 
     for keys, t in per.items():

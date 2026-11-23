@@ -17,8 +17,9 @@
 ; ζωγραφίζεται, ΜΕΤΑ γράφεται στο scr_s (και το CRTC την παίρνει στο επόμενο
 ; καρέ). Η σειρά που αποκαλύπτεται κάθετα είναι εκτός οθόνης ώς τότε: η
 ; κάθετη κύλιση δεν δείχνει ποτέ μισοτελειωμένη λωρίδα. Η στήλη όμως είναι
-; η αριστερή στήλη της επόμενης σειράς χαρακτήρων — ορατή: για ένα καρέ η
-; άκρη 4 pixels μπορεί να φανεί πριν ή μετά.
+; η αριστερή στήλη της επόμενης σειράς χαρακτήρων — ορατή στην ΑΛΛΗ άκρη:
+; γι' αυτό (2026-11-23) ζωγραφίζεται σε κρυφή μνήμη και τη γράφει στη θέση
+; της η διακοπή, μαζί με τη νέα αρχή (h_column, cs_copy).
 
 BUF_A       equ #A500           ; buffer γραμμής (γραμμή b στο +#800)
 VOID16       equ #A580           ; 16 μηδενικά, στοιχισμένα: «πλακίδιο» εκτός χάρτη
@@ -162,9 +163,9 @@ scroll_apply:
 ; της νέας θέσης, και μετά ξανά οι παλιοί), μαζί και ο καθρέφτης της· στο
 ; δεύτερο (scroll_h2) κινείται η κάμερα. Η οριζόντια κύλιση γίνεται έτσι στο
 ; μισό ρυθμό. Η στήλη είναι στη μνήμη της αριστερής (δεξιάς) άκρης της
-; επόμενης (προηγούμενης) σειράς χαρακτήρων, ορατή: για ένα καρέ η άκρη 4
-; pixels δείχνει ήδη το νέο έδαφος. Ο καθρέφτης έχει το ίδιο, άρα οι
-; μονάδες που περνάνε από εκεί σβήνονται σωστά.
+; επόμενης (προηγούμενης) σειράς χαρακτήρων: ως το 2026-11-23 φαινόταν εκεί
+; 1-2 καρέ (στήλες «αντίγραφα της άλλης πλευράς»)· τώρα στην κρυφή μνήμη
+; ως τη διακοπή (h_column). Ο καθρέφτης την παίρνει αμέσως.
 scroll_h:
         ld hl,(cam_x)
         ld (h_ocx),hl
@@ -209,20 +210,62 @@ scroll_h:
         ld (h_redo),a
         ret
 
-; Η στήλη h_c στη νέα θέση (h_ncx, h_ns): ο πίνακας, η κάμερα, το έδαφος
-; και οι πόροι, ο καθρέφτης.
+; Η στήλη h_c στη νέα θέση (h_ncx, h_ns): η κάμερα, το έδαφος και οι
+; πόροι — ΟΧΙ στη θέση της (2026-11-23): εκεί, ώσπου να αλλάξει η αρχή του
+; CRTC, φαίνεται στην ΑΛΛΗ άκρη (η αρχή της επόμενης / το τέλος της
+; προηγούμενης σειράς χαρακτήρων: στήλες «αντίγραφα της άλλης πλευράς»).
+; Ζωγραφίζεται σε κρυφή μνήμη της οθόνης (CS_SRC: 1.600 bytes μετά την αρχή
+; της, 2 bytes ανά σειρά — έξω από το ορατό και στην παλιά και στη νέα
+; θέση, και από τις σειρές της κάθετης), με πίνακα γραμμών βήματος 2 αντί
+; για 80. Από εκεί στον καθρέφτη τώρα, και στην οθόνη από τη διακοπή, μαζί
+; με τη νέα αρχή (CS_PEND, screen.asm).
 h_column:
         ld hl,(h_ncx)
         ld (cam_x),hl
-        ld hl,(h_ns)
-        call build_lines
         call calc_cam_h
+        ld hl,(h_ns)            ; ο πίνακας: h_ns + 800 - c / 2 (λέξεις),
+        ld de,800               ; βήμα 2
+        add hl,de
+        ld a,(h_c)
+        srl a
+        ld e,a
+        ld d,0
+        or a
+        sbc hl,de
+        push hl
+        add hl,hl               ; CS_SRC = (2 h_ns + 1600) AND #7FF
+        add hl,de
+        add hl,de
+        ld a,h
+        and 7
+        ld h,a
+        ld (CS_SRC),hl
+        add hl,de               ; CS_DST = CS_SRC + c - 1600 = (2 h_ns + c)
+        add hl,de               ; AND #7FF
+        ld de,-1600
+        add hl,de
+        ld a,h
+        and 7
+        ld h,a
+        ld (CS_DST),hl
+        pop hl
+        ld a,2                  ; (και η επόμενη σειρά των πόρων: col_wrap)
+        ld (build_lines.st + 1),a
+        ld (col_wrap.st + 1),a
+        call build_lines
         ld a,RAM_RES            ; οι πόροι είναι στην C6
         call setram
         ld a,(h_c)
         call draw_column        ; έδαφος ΚΑΙ πόροι
-        ld a,(h_c)
-        jp mirror_column        ; (επιστρέφει με την C0)
+        ld a,80
+        ld (build_lines.st + 1),a
+        ld (col_wrap.st + 1),a
+        ld a,RAM_BG             ; ο καθρέφτης (C4)
+        call setram
+        ld a,#40
+        call cs_copy
+        ld a,RAM_BASE
+        jp setram
 
 ; Το δεύτερο καρέ: η κάμερα και η μετατόπιση (και η στήλη ξανά, αν τη
 ; χάλασε στο μεταξύ ένα col_redraw).
@@ -231,16 +274,18 @@ scroll_h2:
         ld (h_pend),a
         ld a,(h_redo)
         or a
-        jr z,.go
-        call h_column
-        jr .pub
-.go:    ld hl,(h_ncx)
+        call nz,h_column
+        ld hl,(h_ncx)
         ld (cam_x),hl
         call calc_cam_h
         ld hl,(h_ns)
         call build_lines
-.pub:   ld hl,(h_ns)
+        ld hl,(h_ns)
+        di                      ; η αρχή και η στήλη μαζί (screen.asm, .fb)
         ld (scr_s),hl
+        ld a,1
+        ld (CS_PEND),a
+        ei
         ret
 h_ocx:  dw 0
 
@@ -751,7 +796,7 @@ col_sprite:
 ; Η επόμενη σειρά χαρακτήρων: +80, τυλιγμένο στα 2 KB, στη γραμμή 0.
 col_wrap:
         ld a,e
-        add a,80
+.st:    add a,80                ; (2 για τη στήλη της κύλισης: h_column)
         ld e,a
         ld a,d
         adc a,0
@@ -1194,45 +1239,54 @@ sr_blit:
 
 ; ------------------------------------------------------------ καθρέφτης
 
-; A = c: τα bytes c, c+1 των γραμμών 0-143 στον καθρέφτη (C4). Οι 8
-; γραμμές μιας σειράς έχουν το ίδιο low byte και τύλιγμα: μία διεύθυνση από
-; τον πίνακα ανά σειρά, και D + 8 για τις υπόλοιπες.
-mirror_column:
+; A = #40 (ο καθρέφτης, με την C4) / #C0 (η οθόνη, από τη διακοπή): η
+; στήλη της κύλισης από την κρυφή μνήμη (CS_SRC: 2 bytes ανά σειρά) στη
+; θέση της (CS_DST: +80 ανά σειρά) — 18 σειρές x 8 γραμμές, τα offsets
+; AND #7FF. Μόνο AF, BC, DE, HL (και από τη διακοπή).
+cs_copy:
         ld c,a
-        ld a,RAM_BG
-        call setram
-        ld hl,line_addr
+        ld hl,(CS_SRC)
+        ld de,(CS_DST)
         ld b,VIEW_H / 8
-.row:   ld e,(hl)
-        inc hl
-        ld d,(hl)
+.row:   push bc
         push hl
-        ld a,c
-        add a,e
-        ld e,a
-        call c,de_carry
-        repeat 8
-        ld h,d
-        ld l,e
-        res 7,h
-        ld a,(de)
-        ld (hl),a
+        push de
+        ld a,h
+        or #C0
+        ld h,a
+        ld a,d
+        or c
+        ld d,a
+        ld b,8
+.ln:    ld a,(hl)               ; (ζυγά: το +1 δεν περνάει σελίδα)
+        ld (de),a
         inc l
         inc e
-        ld a,(de)
-        ld (hl),a
+        ld a,(hl)
+        ld (de),a
+        dec l
         dec e
+        ld a,h
+        add a,8
+        ld h,a
         ld a,d
         add a,8
         ld d,a
-        rend
+        djnz .ln
+        pop de
         pop hl
-        ld de,15
-        add hl,de
-        dec b
-        jp nz,.row
-        ld a,RAM_BASE
-        jp setram
+        inc hl
+        inc hl
+        res 3,h
+        ld a,e
+        add a,80
+        ld e,a
+        jr nc,.n
+        inc d
+        res 3,d
+.n:     pop bc
+        djnz .row
+        ret
 
 ; B = γραμμή, C = byte, D = πλάτος, E = ύψος: το ορθογώνιο από τον καθρέφτη
 ; ξανά στην οθόνη (M20: το κλείσιμο ενός μενού, game/ui.asm).

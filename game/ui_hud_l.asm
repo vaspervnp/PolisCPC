@@ -38,3 +38,4 @@ sn_ct2: ld hl,(sn_home)
         ret
 sn_home:
         db 0, 0                 ; j, i: το lv_home (init.asm, lv_init)
+
