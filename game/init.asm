@@ -690,8 +690,8 @@ ui_load:
         ldir
         ld de,4
         add ix,de
-        ld a,(ix+1)
-        or a
+        ld a,(ix+2)             ; (το μήκος 0: τέλος — όχι η διεύθυνση:
+        or (ix+3)               ; το UI_P είναι στο #0040)
         jr nz,.p
         ld a,RAM_RES            ; (M22) στο τέλος: η σημαία της νίκης στην
         call setram             ; κορυφή της C6 (main.asm, hud_end)
@@ -713,4 +713,5 @@ ui_parts:
         dw UI_D, UID_LEN, SNDA_AT, SNDA_LEN, SNDB_AT, SNDB_LEN
         dw SNDC_AT, SNDC_LEN
         dw UI_H, UIH_LEN, UI_I, UII_LEN, UI_J, UIJ_LEN, UI_K, UIK_LEN
-        db 0, 0                 ; (το high byte 0: τέλος)
+        dw UI_L, UIL_LEN, UI_P, UIP_LEN
+        dw 0, 0                 ; (μήκος 0: τέλος)

@@ -170,14 +170,33 @@ def cancel(c):
     tap(c, ' ')
 
 
-# Τα κουμπιά του HUD (game/ui_hud.asm): 2 σειρές x 4.
+# Τα κουμπιά του HUD (game/ui_hud.asm): 2 σειρές x 4 θέσεις· το PAUSE
+# (8) φαίνεται πάντα, μετά από το τελευταίο φανερό (δεν είναι στο hb_vis).
 HB_BUILD, HB_TRAIN, HB_RESEARCH, HB_SPLIT, HB_AGE, HB_IDLE, HB_SAVE, \
-    HB_CANCEL = range(8)
+    HB_CANCEL, HB_PAUSE = range(9)
 
 
 def visible(c, k):
     """(M22) Φαίνεται τώρα το κουμπί k (hb_vis, game/hudvis.asm);"""
-    return bool(rb(c, U['HB_VIS']) >> k & 1)
+    return k == HB_PAUSE or bool(rb(c, U['HB_VIS']) >> k & 1)
+
+
+def slot_of(c, k):
+    """(M22) Η θέση του κουμπιού k: τα φανερά μπαίνουν στη σειρά από τη
+    θέση 0 (None αν δεν φαίνεται)."""
+    v = rb(c, U['HB_VIS'])
+    if k == HB_PAUSE:
+        return bin(v).count('1')
+    if not v >> k & 1:
+        return None
+    return bin(v & ((1 << k) - 1)).count('1')
+
+
+def slots(c):
+    """(M22) Το κουμπί κάθε θέσης (None: άδεια)."""
+    v = rb(c, U['HB_VIS'])
+    b = [k for k in range(8) if v >> k & 1] + [HB_PAUSE]
+    return b + [None] * (8 - len(b))
 
 
 def hud_enter(c, limit=400):
@@ -204,6 +223,9 @@ def hud_button(c, k, key=' ', leave=True):
     """Ο κέρσορας στο κουμπί k με Q A O P και SPACE πάνω του, όπως ο
     παίκτης· μετά (leave) πίσω στον χάρτη."""
     if not rb(c, U['HB_ON']) and not hud_enter(c):
+        return False
+    k = slot_of(c, k)                   # (M22: ο κέρσορας είναι θέση)
+    if k is None:
         return False
     for _ in range(12):
         i = rb(c, U['HB_I'])

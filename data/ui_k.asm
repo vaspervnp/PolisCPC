@@ -19,20 +19,20 @@ ui_ic_tab:
         db 0, 16
         dw ui_ic_5
         db 1, 15
-        dw 0
-        db 0, 0         ; save: πάντα
+        dw ui_ic_6
+        db 0, 12
         dw ui_ic_7
         db 0, 14
-ui_ic_3:  ; patrol, γραμμές 2-13
-        db #CC, #CC, #66, #CC
-        db #CC, #CC, #33, #CC
-        db #33, #33, #33, #66
-        db #CC, #CC, #33, #CC
-        db #CC, #CC, #66, #CC
-        db #CC, #CC, #CC, #CC
-        db #CC, #CC, #CC, #CC
-        db #CC, #99, #CC, #CC
-        db #CC, #33, #CC, #CC
-        db #99, #33, #33, #33
-        db #CC, #33, #CC, #CC
-        db #CC, #99, #CC, #CC
+        dw ui_ic_8
+        db 2, 10
+ui_ic_8:  ; pause, γραμμές 2-11
+        db #C8, #C0, #C8, #C0
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #42, #C8, #42
+        db #C8, #C0, #C8, #C0

@@ -63,6 +63,11 @@ only after 15 minutes.
 * **GREEK CAMPAIGN** and **EGYPTIAN CAMPAIGN** each have four levels (see
   section 12).
 * **TUTORIAL** teaches you the game step by step (see section 3).
+* **CONTROLS** shows a page with the keys (see section 6); any menu key
+  takes you back.
+
+![The CONTROLS page](img/controls.png)
+
 * **LOAD GAME** continues the game you saved with **SAVE GAME**. If there is no saved
   game, a new one starts.
 
@@ -80,15 +85,15 @@ The top of the screen is the world. The panel at the bottom is the HUD.
   current age.
 * **Left of the HUD:** the **mini map**. It shows the whole land as far as
   you have explored it, and the frame that marks where the camera is.
-* **Card next to the mini map:** when a building is selected, the card
-  shows how many units wait in its queue (the digit). The bar under the
-  digit shows the progress of the current unit, of the construction, or of
-  the research.
-
-* **The buttons** to the right of the card (see section 6): BUILD,
-  TRAIN, RESEARCH, SPLIT SQUAD in the top row; NEXT AGE, IDLE VILLAGER,
-  SAVE GAME, CANCEL in the bottom row. A button shows only when it can do
-  something right now; the others are left empty.
+* **The buttons** right next to the mini map (see section 6): BUILD, TRAIN,
+  RESEARCH, SPLIT SQUAD, NEXT AGE, IDLE VILLAGER, SAVE GAME, CANCEL and
+  PAUSE. A button shows only when it can do something right now, and the
+  ones that show sit one after the other, in this order, from the top left;
+  PAUSE is always the last one.
+* **Card to the right of the buttons:** when a building is selected, the
+  card shows how many units wait in its queue (the digit). The bar under
+  the digit shows the progress of the current unit, of the construction, or
+  of the research.
 
 When the game ends, the card shows the result: a **red flag** means you won
 and a **skull** means you lost.
@@ -142,10 +147,9 @@ closes the menu. The game waits while a menu is open.
 ![The cursor on RESEARCH](img/hud.png)
 
 Move the cursor down past the bottom of the map and it enters the buttons
-of the HUD. **Q A O P** move from button to button, skipping the empty
-places; the current one lights up, and its name appears at the top of the
-screen. **SPACE** or **RETURN** presses it. **Q** from the top row (or
-from under an empty place) takes you back to the map.
+of the HUD. **Q A O P** move from button to button; the current one lights
+up, and its name appears at the top of the screen. **SPACE** or **RETURN**
+presses it. **Q** from the top row takes you back to the map.
 
 A button appears only when it makes sense:
 
@@ -159,6 +163,7 @@ A button appears only when it makes sense:
 | **IDLE VILLAGER** | a villager of yours has nothing to do | select them, and move the view to them |
 | **SAVE GAME** | always | save the game to disc (about 2 seconds) |
 | **CANCEL** | a building is being placed | cancel the placement |
+| **PAUSE** | always | stop the game; the button is now called **CONTINUE**, and pressing it again lets the game go on |
 
 On a PC emulator, **RETURN** is the main **Enter** key. The CPC's **ENTER**
 (on the numeric keypad) is the keypad Enter, and does the same everywhere.
@@ -312,8 +317,8 @@ soldiers bigger, two minutes apart at least. When its berries run out it
 builds Farms too.
 
 You **lose** when you have no units and no Town Center left. The enemy loses
-the same way. When the game ends, it stops, and the card next to the mini
-map shows a red flag (victory) or a skull (defeat).
+the same way. When the game ends, it stops, and the card to the right of
+the buttons shows a red flag (victory) or a skull (defeat).
 
 ![Battle](img/battle.png)
 

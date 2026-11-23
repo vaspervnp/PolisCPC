@@ -27,7 +27,8 @@ import scene as S                               # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 
 IMG = os.path.join(HERE, '..', 'docs', 'img')
-BUTTONS_BOX = (225, 392, 700, 474)      # στην εικόνα 768 x 544 (aspect)
+BUTTONS_BOX = (155, 392, 700, 474)      # στην εικόνα 768 x 544 (aspect):
+#                                         από τον μίνι χάρτη, με την κάρτα
 
 
 def shot(c, name):
@@ -55,11 +56,13 @@ def main():
     UM.hud_button(c, UM.HB_AGE, leave=False)    # (M22) το Κέντρο επιλεγμένο:
     UM.wait_open(c)                             # φαίνονται TRAIN, RESEARCH
     UM.close(c)
+    g.tick(4)                                   # (M22: τα φανερά ανά 4 καρέ,
+    want = UM.slot_of(c, UM.HB_RESEARCH)        # και στη σειρά)
     for _ in range(8):
         i = UM.rb(c, UM.U['HB_I'])
-        if i == UM.HB_RESEARCH:
+        if i == want:
             break
-        UM.tap(c, 'q' if i >= 4 else 'p')
+        UM.tap(c, 'q' if i // 4 > want // 4 else 'p' if i < want else 'o')
     g.tick(4)
     shot(c, 'hud.png')
 

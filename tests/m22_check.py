@@ -10,6 +10,9 @@
    σταθερές ήταν 33 πλακίδια μακριά), 5 λεπτά: οι πηγές όσων μαζεύουν
    (J_GO, J_WORK, J_BACK) ως NEAR πλακίδια από το σπίτι (ως το M21: διάμεσος
    24, 82% πάνω από 20).
+3. CONTROLS. Στο μενού έναρξης η επιλογή CONTROLS: η σελίδα με τα πλήκτρα
+   pixel προς pixel (src/make_menu.py, ctrl_lines), και με SPACE πίσω στο
+   μενού — ίδιο pixel προς pixel, με το βέλος στο CONTROLS.
 """
 import os
 import shutil
@@ -24,6 +27,8 @@ import m13_check as M13                         # noqa: E402
 import scene as S                               # noqa: E402
 import dsk as DK                                # noqa: E402
 import make_levels as ML                        # noqa: E402
+import make_menu as MN                          # noqa: E402
+import cpc as CP                                # noqa: E402
 
 J_SI, J_SJ = 0x7F00, 0x7F80                     # game/gather.asm
 U_JOB = 27
@@ -37,7 +42,43 @@ def report(name, good, what):
     ok &= bool(good)
 
 
+def arrow(img, k, pen):
+    """Το βέλος του μενού στην επιλογή k (pen 0: σβηστό)."""
+    y = MN.ITEM_Y0 + k * MN.ITEM_DY
+    for r, row in enumerate(MN.GLYPHS['>']):
+        for dy in (0, 1):
+            for i, b in enumerate(row + '.'):
+                img[y + 2 * r + dy][2 * (MN.ITEM_X - 2 * MN.CELL) + i] = \
+                    pen if b == '#' else 0
+
+
+def controls():
+    c = M12.boot(os.path.join(M.BUILD, 'polis.dsk'), [])
+    c.run_frames(30)
+    k = MN.items().index(MN.CONTROLS)
+    for _ in range(k - MN.SEL0):
+        c.tap_key(CP.KEY_DOWN)
+        c.run_frames(6)
+    c.tap_key(CP.KEY_RETURN)
+    c.run_frames(40)
+    exp = M13.text_image(MN.ctrl_lines())
+    got = M12.screen_pens(c)
+    bad = sum(1 for y in range(200) for x in range(160) if exp[y][x] != got[y][x])
+    c.tap_key(' ')
+    c.run_frames(150)
+    exp2 = M12.menu_image()
+    arrow(exp2, MN.SEL0, 0)
+    arrow(exp2, k, MN.PEN_HI)
+    got2 = M12.screen_pens(c)
+    bad2 = sum(1 for y in range(200) for x in range(160)
+               if exp2[y][x] != got2[y][x])
+    report('CONTROLS', bad == 0 and bad2 == 0,
+           'η σελίδα: %d pixels διαφέρουν· SPACE: το μενού, με το βέλος στο '
+           'CONTROLS: %d' % (bad, bad2))
+
+
 def main():
+    controls()
     sym = M.symbols()
     path = os.path.join(M.BUILD, 'm22_g2.dsk')
     shutil.copy(os.path.join(M.BUILD, 'polis.dsk'), path)

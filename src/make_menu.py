@@ -69,13 +69,14 @@ NAMES = {'egypt': 'EGYPTIANS', 'greek': 'GREEKS', 'babylon': 'BABYLONIANS',
          'phoenicia': 'PHOENICIANS', 'celt': 'CELTS'}
 LOAD = 'LOAD GAME'
 TUTORIAL = 'TUTORIAL'                  # το tutorial (game/tutor.asm)
+CONTROLS = 'CONTROLS'                  # (M22) η σελίδα με τα πλήκτρα
 PLAY = 'PLAY AS '                       # + <πολιτισμός>: αριστερά / δεξιά
 # Οι εκστρατείες (M13): (γράμμα των αρχείων LG1.BIN..., κείμενο του μενού)
 CAMPAIGNS = [('G', 'GREEK CAMPAIGN'), ('E', 'EGYPTIAN CAMPAIGN')]
 PEN_TEXT, PEN_HI = 9, 10                # λευκό, κίτρινο (palette.asm)
 CELL = 3                                # bytes ανά γράμμα (6 pixels)
 # οι επιλογές (bytes, γραμμές): κάτω από τη σκηνή της εικόνας (make_title)
-ITEM_X, ITEM_Y0, ITEM_DY = 12, 110, 15
+ITEM_X, ITEM_Y0, ITEM_DY = 12, 96, 15   # (M22: 6 επιλογές, η σκηνή πιο κοντή)
 DEFAULT = 1                             # οι Έλληνες (οι εικόνες της εκκίνησης)
 SEL0 = 0                                # η επιλογή με το βέλος στην αρχή
 CULT_X = ITEM_X + CELL * len(PLAY)      # το πεδίο του πολιτισμού
@@ -99,7 +100,7 @@ def items(cult=DEFAULT):
     """Οι επιλογές με τη σειρά: παιχνίδι, οι εκστρατείες, το tutorial, το
     φόρτωμα."""
     return [PLAY + cult_field(cult).rstrip()] + [t for _, t in CAMPAIGNS] + \
-        [TUTORIAL, LOAD]
+        [TUTORIAL, CONTROLS, LOAD]
 
 
 def lines(cult=DEFAULT):
@@ -108,9 +109,39 @@ def lines(cult=DEFAULT):
            (ITEM_Y0, CULT_X, PEN_HI, cult_field(cult))]
     for k, (_, t) in enumerate(CAMPAIGNS):
         out.append((ITEM_Y0 + (k + 1) * ITEM_DY, ITEM_X, PEN_TEXT, t))
-    for k, t in enumerate((TUTORIAL, LOAD)):
+    for k, t in enumerate((TUTORIAL, CONTROLS, LOAD)):
         out.append((ITEM_Y0 + (len(CAMPAIGNS) + 1 + k) * ITEM_DY, ITEM_X,
                     PEN_TEXT, t))
+    return out
+
+
+# (M22) Η σελίδα CONTROLS: το πλήκτρο (κίτρινο) και τι κάνει (λευκό), όπως ο
+# πίνακας του εγχειριδίου (docs/manual_en.md, 6. Controls).
+CTRL_TITLE = 'CONTROLS'
+CTRL_ROWS = [('QAOP/JOY', 'MOVE CURSOR'),
+             ('ARROWS', 'SCROLL MAP'),
+             ('SPACE/FIRE', 'SELECT / BOX'),
+             ('', 'BUILDING MENU'),
+             ('RETURN', 'COMMAND UNITS'),
+             ('', 'VILLAGER BUILD'),
+             ('', 'SQUAD SPLIT'),
+             ('', 'PLACE BUILDING'),
+             ('A AT BOTTOM', 'HUD BUTTONS'),
+             ('M', 'MUSIC OFF/ON')]
+CTRL_BACK = 'SPACE - BACK'
+CTRL_X, CTRL_AX, CTRL_Y0, CTRL_DY = 2, 2 + CELL * 12, 24, 15
+
+
+def ctrl_lines():
+    """(γραμμή, byte, pen, κείμενο) της σελίδας CONTROLS."""
+    out = [(4, (80 - CELL * len(CTRL_TITLE)) // 2, PEN_HI, CTRL_TITLE)]
+    for k, (key, act) in enumerate(CTRL_ROWS):
+        y = CTRL_Y0 + k * CTRL_DY
+        if key:
+            out.append((y, CTRL_X, PEN_HI, key))
+        out.append((y, CTRL_AX, PEN_TEXT, act))
+        assert len(key) <= 11 and CTRL_AX + CELL * len(act) <= 80, (key, act)
+    out.append((184, (80 - CELL * len(CTRL_BACK)) // 2, PEN_TEXT, CTRL_BACK))
     return out
 
 
@@ -143,6 +174,8 @@ def main():
            'MENU_CAMP   equ %d\n' % len(CAMPAIGNS),
            'MENU_TUT    equ %d             ; το tutorial\n'
            % (len(CAMPAIGNS) + 1),
+           'MENU_CTRL   equ %d             ; η σελίδα CONTROLS (M22)\n'
+           % (len(CAMPAIGNS) + 2),
            'MENU_DEF    equ %d             ; ο πολιτισμός στην αρχή\n' % DEFAULT,
            'MENU_SEL0   equ %d\n' % SEL0,
            'MENU_X      equ %d             ; το βέλος: byte\n' % (ITEM_X - 2 * CELL),
@@ -172,6 +205,11 @@ def main():
                       cult_field(k)))
     out.append('menu_iy:    db %s     ; η γραμμή κάθε επιλογής\n'
                % ', '.join(str(ITEM_Y0 + k * ITEM_DY) for k in range(len(its))))
+    out.append('ctrl_lines: ; (M22) η σελίδα CONTROLS\n')
+    for y, x, pen, text in ctrl_lines():
+        out.append('        db %s    ; %s\n' % (', '.join(
+            str(b) for b in encode_lines([(y, x, pen, text)])[:-1]), text))
+    out.append('        db 255\n')
     path = os.path.join(DATA, 'menu.asm')
     open(path, 'w').write(''.join(out))
     print('%s: %d γλύφοι, %d γραμμές' % (path, len(order), len(static)))

@@ -12,7 +12,7 @@ BAR_Y       equ 6
 bar_x:      db 5,17,29,41,53,65
 
 ; η κάρτα του επιλεγμένου κτιρίου: ψηφίο και μπάρα προόδου
-CARD_X      equ 13
+CARD_X      equ 39
 CARD_Y      equ 29
 CARD_BY     equ 37
 CARD_FULL   equ #F3

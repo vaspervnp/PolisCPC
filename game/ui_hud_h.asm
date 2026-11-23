@@ -1,7 +1,8 @@
 ; ui_hud_h.asm — (M22) τα κουμπιά του HUD: η σχεδίαση ενός κουμπιού, και ο
 ; κέρσορας μόνο στα φανερά. Στο UI_H, μόνο με την C0.
 
-; A = κουμπί: ζωγραφίζεται όπως λέει το hb_vis.
+; A = θέση: ζωγραφίζεται όπως λέει το hb_vis (M22: το κουμπί της θέσης,
+; hb_vb — ή άδεια).
 hb_draw:
         ld c,a
         call hb_vk
@@ -36,7 +37,8 @@ hb_draw:
         pop hl
         ld a,c
         call hb_vk
-        ret nc                  ; κρυμμένο
+        ret nc                  ; άδεια
+        call hb_vb              ; το κουμπί της
         add a,a                 ; το εικονίδιο: ui_ic_tab (dw γραμμές, db η
         add a,a                 ; πρώτη, db πόσες)
         ld e,a
@@ -79,21 +81,6 @@ hb_draw:
         ret nz
         jp hb_lit
 
-; C = κουμπί, D = +1 / -1: το επόμενο φανερό της ίδιας σειράς (ή το ίδιο).
-hb_step:
-        ld e,c
-.s:     ld a,e
-        add a,d
-        ld e,a
-        xor c
-        and #FC
-        ret nz
-        ld a,e
-        call hb_vk
-        jr nc,.s
-        ld c,e
-        ret
-
 ; HL = γραμμή της σελίδας του HUD -> η επόμενη (+ #800, και μετά την
 ; όγδοη + 80 από την αρχή). Μόνο A, HL.
 hb_nl:  ld a,h
@@ -109,3 +96,4 @@ hb_nl:  ld a,h
         adc a,0
 .n:     ld h,a
         ret
+

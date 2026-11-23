@@ -100,10 +100,18 @@ def music(g):
     # έρχεται ένα καρέ αργότερα (±1)
     ch = [i for i in range(51, len(seq) - 1) if seq[i] != seq[i - 1] and
           seq[i + 1] == seq[i]]
-    m = sum(1 for i in ch if i < 50 + n)
+    # (M22) η πρώτη αλλαγή μπορεί να είναι η αρχή του τραγουδιού μετά από
+    # σιωπή, που στον δεύτερο γύρο δεν ξαναφαίνεται (η τελευταία νότα ίδια
+    # με την πρώτη): ο γύρος μετράει από τη δεύτερη
+    ch = ch[1:]
+    m = sum(1 for i in ch if i < ch[0] + n - 1)
     st = [seq[i] for i in ch]
     gaps = [b - a for a, b in zip(ch, ch[1:])]
-    loop = st[:m] == st[m:2 * m] and all(g % 16 in (0, 1, 15) for g in gaps)
+    # (η αρχή του γύρου μπορεί να μη φαίνεται ως αλλαγή, αν η τελευταία
+    # νότα είναι ίδια με την πρώτη: η περίοδος της σειράς m - 1 ως m + 1)
+    per = [p for p in (m - 1, m, m + 1) if len(st) - p >= p - 2 and
+           all(st[k] == st[k + p] for k in range(len(st) - p))]
+    loop = bool(per) and all(g % 16 in (0, 1, 15) for g in gaps)
     report('ΜΟΥΣΙΚΗ', got[0] <= want[0] and got[1] <= want[1] and
            len(got[0]) >= len(want[0]) - 1 and len(got[1]) >= 4 and
            max(vols) <= 10 and loop,

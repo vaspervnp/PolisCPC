@@ -63,10 +63,10 @@ hb_keys:
         ld a,b
         and 1 << IN_FIRE | 1 << IN_CMD
         ret z
-        ld a,(hb_i)
+        call hb_btn             ; (M22: το κουμπί της θέσης)
         jp hb_do
 
-; C = το νέο κουμπί.
+; C = η νέα θέση.
 hb_move:
         push bc
         ld a,(hb_i)
@@ -106,6 +106,8 @@ hb_do:  or a
         jp z,hb_idle
         dec a
         jp z,hb_save
+        dec a                   ; (M22) PAUSE / CONTINUE (8, 9)
+        jp nz,hb_pause
         ld a,255                ; CANCEL: η τοποθέτηση
         ld (bmode),a
         jp cur_look

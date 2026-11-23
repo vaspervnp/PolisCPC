@@ -23,7 +23,7 @@ hb_tick:
         inc (hl)                ; ο αδρανής χωρικός (hb_lab), σε κάθε καρέ η
         ld a,(hl)               ; ετικέτα: όχι πάνω από ~0,5 ms σε κανένα
         and 3
-        jp nz,hb_lab
+        jp nz,hb_odd            ; (στα άλλα: πρώτα οι μονές θέσεις)
         ld c,1 << 6             ; SAVE GAME
         ld a,(bmode)            ; CANCEL
         inc a

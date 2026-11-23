@@ -50,8 +50,28 @@ PREVIEW = os.path.join(gfx.OUT, 'preview')
 TER = {k: i for i, (k, _, _, _) in enumerate(T.TERRAIN)}
 TER_ART = {k: a for k, _, a, _ in T.TERRAIN}
 RES_ART = {k: a for k, _, a, _, _ in T.RESOURCES}
+# (M22) η παύση: δύο μπάρες
+PAUSE_ART = """
+--------
+--------
+-KKK-KKK
+-KiK-KiK
+-KiK-KiK
+-KiK-KiK
+-KiK-KiK
+-KiK-KiK
+-KiK-KiK
+-KiK-KiK
+-KiK-KiK
+-KKK-KKK
+--------
+--------
+--------
+--------
+"""
 HUD_ART = dict([(k, a) for k, _, a in T.ICONS] +
-               [(k, a) for k, _, a, _ in T.COMMANDS] + [('save', T.CMD_SAVE)])
+               [(k, a) for k, _, a, _ in T.COMMANDS] + [('save', T.CMD_SAVE),
+                                                         ('pause', PAUSE_ART)])
 
 # Τα κουμπιά του HUD (M20, 2026-11-21): 2 σειρές x 4, στη θέση των 16 του
 # σχεδίου (τα περισσότερα ήταν για λειτουργίες που δεν έγιναν). (εικονίδιο,
@@ -59,7 +79,10 @@ HUD_ART = dict([(k, a) for k, _, a in T.ICONS] +
 BUTTONS = [('build', 'BUILD'), ('eject', 'TRAIN'), ('research', 'RESEARCH'),
            ('patrol', 'SPLIT SQUAD'), ('age_up', 'NEXT AGE'),
            ('idle', 'IDLE VILLAGER'), ('save', 'SAVE GAME'),
-           ('cancel', 'CANCEL')]
+           ('cancel', 'CANCEL'), ('pause', 'PAUSE')]
+SLOTS = 8                               # οι θέσεις (M22: το PAUSE, το 9ο
+                                        # κουμπί, πάντα μετά τα άλλα φανερά)
+CONTINUE = 'CONTINUE'                   # η ετικέτα του PAUSE όσο σταματημένο
 BTN_PEN, BTN_HI = 't', 'c'              # το φόντο του κουμπιού· φωτισμένο
 HUD_BG = 'K'                            # το φόντο του HUD (και κουμπί κρυμμένο, M22)
 
@@ -67,7 +90,8 @@ HUD_BG = 'K'                            # το φόντο του HUD (και κ�
 def btn_xy(k):
     """Το εικονίδιο του κουμπιού k: (x, y) σε pixels οθόνης (το πλαίσιο: x-1
     ως x+8, y ως y+16)."""
-    return 44 + (k % 4) * 28, 162 + (k // 4) * 18
+    return 26 + (k % 4) * 12, 162 + (k // 4) * 19     # (κενό 2 pixels,
+    #                                 και από τον μίνι χάρτη)
 
 # Ψηφία 3x5. Στο Mode 0 είναι 6x5 μονάδες οθόνης — στενά και ευανάγνωστα.
 DIGITS = ['111101101101111', '010110010010111', '111001111100111',
@@ -450,12 +474,12 @@ def hud_background(numbers=True):
     # επιλεγμένου κτιρίου, τα γράφει ο Z80)
     if numbers:
         sets = {s.name: s for s in units.all_sets()}
-        gfx.stamp(img, sets['swordsman'].frames[0], 27, 163)
-        for x in range(26, 38):
+        gfx.stamp(img, sets['swordsman'].frames[0], 79, 163)   # (δεξιά από
+        for x in range(78, 90):                                 # τα κουμπιά)
             img[181][x] = gfx.PEN['n'] if x < 35 else gfx.PEN['r']
 
     # τα κουμπιά (M20: BUTTONS, 2 x 4)
-    for i, (k, _) in enumerate(BUTTONS):
+    for i, (k, _) in enumerate(BUTTONS[:SLOTS]):
         ox, oy = btn_xy(i)
         for y in range(oy, oy + 17):
             for x in range(ox - 1, ox + 9):

@@ -19,25 +19,12 @@ hb_upd: ld a,(sel_n)            ; SPLIT SQUAD (όπως το sq_split)
         cp 2
         jr c,.d
         set 3,c
-.d:     ld a,(hb_vis)           ; όσα άλλαξαν
-        xor c
-        jr z,hb_lab
-        ld e,a
-        ld a,c
-        ld (hb_vis),a
-        ld b,0
-.k:     srl e
-        jr nc,.n
-        push bc
-        push de
-        ld a,b
-        call hb_draw
-        pop de
-        pop bc
-.n:     inc b
-        ld a,e
-        or a
-        jr nz,.k
+.d:     ld hl,hb_vis            ; (M22) τα φανερά σε σειρά, από τη θέση 0:
+        ld b,0                  ; ξαναζωγραφίζονται οι θέσεις που άλλαξε το
+        call hb_sync            ; κουμπί τους — εδώ οι ζυγές, οι μονές στο
+;                                 επόμενο καρέ (hb_odd): ως 4 σε ένα καρέ
+;                                 ξεπερνούσαν τα 40 ms
+
 ; Από το hb_tick (main.asm) στα άλλα καρέ: στο 2ο των 4 ο αδρανής
 ; χωρικός· σε όλα η ετικέτα.
 hb_lab: ld a,(hb_ph)
@@ -45,12 +32,13 @@ hb_lab: ld a,(hb_ph)
         cp 2
         call z,hb_scan
 .l:     ld a,(hb_on)            ; ο κέρσορας στα κουμπιά: η ετικέτα — και αν
-        or a                    ; το κουμπί του κρύφτηκε, στο SAVE GAME
-        ret z
+        or a                    ; η θέση του άδειασε, μία πίσω σε κάθε καρέ
+        ret z                   ; (το SAVE GAME φαίνεται πάντα)
         ld a,(hb_i)
         call hb_vk
         jp c,hb_label
-        ld c,6
+        dec a
+        ld c,a
         call hb_move
         jp hb_label
 
@@ -87,10 +75,29 @@ hb_scan:
         ld (hb_idf),a
         ret
 
-
-; (M22) Η συνέχεια του sn_ctr (ui_hud_d.asm): το σπίτι του αντιπάλου.
-sn_ct2: ld hl,(sn_home)
-        ld (sn_cj),hl
+; HL = τα φανερά όπως είναι ζωγραφισμένα (hb_vis οι ζυγές, hb_old οι μονές),
+; C = τα νέα, B = η πρώτη θέση: ξαναζωγραφίζονται B, B + 2, ... (E = παλιά).
+hb_sync:
+        ld a,(hl)
+        cp c
+        ret z
+        ld e,a
+        ld (hl),c
+.k:     ld a,b
+        call hb_nthe
+        ld d,a
+        ld a,b
+        call hb_vb
+        cp d
+        jr z,.n
+        push bc
+        push de
+        ld a,b
+        call hb_draw
+        pop de
+        pop bc
+.n:     inc b
+        inc b
+        bit 3,b
+        jr z,.k
         ret
-sn_home:
-        db 0, 0                 ; j, i: το lv_home (init.asm, lv_init)

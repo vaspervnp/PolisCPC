@@ -85,7 +85,9 @@ def res_mask():
 IC_C5 = [('ic_c5a.bin', 'SPR_ARROW', 128, ['eject', 'age_up']),
          ('ic_c5b.bin', 'OCC_E + 1600', 0x700 - 1600,
           ['research', 'cancel', 'idle'])]
-IC_HUD = [('ui_j.asm', 56, ['build']), ('ui_k.asm', 48, ['patrol'])]
+IC_HUD = [('ui_j.asm', 56, ['build']), ('ui_l.asm', 48, ['save']),
+          ('ui_p.asm', 48, ['patrol']),
+          ('ui_k.asm', 44, ['pause'])]      # (M22: τα φανερά σε σειρά)
 
 
 def icons(head, mockup, cpcimg):
@@ -128,7 +130,7 @@ def icons(head, mockup, cpcimg):
             placed.add(art)
         assert size <= cap, '%s: %d > %d' % (name, size, cap)
         hud[name] = out
-    assert placed == set(keys) - {'save'}, placed
+    assert placed == set(keys), placed
     tab = ['; ο πίνακας των εικονιδίων (UI_K)\n'] + equs + ['ui_ic_tab:\n']
     for k, art in enumerate(keys):
         if art in placed:
@@ -138,6 +140,8 @@ def icons(head, mockup, cpcimg):
             tab.append('        dw 0\n        db 0, 0         ; %s: πάντα\n'
                        % art)
     print(write('ui_j.asm', head + ''.join(hud['ui_j.asm'])))
+    print(write('ui_l.asm', head + ''.join(hud['ui_l.asm'])))
+    print(write('ui_p.asm', head + ''.join(hud['ui_p.asm'])))
     print(write('ui_k.asm', head + ''.join(tab + hud['ui_k.asm'])))
 
 
@@ -225,7 +229,7 @@ def main():
     # η ετικέτα· και τα pens του φόντου τους, κανονικό και φωτισμένο
     import mockup
     import cpcimg
-    xy = [mockup.btn_xy(k) for k in range(len(mockup.BUTTONS))]
+    xy = [mockup.btn_xy(k) for k in range(mockup.SLOTS)]
     b.append('\nUB_N        equ %d\nUB_W        equ 6              ; bytes\n'
              'UB_H        equ 17\n' % len(xy))
     def hud_adr(x, y):              # η σελίδα του HUD: διάταξη CRTC, αρχή 0
@@ -233,9 +237,10 @@ def main():
         return 0x4000 + (y & 7) * 0x800 + (y >> 3) * 80 + x // 2 - 1
     b.append('ui_btn:     dw %s\n' % ', '.join(
         '#%04X' % hud_adr(x, y) for x, y in xy))
+    lbls = [lbl for _, lbl in mockup.BUTTONS] + [mockup.CONTINUE]
     b.append('ui_blbl:    dw %s\n' % ', '.join(
-        'ul_%d' % k for k in range(len(xy))))
-    for k, (_, lbl) in enumerate(mockup.BUTTONS):
+        'ul_%d' % k for k in range(len(lbls))))
+    for k, lbl in enumerate(lbls):
         b.append(db_str('ul_%d' % k, lbl))
     # Ο φωτισμός αλλάζει pen ΤΟ ΦΟΝΤΟ <-> ΤΟ ΦΩΤΙΣΜΕΝΟ, pixel προς pixel
     # (game/ui_hud_b.asm): αν το φωτισμένο pen υπήρχε σε εικονίδιο, το σβήσιμο

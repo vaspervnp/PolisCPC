@@ -129,7 +129,8 @@ UI_PARTS = [(0x7230, 'ui.bin'), (0x6D80, 'ui_a.bin'), ('HIB_END', 'ui_b.bin'),
             ('HUD_MUS', 'ui_e.bin'), ('FX_TICK', 'ui_f.bin'),  # ο ήχος (M21)
             ('MUS_GAME', 'ui_g.bin'),
             ('HB_DRAW', 'ui_h.bin'), ('HB_UPD', 'ui_i.bin'),   # (M22) τα
-            ('UI_IC_0', 'ui_j.bin'), ('UI_IC_TAB', 'ui_k.bin')]  # κουμπιά
+            ('UI_IC_0', 'ui_j.bin'), ('UI_IC_TAB', 'ui_k.bin'),
+            ('UI_IC_6', 'ui_l.bin'), ('UI_IC_3', 'ui_p.bin')]  # κουμπιά
 
 
 def ui_syms():

@@ -423,6 +423,7 @@ def log(s):
 
 
 def scenario(p):
+    slow_menus()
     r, c, sym = p.r, p.c, p.sym
     # ---- ο CPC ξεκινά, RUN"POLIS
     r.frames(120)
@@ -583,12 +584,48 @@ def mux(secs):
     os.remove(a)
 
 
+MENU_PAUSE = 100                # καρέ (2 s): το μενού ανοιχτό πριν από κάθε επιλογή
+MENU_STEP = 12                  # καρέ επιπλέον ανά βήμα του κέρσορα στο μενού
+
+
+def slow_menus():
+    """Για το βίντεο: όταν ανοίγει ένα μενού (ui_menu.wait_open), 2 s πριν
+    από την πρώτη κίνηση ή επιλογή, και κάθε βήμα του κέρσορα μέσα του πιο
+    αργό — αλλιώς δεν φαίνεται τι διαλέγει ο «παίκτης»."""
+    if getattr(UM, '_slow', False):
+        return
+    UM._slow = True
+    st = {'paused': False}
+    wait_open0, settle0, tap0 = UM.wait_open, UM.settle, UM.tap
+
+    def wait_open(c, limit=200):
+        ok = wait_open0(c, limit)
+        if ok and not st['paused']:
+            st['paused'] = True
+            UM.frames(c, MENU_PAUSE)
+        elif not ok:
+            st['paused'] = False
+        return ok
+
+    def settle(c):
+        settle0(c)
+        st['paused'] = False
+
+    def tap(c, key, n=4):
+        tap0(c, key, n)
+        if UM.is_open(c):
+            UM.frames(c, MENU_STEP)
+
+    UM.wait_open, UM.settle, UM.tap = wait_open, settle, tap
+
+
 def bot_game(p):
     """--bot: ο «παίκτης» του M14 (tests/m14_game_check.py, Bot), που χτίζει
     οικονομία και στρατό, αποκρούει τα κύματα και νικάει — με την επίθεση
     στα BOT_FIRST s της πίστας, ώστε η νίκη να πέσει κοντά στο τέλος ενός
     βίντεο 10 λεπτών."""
     import m14_game_check as G
+    slow_menus()
     r, c, sym = p.r, p.c, p.sym
     r.frames(120)
     c.insert_disc(os.path.join(BUILD, 'polis.dsk'))

@@ -51,14 +51,14 @@ menu:
         jp lv_go
 .ui:    xor a                   ; καμία κεφαλίδα: η παρτίδα του χάρτη της
         ld (LV_HDR),a           ; εκκίνησης (lv_init)
-        call mn_title
-        ld hl,menu_lines
-        call mn_text
         ld a,MENU_DEF
         ld (mn_cul),a
-        call mn_cult
         ld a,MENU_SEL0
         ld (mn_sel),a
+.re:    call mn_title           ; (M22: και πίσω από τη σελίδα CONTROLS)
+        ld hl,menu_lines
+        call mn_text
+        call mn_cult
         ld a,255
         ld (mn_held),a          ; ό,τι είναι πατημένο από πριν: όχι
 .mark:  ld a,MG_ARROW
@@ -69,18 +69,20 @@ menu:
         rra
         jp c,.up
         rra
-        jr c,.right
+        jp c,.right
         rra
         jp c,.down
         ld a,(keyrows + 1)
         rra
-        jr c,.left
+        jp c,.left
         call mn_rel
         ld a,(mn_sel)           ; επιλογή
         cp MENU_N - 1
         jr z,.load
         cp MENU_TUT
         jr z,.tut
+        cp MENU_CTRL
+        jr z,.ctrl
         or a
         jr nz,.camp
 .play:  ld a,(mn_cul)           ; παιχνίδι: ο πολιτισμός
@@ -99,6 +101,17 @@ menu:
 .load:  ld a,1
         ld (load_req),a
         ret
+; (M22) Η σελίδα με τα πλήκτρα (ctrl_lines, make_menu.py) ώσπου να πατηθεί
+; πλήκτρο του μενού, και πάλι το μενού, στην ίδια επιλογή.
+.ctrl:  call mn_cls
+        ld hl,ctrl_lines
+        call mn_text
+        ld a,255
+        ld (mn_held),a
+.cw:    call mn_keys
+        jr z,.cw
+        call mn_rel
+        jr .re
 
 ; Το tutorial: το TUTOR.BIN στην C6 (tutor.asm), και η παρτίδα του χάρτη της
 ; εκκίνησης με το πρώτο κύμα του αντιπάλου στα TUT_COOL s. Χωρίς το αρχείο:

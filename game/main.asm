@@ -128,6 +128,7 @@ start:
         ld de,INIT              ; (init.asm, M11), και πίσω τους η
         call dzx0               ; αποθήκευση (savegame.asm, M12) και οι
                                 ; ρουτίνες της σελίδας του HUD
+start_dead:                     ; (M22) ως εδώ το UI_P: ό,τι είναι πριν έτρεξε
         ld hl,hud_z             ; (από εδώ: ο rasm δίνει λάθος τιμή στις
                                 ; ετικέτες των συμπιεσμένων μέσα στο init_z)
         ifndef SNA              ; το HUD, τα μενού (UI.BIN: στο snapshot τα
@@ -413,6 +414,7 @@ hb_ik:      db 0                ; στην αρχή, όπως το HUD· ο αδ
 hb_if:      db 0                ; η επόμενη μονάδα, βρέθηκε σε αυτόν τον γύρο,
 hb_idf:     db 0                ; βρέθηκε στον προηγούμενο (1 << 5)
 hb_ph:      db 0                ; η φάση των καρέ (hb_tick)
+hb_old:     db 255              ; τα φανερά στις μονές θέσεις (hb_odd)
 tw_b:       db 255              ; ο πύργος που σημαδεύει (255 κανένας, buildings.asm)
 ; του ήχου (sound.asm)
 snd_div:    db 6                ; οι διακοπές ως το επόμενο καρέ του ήχου
@@ -1075,6 +1077,8 @@ UI_H        equ BKT0 + 196      ; (M22) τα κουμπιά που κρύβον�
 UI_I        equ BKT1 + 196      ; κάδους (pathing.asm), ως το τέλος της οκτάδας
 UI_J        equ HUD_PAGE + #1000 + HUD_ROWS * 80 ; ως το RPOSE
 UI_K        equ HUD_PAGE + #2800 + HUD_ROWS * 80 ; ως το RPOSE2
+UI_L        equ STACK_LOW       ; (M22) στον πάτο της στοίβας: ui_hud_l.asm
+UI_P        equ start           ; (M22) στον κώδικα του start που έτρεξε
 SNDA_AT      equ SVM_STORE + SVM_LEN ; ο ήχος (sound_fx.asm, M21): ως το BKT0
 SNDB_AT     equ SRC_TAB + SRC_N * 4 ; τα εφέ: ως το #7000
 SNDC_AT     equ BOOT + BOOT_LEN ; η μουσική του παιχνιδιού: ως το J_SI
@@ -1129,6 +1133,14 @@ uij_end:
         org UI_K
         include "../data/ui_k.asm"
 uik_end:
+        org UI_L
+        include "../data/ui_l.asm"
+        include "ui_hud_l.asm"
+uil_end:
+        org UI_P
+        include "../data/ui_p.asm"
+        include "ui_hud_p.asm"
+uip_end:
         endif
 UI_LEN      equ ui_end - UI_AT
 UIA_LEN     equ uia_end - UI_F
@@ -1142,9 +1154,13 @@ UIH_LEN     equ uih_end - UI_H
 UII_LEN     equ uii_end - UI_I
 UIJ_LEN     equ uij_end - UI_J
 UIK_LEN     equ uik_end - UI_K
+UIL_LEN     equ uil_end - UI_L
+UIP_LEN     equ uip_end - UI_P
         ifndef SNA
         assert uih_end <= #5000 && uii_end <= #5800, 'ui_h / ui_i past the 8th row'
         assert uij_end <= RPOSE && uik_end <= RPOSE2, 'ui_j / ui_k past RPOSE'
+        assert uip_end <= start_dead, 'ui_p past start_dead'
+        assert uil_end <= STACK_LOW + #60, 'ui_l: stack keeps 160 bytes'  ; (της στοίβας μένουν 160)
         assert sndc_end <= J_SI, 'music_game past J_SI'
         assert snda_end <= BKT0, 'sound_fx past BKT0'
         assert sndb_end <= #7000, 'fx_tab past #7000'
@@ -1153,7 +1169,7 @@ UIK_LEN     equ uik_end - UI_K
         assert uia_end <= SRC_TAB, 'ui_a past SRC_TAB'
         assert uib_end <= PN, 'ui_b past PN'
         assert uic_end <= PORTAL, 'ui_c past PORTAL'
-        assert UI_TMP >= LOAD_AT + #800 && UI_TMP + UI_LEN + UIA_LEN + UIB_LEN + UIC_LEN + UID_LEN + SNDA_LEN + SNDB_LEN + SNDC_LEN + UIH_LEN + UII_LEN + UIJ_LEN + UIK_LEN + 64 + #700 - 4 * 25 * 16 + 128 <= INIT, 'UI_TMP over INIT (ui_load)'
+        assert UI_TMP >= LOAD_AT + #800 && UI_TMP + UI_LEN + UIA_LEN + UIB_LEN + UIC_LEN + UID_LEN + SNDA_LEN + SNDB_LEN + SNDC_LEN + UIH_LEN + UII_LEN + UIJ_LEN + UIK_LEN + UIL_LEN + UIP_LEN + 64 + #700 - 4 * 25 * 16 + 128 <= INIT, 'UI_TMP over INIT (ui_load)'
         ifndef C7RAW
         save 'build/ui.bin',UI_AT,UI_LEN
         save 'build/ui_a.bin',UI_F,UIA_LEN
@@ -1167,6 +1183,8 @@ UIK_LEN     equ uik_end - UI_K
         save 'build/ui_i.bin',UI_I,UII_LEN
         save 'build/ui_j.bin',UI_J,UIJ_LEN
         save 'build/ui_k.bin',UI_K,UIK_LEN
+        save 'build/ui_l.bin',UI_L,UIL_LEN
+        save 'build/ui_p.bin',UI_P,UIP_LEN
         endif
         endif
 

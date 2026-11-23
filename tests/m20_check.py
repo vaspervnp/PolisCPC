@@ -39,6 +39,7 @@ import m4_check as M4                           # noqa: E402
 import m6_check as M6                           # noqa: E402
 import m7_check as M7                           # noqa: E402
 import scene as S                               # noqa: E402
+import gfx                                      # noqa: E402
 import ui_menu as UM                            # noqa: E402
 import cpc as CPCMOD                            # noqa: E402
 import mockup                                   # noqa: E402
@@ -67,16 +68,22 @@ def btn_bytes(c, k):
 _HUD = []
 
 
-def btn_expect(k, shown):
-    """(M22) Τα bytes του πλαισίου k: όπως στο HUD του σχεδίου (φανερό,
-    χωρίς φωτισμό), ή το φόντο του HUD (κρυμμένο)."""
+def btn_expect(s, b):
+    """(M22) Τα bytes της θέσης s με το κουμπί b (χωρίς φωτισμό): το
+    πλαίσιο και το εικονίδιό του όπως στο HUD του σχεδίου — ή το φόντο του
+    HUD (b None: άδεια)."""
     import cpcimg
-    if not shown:
+    if b is None:
         return bytes([0xC0] * 6 * 17)
     if not _HUD:
         _HUD.append(mockup.hud_background(numbers=False))
-    img = _HUD[0]
-    ox, oy = mockup.btn_xy(k)
+    img = [list(r) for r in _HUD[0]]
+    ox, oy = mockup.btn_xy(s)
+    icon = mockup.T.hud(mockup.HUD_ART[mockup.BUTTONS[b][0]])
+    for y in range(17):
+        for x in range(-1, 9):
+            p = icon[y][x] if 0 <= x < 8 and y < 16 else None
+            img[oy + y][ox + x] = gfx.PEN[mockup.BTN_PEN] if p is None else p
     return bytes(cpcimg.mode0_byte(img[y][2 * bx], img[y][2 * bx + 1])
                  for y in range(oy, oy + 17)
                  for bx in range(ox // 2 - 1, ox // 2 + 5))
@@ -87,9 +94,9 @@ def vis(c):
 
 
 def frames_ok(c):
-    """Κάθε πλαίσιο όπως λέει το hb_vis (κανένα φωτισμένο)."""
-    v = vis(c)
-    return all(btn_bytes(c, k) == btn_expect(k, v >> k & 1) for k in range(8))
+    """Κάθε θέση με το κουμπί της (τα φανερά στη σειρά), κανένα φωτισμένο."""
+    return all(btn_bytes(c, s) == btn_expect(s, b)
+               for s, b in enumerate(UM.slots(c)))
 
 
 def tc_queue(c):
@@ -101,14 +108,14 @@ def squads(c):
                (0, 3, 255) and u['wx'] != 0xFFFF)
 
 
-def label_ok(c, sym, k):
+def label_ok(c, sym, k, text=None):
     """Η λωρίδα της ετικέτας: μελάνι μόνο μέσα στα κελιά του κειμένου
     (κεντραρισμένο), και στο πρώτο και στο τελευταίο κελί. (Μια μονάδα που
     περνάει από τη λωρίδα ζωγραφίζεται από πάνω της: έξω από τα κελιά
     μετράει μόνο το pen των γραμμάτων.)"""
     rows = M4.M2.decode_scrolled(c, sym)[:8]
     bg = rows[7][0]
-    n = len(mockup.BUTTONS[k][1])
+    n = len(text or mockup.BUTTONS[k][1])
     x0 = (80 - 3 * n) // 2 * 2
     x1 = x0 + 6 * n
     ink = {rows[y][x] for y in range(7) for x in range(x0, x1)} - {bg}
@@ -188,15 +195,15 @@ def main():
 
     # ------------------------------------------------ 5. κουμπιά
     # (M22) με χωρικό επιλεγμένο φαίνονται μόνο BUILD, NEXT AGE, IDLE
-    # VILLAGER, SAVE GAME (0x71), τα άλλα είναι φόντο· ο κέρσορας περνάει
-    # μόνο από τα φανερά: P (κανένα δεξιά), A, P, P, P (το CANCEL κρυμμένο),
-    # O, Q (πάνω από το IDLE το TRAIN είναι κρυμμένο: το BUILD)
+    # VILLAGER, SAVE GAME (0x71), το ένα μετά το άλλο από τη θέση 0 (οι
+    # θέσεις 4-7 φόντο)· ο κέρσορας μόνο στα φανερά: P P P P (στην 3 μένει),
+    # O O, A (από κάτω μόνο το PAUSE, στη θέση 4)
     g.tick(4)
     v0, f0 = vis(c), frames_ok(c)
     before = [btn_bytes(c, k) for k in range(8)]
     entered = UM.hud_enter(c)
     seen, lit, labels = [UM.rb(c, UM.U['HB_I'])], [], []
-    for key in 'pappppoq':
+    for key in 'ppppooa':
         UM.tap(c, key)
         g.tick(2)
         i = UM.rb(c, UM.U['HB_I'])
@@ -204,14 +211,14 @@ def main():
         lit.append(btn_bytes(c, i) != before[i] and
                    all(btn_bytes(c, j) == before[j] for j in range(8)
                        if j != i))
-        labels.append(label_ok(c, sym, i))
+        labels.append(label_ok(c, sym, UM.slots(c)[i]))
         if g.shots and key == 'a':
             c.screenshot(os.path.join(M4.M.BUILD, 'm20_hud.png'),
                          aspect=True)
     g.report('κουμπιά', entered and v0 == 0x71 and f0 and
-             seen == [0, 0, 4, 5, 6, 6, 6, 5, 0] and all(lit) and all(labels),
-             'χωρικός: φανερά #%02X, τα πλαίσια σωστά %s· A: στα κουμπιά %s· '
-             'P A P P P P O Q: %s· φωτισμένο μόνο το τρέχον %s· ετικέτα %s'
+             seen == [0, 1, 2, 3, 3, 2, 1, 4] and all(lit) and all(labels),
+             'χωρικός: φανερά #%02X, οι θέσεις σωστές %s· A: στα κουμπιά %s· '
+             'P P P P O O A: %s· φωτισμένο μόνο το τρέχον %s· ετικέτα %s'
              % (v0, f0, entered, seen, all(lit), labels))
 
     # ------------------------------------------------ 6. πράξεις
@@ -287,6 +294,28 @@ def main():
                     '%s #%02X (#%02X)' % x for x in seen_vis)))
     for name, good, what in out:
         g.report(name, good, what)
+
+    # ------------------------------------------------ 6β. PAUSE
+    # το PAUSE σταματάει τις μονάδες και η ετικέτα του γίνεται CONTINUE· το
+    # ίδιο κουμπί ξανά: συνεχίζουν
+    def pos():
+        return [(u['wx'], u['wy']) for u in S.units(c)]
+    UM.hud_button(c, UM.HB_PAUSE, leave=False)
+    g.tick(2)
+    p1, l1 = c.peek(sym['PAUSED']), label_ok(c, sym, 8, mockup.CONTINUE)
+    a = pos()
+    g.tick(30)
+    still = pos() == a
+    UM.hud_button(c, UM.HB_PAUSE, leave=False)
+    g.tick(2)
+    p2, l2 = c.peek(sym['PAUSED']), label_ok(c, sym, UM.HB_PAUSE)
+    a = pos()
+    g.tick(30)
+    moved = pos() != a
+    g.report('PAUSE', p1 == 1 and l1 and still and p2 == 0 and l2 and moved,
+             'PAUSE: paused %d, ετικέτα CONTINUE %s, οι μονάδες ακίνητες %s· '
+             'CONTINUE: paused %d, ετικέτα PAUSE %s, κινούνται %s'
+             % (p1, l1, still, p2, l2, moved))
 
     # ------------------------------------------------ 7. πίσω
     for k in range(8):                  # στην πάνω σειρά, και Q

@@ -26,7 +26,8 @@ DATA = os.path.join(gfx.OUT, 'data')
 W, H = 160, 200
 LOGO = 'POLIS'
 LOGO_Y, LOGO_S = 4, 3                   # η γραμμή, η κλίμακα (pixels)
-SCENE_Y0, SCENE_Y1 = 52, 106            # η σκηνή: οι γραμμές της
+SCENE_Y0, SCENE_Y1 = 52, 92             # η σκηνή: οι γραμμές της (M22: ως
+                                        # το 106 — 6 επιλογές του μενού)
 SCENE_AT = (33, 61)                     # το πλακίδιο στο κέντρο της
 CREDITS = 'REVIVE8BIT - 2026 - VASPER'
 CREDITS_Y = 185

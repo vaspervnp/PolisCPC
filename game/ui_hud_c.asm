@@ -1,25 +1,20 @@
-; ui_hud_c.asm — (M20) τα κουμπιά του HUD: ο αδρανής χωρικός (μετά τα
-; κείμενα, στο UI_S).
+; ui_hud_c.asm — (M20) τα κουμπιά του HUD (μετά τα κείμενα, στο UI_S).
+; (M22: το hb_idle στο ui_hud_p.asm — εδώ χρειάστηκε ο χώρος για τις ετικέτες)
 
-hb_idle:
-        ld a,(hb_iv)            ; IDLE VILLAGER: ο επόμενος χωρικός σου χωρίς
-        ld c,a                  ; δουλειά και χωρίς βήμα — επιλεγμένος, και
-        ld b,UNITS              ; η κάμερα πάνω του
-.il:    inc c
-        ld a,c
-        cp UNITS
-        jr c,.i1
-        ld c,0
-.i1:    ld a,c
-        call idx_ix
-        push ix
-        pop iy
-        call is_villager
-        jr nz,.in
-        ld a,(ix+U_JOB)
-        or a
-        jr nz,.in
-        bit F_MOVE,(ix+U_FL)
-        jp z,hb_got
-.in:    djnz .il
+
+; C = κουμπί, D = +1 / -1: το επόμενο φανερό της ίδιας σειράς (ή το ίδιο).
+hb_step:
+        ld e,c
+.s:     ld a,e
+        add a,d
+        ld e,a
+        xor c
+        and #FC
+        ret nz
+        ld a,e
+        call hb_vk
+        jr nc,.s
+        ld c,e
         ret
+
+
