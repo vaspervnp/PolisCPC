@@ -164,7 +164,12 @@ def main():
         elif args[0] == '--zx0':
             name, path = args[1], args[2]
             args = args[3:]
-            dsk.add(name, zx0(open(path, 'rb').read()))
+            z = zx0(open(path, 'rb').read())
+            # (2026-11-25) το UI.BIN συμπιεσμένο στο LOAD_AT (#C000), και
+            # αποσυμπιεσμένο από το UI_TMP (game/main.asm: SCREEN + #CC0)
+            assert name != 'UI.BIN' or len(z) <= 0xCC0, \
+                'UI.BIN: %d bytes συμπιεσμένο, πάνω από #CC0 (UI_TMP)' % len(z)
+            dsk.add(name, z)
         else:
             name, path = args[0], args[1]
             args = args[2:]

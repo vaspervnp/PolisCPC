@@ -76,7 +76,7 @@ PY
 # Τα αρχεία χωρίς κεφαλίδα AMSDOS (M12, src/dsk.py): οι εποχές ανά
 # πολιτισμό και ο οπλίτης, συμπιεσμένα ZX0 (M13: τα φορτώνει το disk_load
 # στην οθόνη, και το dzx0 στη θέση τους).
-cat build/ui.bin build/ui_a.bin build/ui_b.bin build/ui_c.bin build/ui_d.bin build/ui_e.bin build/ui_f.bin build/ui_g.bin build/ui_h.bin build/ui_i.bin build/ui_j.bin build/ui_k.bin build/ui_l.bin build/ui_p.bin data/ui_end.bin data/ic_c5a.bin data/ic_c5b.bin > build/ui_all.bin   # (M20)
+cat build/ui.bin build/ui_a.bin build/ui_b.bin build/ui_c.bin build/ui_d.bin build/ui_e.bin build/ui_f.bin build/ui_g.bin build/ui_h.bin build/ui_i.bin build/ui_j.bin build/ui_k.bin build/ui_l.bin build/ui_p.bin build/ui_m.bin build/ui_n.bin data/ui_end.bin data/ic_c6.bin data/ic_c5a.bin data/ic_c5b.bin > build/ui_all.bin   # (M20)
 python3 src/dsk.py build/polis.dsk \
     $(for c in E G B A R P F K; do echo --zx0 AGE3$c.BIN data/age3$c.bin --zx0 AGE4$c.BIN data/age4$c.bin; done) \
     --zx0 HOPL.BIN data/c5_slot3.bin \

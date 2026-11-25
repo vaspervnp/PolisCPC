@@ -25,17 +25,9 @@ hb_nthe:
         pop bc
         ret
 
-; (M22) Οι μονές θέσεις (hb_odd, UI_P): ό,τι άλλαξε από το hb_old.
-hb_od2: ld a,(hb_vis)
-        ld c,a
-        ld hl,hb_old
-        ld b,1
-        jp hb_sync
-
 ; (M22) Η συνέχεια του sn_ctr (ui_hud_d.asm): το σπίτι του αντιπάλου.
 sn_ct2: ld hl,(sn_home)
         ld (sn_cj),hl
         ret
 sn_home:
         db 0, 0                 ; j, i: το lv_home (init.asm, lv_init)
-

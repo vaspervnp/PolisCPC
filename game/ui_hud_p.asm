@@ -26,12 +26,6 @@ hb_pause:
         ld (hl),a
         ret
 
-; (M22) Τα καρέ χωρίς έλεγχο των φανερών: οι μονές θέσεις, και μετά το
-; hb_lab (UI_I).
-hb_odd: ld hl,hb_lab
-        push hl
-        jp hb_od2
-
 hb_idle:
         ld a,(hb_iv)            ; IDLE VILLAGER: ο επόμενος χωρικός σου χωρίς
         ld c,a                  ; δουλειά και χωρίς βήμα — επιλεγμένος, και
@@ -54,3 +48,16 @@ hb_idle:
         jp z,hb_got
 .in:    djnz .il
         ret
+
+; (M22) Από το sn_try (jobs.asm), αντί για το job_src: D = si, E = sj (η
+; παλιά πηγή, το κέντρο του παραθύρου της αναζήτησης), και το κέντρο της
+; απόστασης (sn_cj, sn_ci): η παλιά πηγή — για χωρικό του αντιπάλου το
+; σπίτι του (sn_home, sn_ct2): από τις πηγές κοντά στην παλιά διαλέγει την
+; πιο κοντινή στο Κέντρο του, και φεύγει μακριά μόνο όταν κοντά δεν έχει.
+sn_ctr: call job_src
+        ld (sn_cj),de
+        ld a,(ix+U_TEAM)
+        or a
+        ret z
+        jp sn_ct2
+; (τα sn_cj, sn_ci στο UI_S: ui_hud_c.asm)

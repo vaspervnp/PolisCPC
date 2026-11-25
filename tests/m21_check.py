@@ -88,7 +88,10 @@ def music(g):
     c = g.c
     n = song_frames('mus_game')
     regs = listen(c, 2 * n + 50)
-    got = [{tone(r, ch) for r in regs if r[8 + ch]} for ch in (0, 1)]
+    # (2026-11-25) μόνο τόνοι που κρατάνε 2 δείγματα: ένα δείγμα ανάμεσα στις
+    # δύο εγγραφές ενός καναλιού (R2, R3) δίνει έναν μισό τόνο για ένα καρέ
+    got = [{tone(r, ch) for r, q in zip(regs, regs[1:])
+            if r[8 + ch] and tone(r, ch) == tone(q, ch)} for ch in (0, 1)]
     want = [periods('mus_game', ch) for ch in (0, 1)]
     vols = {r[8] for r in regs} | {r[9] for r in regs}
     seq = [(tone(r, 0), tone(r, 1)) for r in regs]

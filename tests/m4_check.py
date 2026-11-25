@@ -33,8 +33,11 @@ from cpc import CPC                             # noqa: E402
 CUR_DX, CUR_DY = 2, 6
 
 
+WZ_OFF = 0xADE5                         # game/fog.asm (equ)
+
+
 class Game:
-    def __init__(self, shots, ai=False, fog=False):
+    def __init__(self, shots, ai=False, fog=False, wander=False):
         self.shots = shots
         self.sym = M.symbols()
         grd, res = M.mockup.make_map()
@@ -47,6 +50,12 @@ class Game:
         if not fog:                     # και χωρίς ομίχλη (M11): όλα
             self.c.poke(self.sym['FOG_ON'], 0)  # εξερευνημένα
         M.wait_phase(self.c, self.sym, 6, limit_ms=8000)   # (M13: ~4 s)
+        # (2026-11-25) wander: οι περιπλανώμενες παντού, όπως ως τότε (M15,
+        # M18 στηρίζονται σ' αυτό) — χωρίς τον αντίπαλο δεν μετράει ο χρόνος,
+        # και η πόλη του παίκτη μένει κλειστή γι' αυτές (WZ_OFF, game/fog.asm·
+        # ο έλεγχός της: M22)
+        if wander:
+            self.c.poke(WZ_OFF, 1)
         self.times = []
         self.scrolled = []              # κύλησε η κάμερα σε εκείνο το καρέ;
         self.ok = True

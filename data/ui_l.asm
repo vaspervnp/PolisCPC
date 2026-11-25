@@ -1,15 +1,17 @@
 ; ΠΑΡΑΓΕΤΑΙ από src/make_ui.py (M20).
 
-ui_ic_6:  ; save, γραμμές 0-11
-        db #C0, #C0, #C0, #C4
-        db #81, #90, #60, #42
-        db #81, #90, #60, #42
-        db #81, #C0, #C0, #42
-        db #81, #03, #03, #42
-        db #81, #03, #03, #42
-        db #81, #C0, #C0, #42
-        db #81, #85, #4A, #42
-        db #81, #85, #4A, #42
-        db #81, #C0, #C0, #42
-        db #81, #03, #03, #42
-        db #C0, #C0, #C0, #C0
+ui_ic_3:  ; patrol, γραμμές 2-15
+        db #CC, #CC, #66, #CC
+        db #CC, #CC, #33, #CC
+        db #33, #33, #33, #66
+        db #CC, #CC, #33, #CC
+        db #CC, #CC, #66, #CC
+        db #CC, #CC, #CC, #CC
+        db #CC, #CC, #CC, #CC
+        db #CC, #99, #CC, #CC
+        db #C0, #C0, #CC, #CC
+        db #C1, #C2, #33, #33
+        db #C2, #C0, #CC, #CC
+        db #C1, #C0, #CC, #CC
+        db #C0, #C2, #CC, #CC
+        db #C3, #C0, #CC, #CC

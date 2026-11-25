@@ -10,6 +10,11 @@
    σταθερές ήταν 33 πλακίδια μακριά), 5 λεπτά: οι πηγές όσων μαζεύουν
    (J_GO, J_WORK, J_BACK) ως NEAR πλακίδια από το σπίτι (ως το M21: διάμεσος
    24, 82% πάνω από 20).
+4. ΓΕΙΤΟΝΕΣ (2026-11-25). Νέο παιχνίδι από τη δισκέτα (PLAY), ο παίκτης
+   αδρανής, 280 s: καμία περιπλανώμενη του αντιπάλου (F_WANDER) πιο κοντά
+   από FAR στην πόλη του παίκτη (max(|dx|, |dy| / 2) σε συντεταγμένες
+   κόσμου, από το κέντρο των χωρικών του· ως τότε 11 από τα 40 s). Μετά τα
+   300 s (WZ_OFF = 1) ξανά ελεύθερες.
 3. CONTROLS. Στο μενού έναρξης η επιλογή CONTROLS: η σελίδα με τα πλήκτρα
    pixel προς pixel (src/make_menu.py, ctrl_lines), και με SPACE πίσω στο
    μενού — ίδιο pixel προς pixel, με το βέλος στο CONTROLS.
@@ -77,8 +82,38 @@ def controls():
            'CONTROLS: %d' % (bad, bad2))
 
 
+FAR = 24
+
+
+def neighbours():
+    sym = M.symbols()
+    c = M12.boot(os.path.join(M.BUILD, 'polis.dsk'), [])
+    c.tap_key(CP.KEY_RETURN)
+    M.wait_phase(c, sym, 6, limit_ms=10000)
+    mine = [u for u in S.units(c) if u['team'] == 0 and u['wx'] != 0xFFFF]
+    hx = sum(u['wx'] for u in mine) / len(mine)
+    hy = sum(u['wy'] for u in mine) / len(mine)
+    near, n = 999, 0
+    for _ in range(56):                         # 56 x 5 s
+        c.run_frames(250)
+        for u in S.units(c):
+            if u['team'] == 1 and u['fl'] & S.F_WANDER and u['wx'] != 0xFFFF:
+                n += 1
+                near = min(near, max(abs(u['wx'] - hx), abs(u['wy'] - hy) / 2))
+    wz_off = 0xADE5                             # WZ_OFF (fog.asm, equ)
+    off0 = c.peek(wz_off)
+    for _ in range(12):
+        c.run_frames(250)
+    off1 = c.peek(wz_off)
+    report('ΓΕΙΤΟΝΕΣ', n > 1000 and near >= FAR and off0 == 0 and off1 == 1,
+           '280 s, %d δείγματα: η πιο κοντινή περιπλανώμενη %d από την πόλη '
+           '(όριο %d)· WZ_OFF %d, μετά από 60 s ακόμα %d'
+           % (n, near, FAR, off0, off1))
+
+
 def main():
     controls()
+    neighbours()
     sym = M.symbols()
     path = os.path.join(M.BUILD, 'm22_g2.dsk')
     shutil.copy(os.path.join(M.BUILD, 'polis.dsk'), path)

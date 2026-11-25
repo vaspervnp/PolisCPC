@@ -36,13 +36,13 @@ UB_W        equ 6              ; bytes
 UB_H        equ 17
 ui_btn:     dw #50AC, #50B2, #50B8, #50BE, #694C, #6952, #6958, #695E
 ui_blbl:    dw ul_0, ul_1, ul_2, ul_3, ul_4, ul_5, ul_6, ul_7, ul_8, ul_9
-ul_0: db 5, 3, 22, 10, 13, 5  ; BUILD
-ul_1: db 5, 21, 19, 2, 10, 15  ; TRAIN
-ul_2: db 8, 19, 6, 20, 6, 2, 19, 4, 9  ; RESEARCH
-ul_3: db 11, 20, 17, 13, 10, 21, 0, 20, 18, 22, 2, 5  ; SPLIT SQUAD
-ul_4: db 8, 15, 6, 25, 21, 0, 2, 8, 6  ; NEXT AGE
-ul_5: db 13, 10, 5, 13, 6, 0, 23, 10, 13, 13, 2, 8, 6, 19  ; IDLE VILLAGER
-ul_6: db 9, 20, 2, 23, 6, 0, 8, 2, 14, 6  ; SAVE GAME
-ul_7: db 6, 4, 2, 15, 4, 6, 13  ; CANCEL
-ul_8: db 5, 17, 2, 22, 20, 6  ; PAUSE
-ul_9: db 8, 4, 16, 15, 21, 10, 15, 22, 6  ; CONTINUE
+ul_0: db 5, 131, 22, 10, 13, 5  ; BUILD
+ul_1: db 5, 149, 19, 2, 10, 15  ; TRAIN
+ul_2: db 8, 147, 6, 20, 6, 2, 19, 4, 9  ; RESEARCH
+ul_3: db 11, 148, 17, 13, 10, 21, 0, 20, 18, 22, 2, 5  ; SPLIT SQUAD
+ul_4: db 8, 143, 6, 25, 21, 0, 2, 8, 6  ; NEXT AGE
+ul_5: db 13, 138, 5, 13, 6, 0, 23, 10, 13, 13, 2, 8, 6, 19  ; IDLE VILLAGER
+ul_6: db 9, 20, 2, 151, 6, 0, 8, 2, 14, 6  ; SAVE GAME
+ul_7: db 6, 132, 2, 15, 4, 6, 13  ; CANCEL
+ul_8: db 5, 17, 2, 150, 20, 6  ; PAUSE
+ul_9: db 8, 4, 16, 15, 21, 10, 15, 150, 6  ; CONTINUE

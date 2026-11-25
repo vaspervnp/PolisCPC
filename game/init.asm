@@ -65,6 +65,19 @@ lv_init:
         ld de,lv_c7
         ld bc,H_TEXT - H_ROUTE
         ldir
+        ld hl,wz_code           ; (2026-11-25) ο έλεγχος των περιπλανώμενων
+        ld de,WZ_TILE           ; στη θέση του (fog.asm), με την περιοχή
+        ld bc,WZ_LEN            ; γύρω από το Κέντρο Πόλης του παίκτη
+        ldir
+        xor a
+        ld (WZ_OFF),a
+        ld hl,(lv_h + H_TC)     ; (H = i, L = j)
+        ld a,h
+        sub WZ_R
+        ld (WZ_TILE + wz_code.i0 - wz_code + 1),a
+        ld a,l
+        sub WZ_R
+        ld (WZ_TILE + wz_code.j0 - wz_code + 1),a
         ld a,RAM_BASE
         call setram
         ld hl,(lv_h + H_CAM)
@@ -90,6 +103,36 @@ lv_init:
         ld (age3_name + 4),a
         ld (age4_name + 4),a
         ret
+
+; (2026-11-25, ζήτημα του χρήστη: «έρχονται από την αρχή στο χωριό μου οι
+; γείτονες· να μην έρχονται για 5 λεπτά τουλάχιστον».) Οι περιπλανώμενες
+; (F_WANDER, ομάδα 1) διαλέγουν τυχαίο στόχο ±32 x ±64 (units.asm) και
+; ρωτάνε το spot_blk (pathing.asm) αν είναι εμπόδιο· το spot_blk το καλούν
+; ΜΟΝΟ αυτές, και τελειώνει εδώ: HL = i, DE = j του στόχου -> A = 1 (όχι
+; εκεί) αν είναι μέσα στο τετράγωνο ±WZ_R πλακιδίων γύρω από το Κέντρο του
+; παίκτη (H_TC, 4 x 4) — ώσπου η C7 να γράψει WZ_OFF στα 300 s (bank7.asm,
+; το δευτερόλεπτο του αντιπάλου). Αλλιώς το tile_blk. Χωρίς απόλυτα άλματα
+; μέσα του: αντιγράφεται στο WZ_TILE (κύρια RAM, μετά το FD_TAB), και το
+; lv_init γράφει τα όρια στα i0, j0. Από έξω δεν διασχίζεται με ένα βήμα
+; (±16 πλακίδια το πολύ, η πλευρά 2 WZ_R + 4).
+WZ_R        equ 12
+wz_code:
+        ld a,(WZ_OFF)
+        or a
+        jr nz,.ok
+        ld a,l
+.i0:    sub 0
+        cp 2 * WZ_R + 4
+        jr nc,.ok
+        ld a,e
+.j0:    sub 0
+        cp 2 * WZ_R + 4
+        jr nc,.ok
+        ld a,1
+        ret
+.ok:    jp tile_blk
+WZ_LEN      equ $ - wz_code
+        assert WZ_TILE + WZ_LEN <= UNIT_TAB, 'wz_code'
 
         include "../data/lvdef.asm"
 lv_h:     ds H_TEXT
@@ -700,6 +743,9 @@ ui_load:
         ld de,END_IC
         ld bc,64
         ldir
+        ld de,IC_C6             ; (2026-11-25) ένα εικονίδιο κουμπιού στην C6
+        ld bc,#5F80 - IC_C6     ; (make_ui.py)
+        ldir
         ld a,RAM_SPR            ; και εικονίδια των κουμπιών στην C5: στη
         call setram             ; θέση του βέλους, και μετά τα περιγράμματα
         ld de,SPR_ARROW         ; των καρέ (make_ui.py, hudvis.asm)
@@ -715,5 +761,5 @@ ui_parts:
         dw UI_D, UID_LEN, SNDA_AT, SNDA_LEN, SNDB_AT, SNDB_LEN
         dw SNDC_AT, SNDC_LEN
         dw UI_H, UIH_LEN, UI_I, UII_LEN, UI_J, UIJ_LEN, UI_K, UIK_LEN
-        dw UI_L, UIL_LEN, UI_P, UIP_LEN
+        dw UI_L, UIL_LEN, UI_P, UIP_LEN, UI_M, UIM_LEN, UI_N, UIN_LEN
         dw 0, 0                 ; (μήκος 0: τέλος)

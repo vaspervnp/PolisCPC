@@ -76,25 +76,29 @@ def res_mask():
     return m
 
 
-# (M22) Τα εικονίδια των κουμπιών που κρύβονται όταν δεν έχουν νόημα (όλα
-# εκτός από το SAVE GAME), μόνο οι γραμμές τους με σχέδιο: δύο κενά της C5
-# (το αχρησιμοποίητο βέλος SPR_ARROW, και μετά τα 1.600 bytes των
-# περιγραμμάτων OCC_E ως το #700 — game/main.asm, cursor_gfx) και δύο
-# περιοχές της σελίδας του HUD (UI_J, UI_K), και ο πίνακάς τους (ui_ic_tab:
-# dw γραμμές, db η πρώτη, db πόσες· το hb_draw τα αντιγράφει με το rst 8).
-IC_C5 = [('ic_c5a.bin', 'SPR_ARROW', 128, ['eject', 'age_up']),
-         ('ic_c5b.bin', 'OCC_E + 1600', 0x700 - 1600,
-          ['research', 'cancel', 'idle'])]
-IC_HUD = [('ui_j.asm', 56, ['build']), ('ui_l.asm', 48, ['save']),
-          ('ui_p.asm', 48, ['patrol']),
-          ('ui_k.asm', 44, ['pause'])]      # (M22: τα φανερά σε σειρά)
+# (M22) Τα εικονίδια των κουμπιών, μόνο οι γραμμές τους με σχέδιο, και ο
+# πίνακάς τους (ui_ic_tab: dw γραμμές, db η πρώτη | η τράπεζα x 16, db
+# πόσες· το hb_draw τα αντιγράφει με το rst 8 από την τράπεζα του πίνακα).
+# (2026-11-25) Με το γράμμα του πλήκτρου τους (mockup.btn_icon: 548 bytes,
+# ήταν 488), σε ό,τι κενό υπάρχει — κάθε εικονίδιο σε ένα κομμάτι:
+#   C5 #7380 (το αχρησιμοποίητο βέλος SPR_ARROW), C5 #7A40 (μετά τα 1.600
+#   bytes των περιγραμμάτων OCC_E, ως τις σελίδες τους στο #7B00), C6 #5F48
+#   (μετά το μεγαλύτερο αρχείο εποχής, ως την ομίχλη), και κομμάτια της
+#   σελίδας του HUD: UI_M (το set_palette της εκκίνησης, game/boot.asm),
+#   UI_K, UI_L. Ο πίνακας στο UI_P.
+IC_BANK = [('ic_c5a.bin', 0x7380, 5, 128, ['eject', 'age_up']),
+           ('ic_c5b.bin', 0x7A40, 5, 0x7B00 - 0x7A40,
+            ['save', 'cancel', 'research']),
+           ('ic_c6.bin', 0x5F48, 6, 0x5F80 - 0x5F48, ['pause'])]
+IC_HUD = [('ui_m.asm', 61, ['build']), ('ui_k.asm', 61, ['idle']),
+          ('ui_l.asm', 65, ['patrol'])]
 
 
 def icons(head, mockup, cpcimg):
     keys = [k for k, _ in mockup.BUTTONS]
     rows = {}
-    for art in keys:
-        ic = mockup.T.hud(mockup.HUD_ART[art])
+    for k, art in enumerate(keys):
+        ic = mockup.btn_icon(k)
         bg = gfx.PEN[mockup.BTN_PEN]
         px = [[bg if p is None else p for p in r] for r in ic]
         used = [y for y, r in enumerate(ic) if any(p is not None for p in r)]
@@ -102,47 +106,40 @@ def icons(head, mockup, cpcimg):
         rows[art] = (y0, y1 - y0, bytes(
             cpcimg.mode0_byte(px[y][2 * x], px[y][2 * x + 1])
             for y in range(y0, y1) for x in range(4)))
-    placed = set()
-    equs = []
-    for name, at, cap, arts in IC_C5:
+    where = {}
+    for name, at, bank, cap, arts in IC_BANK:
         blob = b''
         for art in arts:
-            equs.append('ui_ic_%d     equ %s + %d    ; %s (C5)\n'
-                        % (keys.index(art), at, len(blob), art))
+            where[art] = ('#%04X' % (at + len(blob)), bank)
             blob += rows[art][2]
-            placed.add(art)
         assert len(blob) <= cap, '%s: %d > %d' % (name, len(blob), cap)
         with open(os.path.join(DATA, name), 'wb') as f:
             f.write(blob + bytes(cap - len(blob)))
         print(os.path.join(DATA, name), len(blob), 'από', cap)
-    hud = {}
     for name, cap, arts in IC_HUD:
-        out = []
+        out = [head]
         size = 0
         for art in arts:
             y0, n, data = rows[art]
-            out.append('ui_ic_%d:  ; %s, γραμμές %d-%d\n'
-                       % (keys.index(art), art, y0, y0 + n - 1))
+            lab = 'ui_ic_%d' % keys.index(art)
+            where[art] = (lab, 0)
+            out.append('%s:  ; %s, γραμμές %d-%d\n' % (lab, art, y0, y0 + n - 1))
             for k in range(0, len(data), 4):
                 out.append('        db %s\n' % ', '.join(
                     '#%02X' % x for x in data[k:k + 4]))
             size += len(data)
-            placed.add(art)
         assert size <= cap, '%s: %d > %d' % (name, size, cap)
-        hud[name] = out
-    assert placed == set(keys), placed
-    tab = ['; ο πίνακας των εικονιδίων (UI_K)\n'] + equs + ['ui_ic_tab:\n']
+        print(write(name, ''.join(out)))
+    assert set(where) == set(keys), where
+    tab = [head, '; ο πίνακας των εικονιδίων (UI_P): η πρώτη γραμμή | η '
+           'τράπεζα x 16 (0: C0)\n', 'ui_ic_tab:\n']
     for k, art in enumerate(keys):
-        if art in placed:
-            y0, n, _ = rows[art]
-            tab.append('        dw ui_ic_%d\n        db %d, %d\n' % (k, y0, n))
-        else:
-            tab.append('        dw 0\n        db 0, 0         ; %s: πάντα\n'
-                       % art)
-    print(write('ui_j.asm', head + ''.join(hud['ui_j.asm'])))
-    print(write('ui_l.asm', head + ''.join(hud['ui_l.asm'])))
-    print(write('ui_p.asm', head + ''.join(hud['ui_p.asm'])))
-    print(write('ui_k.asm', head + ''.join(tab + hud['ui_k.asm'])))
+        y0, n, _ = rows[art]
+        adr, bank = where[art]
+        tab.append('        dw %s\n        db %d | %d << 4, %d   ; %s (%s)\n'
+                   % (adr, y0, bank, n, art, mockup.BUTTON_KEYS[k]))
+    print(write('ui_p.asm', ''.join(tab)))
+    print(write('ui_j.asm', head + '; (2026-11-25: τα εικονίδια αλλού)\n'))
 
 
 def end_icon(name):
@@ -240,8 +237,11 @@ def main():
     lbls = [lbl for _, lbl in mockup.BUTTONS] + [mockup.CONTINUE]
     b.append('ui_blbl:    dw %s\n' % ', '.join(
         'ul_%d' % k for k in range(len(lbls))))
-    for k, lbl in enumerate(lbls):
-        b.append(db_str('ul_%d' % k, lbl))
+    for k, lbl in enumerate(lbls):         # (το γράμμα του πλήκτρου: bit 7)
+        g = list(enc(lbl))
+        g[mockup.key_index(lbl, min(k, 8))] |= 0x80
+        b.append('ul_%d: db %d%s  ; %s\n' % (k, len(g), ''.join(
+            ', %d' % x for x in g), lbl))
     # Ο φωτισμός αλλάζει pen ΤΟ ΦΟΝΤΟ <-> ΤΟ ΦΩΤΙΣΜΕΝΟ, pixel προς pixel
     # (game/ui_hud_b.asm): αν το φωτισμένο pen υπήρχε σε εικονίδιο, το σβήσιμο
     # θα το έκανε φόντο.

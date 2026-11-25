@@ -27,7 +27,8 @@ hb_upd: ld a,(sel_n)            ; SPLIT SQUAD (όπως το sq_split)
 
 ; Από το hb_tick (main.asm) στα άλλα καρέ: στο 2ο των 4 ο αδρανής
 ; χωρικός· σε όλα η ετικέτα.
-hb_lab: ld a,(hb_ph)
+hb_lab: call hb_hot             ; (2026-11-25) τα γράμματα των κουμπιών
+        ld a,(hb_ph)
         and 3
         cp 2
         call z,hb_scan

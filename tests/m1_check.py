@@ -129,8 +129,9 @@ UI_PARTS = [(0x7230, 'ui.bin'), (0x6D80, 'ui_a.bin'), ('HIB_END', 'ui_b.bin'),
             ('HUD_MUS', 'ui_e.bin'), ('FX_TICK', 'ui_f.bin'),  # ο ήχος (M21)
             ('MUS_GAME', 'ui_g.bin'),
             ('HB_DRAW', 'ui_h.bin'), ('HB_UPD', 'ui_i.bin'),   # (M22) τα
-            ('UI_IC_0', 'ui_j.bin'), ('UI_IC_TAB', 'ui_k.bin'),
-            ('UI_IC_6', 'ui_l.bin'), ('UI_IC_3', 'ui_p.bin')]  # κουμπιά
+            ('HB_VB', 'ui_j.bin'), ('UI_IC_5', 'ui_k.bin'),     # κουμπιά
+            ('UI_IC_3', 'ui_l.bin'), ('UI_IC_TAB', 'ui_p.bin'),  # (η αρχή
+            ('UI_IC_0', 'ui_m.bin'), ('HB_ODD', 'ui_n.bin')]    # τους)
 
 
 def ui_syms():
@@ -166,6 +167,10 @@ def ui_poke(c, sym):
     p = scene.bank_ram(c, 6)
     for k, v in enumerate(end):
         p[END_IC - 0x4000 + k] = v
+    # (2026-11-25) ένα εικονίδιο κουμπιού στην C6 (IC_C6, game/fog.asm)
+    for k, v in enumerate(open(os.path.join(HERE, '..', 'data', 'ic_c6.bin'),
+                               'rb').read()):
+        p[0x5F48 - 0x4000 + k] = v
     # και τα εικονίδια των κουμπιών στην C5 (SPR_ARROW #7380, OCC_E + 1600)
     p = scene.bank_ram(c, 5)
     for a, f in ((0x7380, 'ic_c5a.bin'), (0x7400 + 1600, 'ic_c5b.bin')):

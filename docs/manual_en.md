@@ -151,19 +151,25 @@ of the HUD. **Q A O P** move from button to button; the current one lights
 up, and its name appears at the top of the screen. **SPACE** or **RETURN**
 presses it. **Q** from the top row takes you back to the map.
 
+Every button also has its own **letter key**, shown in white in the bottom
+left corner of its icon and in white inside its name at the top of the
+screen. The letter presses the button from anywhere, without moving the
+cursor, but only while the button is showing (**U**, for PAUSE, always
+works).
+
 A button appears only when it makes sense:
 
-| button | appears when | what it does |
-|---|---|---|
-| **BUILD** | villagers are selected | the BUILD menu |
-| **TRAIN** | one of your buildings that trains units is selected | train one unit |
-| **RESEARCH** | one of your buildings with technologies is selected | its menu |
-| **SPLIT SQUAD** | one of your squads (2 or more) is selected | split it in two |
-| **NEXT AGE** | before the Iron Age | the menu of your Town Center, with the next age |
-| **IDLE VILLAGER** | a villager of yours has nothing to do | select them, and move the view to them |
-| **SAVE GAME** | always | save the game to disc (about 2 seconds) |
-| **CANCEL** | a building is being placed | cancel the placement |
-| **PAUSE** | always | stop the game; the button is now called **CONTINUE**, and pressing it again lets the game go on |
+| button | key | appears when | what it does |
+|---|---|---|---|
+| **BUILD** | **B** | villagers are selected | the BUILD menu |
+| **TRAIN** | **T** | one of your buildings that trains units is selected | train one unit |
+| **RESEARCH** | **R** | one of your buildings with technologies is selected | its menu |
+| **SPLIT SQUAD** | **S** | one of your squads (2 or more) is selected | split it in two |
+| **NEXT AGE** | **N** | before the Iron Age | the menu of your Town Center, with the next age |
+| **IDLE VILLAGER** | **I** | a villager of yours has nothing to do | select them, and move the view to them |
+| **SAVE GAME** | **V** | always | save the game to disc (about 2 seconds) |
+| **CANCEL** | **C** | a building is being placed | cancel the placement |
+| **PAUSE** | **U** | always | stop the game; the button is now called **CONTINUE**, and pressing it again lets the game go on |
 
 On a PC emulator, **RETURN** is the main **Enter** key. The CPC's **ENTER**
 (on the numeric keypad) is the keypad Enter, and does the same everywhere.

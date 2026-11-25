@@ -15,8 +15,10 @@ Q A O P / βελάκια, SPACE και RETURN: οι πράξεις σε μενο
    της ομάδας, με SPLIT SQUAD.
 3. SPACE ΣΤΟ ΚΕΝΤΡΟ ΠΟΛΗΣ. Το μενού του (TRAIN και οι τεχνολογίες του)·
    TRAIN: η ουρά του + 1.
-4. ΤΑ ΓΡΑΜΜΑΤΑ. H B T U X V ESC δεν κάνουν πια τίποτα: κανένα μενού,
-   καμία τοποθέτηση, καμία ουρά, καμία αποθήκευση.
+4. ΤΑ ΓΡΑΜΜΑΤΑ (2026-11-25: ξανά, ένα ανά κουμπί του HUD — B T R S N I V
+   C U, game/ui_hud_j.asm hb_hot — μόνο όταν το κουμπί φαίνεται). Με
+   χωρικό επιλεγμένο: T (το TRAIN κρυμμένο), H, X, ESC τίποτα· B το μενού
+   BUILD· U σταματάει το παιχνίδι, U ξανά συνεχίζει.
 5. ΚΟΥΜΠΙΑ. Ο κέρσορας κάτω από τον χάρτη μπαίνει στα κουμπιά· σε κάθε
    κουμπί η ετικέτα του στην κορυφή του χάρτη (στη μέση, τίποτα άλλο στη
    λωρίδα) και το φόντο του φωτισμένο· φεύγοντας, το πλαίσιο ξανά ακριβώς
@@ -79,7 +81,7 @@ def btn_expect(s, b):
         _HUD.append(mockup.hud_background(numbers=False))
     img = [list(r) for r in _HUD[0]]
     ox, oy = mockup.btn_xy(s)
-    icon = mockup.T.hud(mockup.HUD_ART[mockup.BUTTONS[b][0]])
+    icon = mockup.btn_icon(b)              # (με το γράμμα του πλήκτρου)
     for y in range(17):
         for x in range(-1, 9):
             p = icon[y][x] if 0 <= x < 8 and y < 16 else None
@@ -119,7 +121,8 @@ def label_ok(c, sym, k, text=None):
     x0 = (80 - 3 * n) // 2 * 2
     x1 = x0 + 6 * n
     ink = {rows[y][x] for y in range(7) for x in range(x0, x1)} - {bg}
-    outside = len(ink) == 1 and all(
+    # (2026-11-25) δύο pens: τα γράμματα, και το γράμμα του πλήκτρου
+    outside = len(ink) == 2 and all(
         rows[y][x] not in ink for y in range(8) for x in range(160)
         if not x0 <= x < x1)
     first = any(rows[y][x] != bg for y in range(7) for x in range(x0, x0 + 6))
@@ -185,13 +188,23 @@ def main():
 
     # ------------------------------------------------ 4. τα γράμματα
     M6.click_unit(g, 0)
-    for k in list('hbtuxv') + [CPCMOD.KEY_ESC]:
+    for k in list('thx') + [CPCMOD.KEY_ESC]:
         M7.press(g, k)
     dead = (not UM.is_open(c) and c.peek(sym['BMODE']) == 255 and
             tc_queue(c) == q1 and c.peek(sym['SAVE_REQ']) == 0)
-    g.report('γράμματα', dead, 'H B T U X V ESC: κανένα μενού, bmode %d, '
-             'ουρά %d, save_req %d' % (c.peek(sym['BMODE']), tc_queue(c),
-                                       c.peek(sym['SAVE_REQ'])))
+    M7.press(g, 'b')
+    bld = UM.wait_open(c) and UM.rb(c, UM.U['UM_KIND']) == UM.MK_BUILD
+    UM.close(c)
+    g.tick(2)
+    M7.press(g, 'u')
+    p1 = c.peek(sym['PAUSED'])
+    M7.press(g, 'u')
+    p2 = c.peek(sym['PAUSED'])
+    g.report('γράμματα', dead and bld and p1 == 1 and p2 == 0,
+             'T H X ESC: κανένα μενού %s (bmode %d, ουρά %d, save_req %d)· '
+             'B: το μενού BUILD %s· U: paused %d, U: %d'
+             % (dead, c.peek(sym['BMODE']), tc_queue(c),
+                c.peek(sym['SAVE_REQ']), bld, p1, p2))
 
     # ------------------------------------------------ 5. κουμπιά
     # (M22) με χωρικό επιλεγμένο φαίνονται μόνο BUILD, NEXT AGE, IDLE

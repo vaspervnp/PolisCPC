@@ -17,4 +17,8 @@ hb_step:
         ld c,e
         ret
 
-
+; (2026-11-25) Μεταβλητές του UI_C (ui_hud_d.asm: η ετικέτα, το sn_ctr) —
+; εκεί δεν χωρούσαν.
+hb_lw:  db 0
+sn_cj:  db 0
+sn_ci:  db 0

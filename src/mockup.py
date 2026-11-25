@@ -83,6 +83,36 @@ BUTTONS = [('build', 'BUILD'), ('eject', 'TRAIN'), ('research', 'RESEARCH'),
 SLOTS = 8                               # οι θέσεις (M22: το PAUSE, το 9ο
                                         # κουμπί, πάντα μετά τα άλλα φανερά)
 CONTINUE = 'CONTINUE'                   # η ετικέτα του PAUSE όσο σταματημένο
+# (2026-11-25) Το πλήκτρο κάθε κουμπιού (game/ui_hud_j.asm, hb_hot): στην
+# ετικέτα το γράμμα του με άλλο χρώμα, και στην κάτω αριστερή γωνία του
+# εικονιδίου, άσπρο σε σκούρο πλαίσιο 4 x 6 (btn_icon). Όχι Q A O P (ο
+# κέρσορας) ούτε M (η μουσική).
+BUTTON_KEYS = 'BTRSNIVCU'
+KEY_GLYPHS = {'B': '110101110101110', 'T': '111010010010010',
+              'R': '110101110101101', 'S': '011100010001110',
+              'N': '110101101101101', 'I': '111010010010111',
+              'V': '101101101101010', 'C': '011100100100011',
+              'U': '101101101101111'}
+KEY_BOX, KEY_INK = 'K', 'I'
+
+
+def btn_icon(k):
+    """Το εικονίδιο του κουμπιού k (BUTTONS) με το γράμμα του πλήκτρου."""
+    ic = [list(r) for r in T.hud(HUD_ART[BUTTONS[k][0]])]
+    g = KEY_GLYPHS[BUTTON_KEYS[k]]
+    for y in range(10, 16):
+        for x in range(4):
+            ic[y][x] = gfx.PEN[KEY_BOX]
+    for j in range(5):
+        for i in range(3):
+            if g[3 * j + i] == '1':
+                ic[11 + j][i] = gfx.PEN[KEY_INK]
+    return ic
+
+
+def key_index(label, k):
+    """Η θέση του γράμματος του πλήκτρου μέσα στην ετικέτα."""
+    return label.index(BUTTON_KEYS[k])
 BTN_PEN, BTN_HI = 't', 'c'              # το φόντο του κουμπιού· φωτισμένο
 HUD_BG = 'K'                            # το φόντο του HUD (και κουμπί κρυμμένο, M22)
 
@@ -484,7 +514,7 @@ def hud_background(numbers=True):
         for y in range(oy, oy + 17):
             for x in range(ox - 1, ox + 9):
                 img[y][x] = gfx.PEN[BTN_PEN]
-        gfx.stamp(img, T.hud(HUD_ART[k]), ox, oy)
+        gfx.stamp(img, btn_icon(i), ox, oy)
     return img
 
 

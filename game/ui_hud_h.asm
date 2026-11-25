@@ -45,7 +45,9 @@ hb_draw:
         ld d,0
         ld ix,ui_ic_tab
         add ix,de
-        ld b,(ix+2)
+        ld a,(ix+2)             ; (2026-11-25: η τράπεζα στα ψηλά 4 bits)
+        and 15
+        ld b,a
         inc b
         jr .s0
 .sk:    call hb_nl
@@ -53,12 +55,14 @@ hb_draw:
         inc hl
         ld e,(ix+0)
         ld d,(ix+1)
-        ld a,d                  ; οι γραμμές στην C5 (#7xxx: make_ui.py) ή
-        cp #70                  ; εδώ, με το rst 8 (bcopy_to)
-        ld a,RAM_SPR
-        jr nc,.b
-        ld a,RAM_BASE
-.b:     ld (BC_SRC),a
+        ld a,(ix+2)             ; οι γραμμές από την C0, C5 ή C6 (ο πίνακας:
+        rrca                    ; make_ui.py), με το rst 8 (bcopy_to)
+        rrca
+        rrca
+        rrca
+        and 15
+        or RAM_BASE
+        ld (BC_SRC),a
         ld b,(ix+3)
 .i:     push bc
         push hl

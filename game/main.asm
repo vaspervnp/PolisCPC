@@ -1055,7 +1055,7 @@ tut_end     equ TUT_AT + 1      ; έβαζε στο #4000 της C6, πάνω σ
         bank
         org TUT_AT
         include "tutor.asm"
-        assert tut_end <= FOG, 'tutorial past FOG (C6)'
+        assert tut_end <= IC_C6, 'tutorial past IC_C6 (C6)'
         assert tut_end - TUT_AT <= #800, 'tutor past TUT_CP_AT (menu.asm)'
         ifndef C7RAW
         save 'build/tutor.bin',TUT_AT,tut_end - TUT_AT
@@ -1072,13 +1072,18 @@ UI_F        equ #6D80           ; η γραμματοσειρά: μετά το R
 UI_S        equ HI_B + HIB_LEN  ; κτίρια, μονάδες, λέξεις: μετά τα HI_B, ως το PN
 UI_C        equ HI_C + HIC_LEN  ; οι τεχνολογίες: μετά τα HI_C, ως το PORTAL
 UI_D        equ HI_A + HIA_LEN  ; τα κουμπιά του HUD: μετά τα HI_A, ως το PX
-UI_TMP      equ SCREEN + #1000  ; το UI.BIN αποσυμπιεσμένο, πριν μοιραστεί
+UI_TMP      equ SCREEN + #CC0   ; το UI.BIN αποσυμπιεσμένο, πριν μοιραστεί
+                                ; (2026-11-25: ήταν #1000 — με τα εικονίδια
+                                ; στην C5 έγραφε πάνω στο INIT· το συμπιεσμένο
+                                ; ως #CC0: build.sh)
 UI_H        equ BKT0 + 196      ; (M22) τα κουμπιά που κρύβονται: μετά τους
 UI_I        equ BKT1 + 196      ; κάδους (pathing.asm), ως το τέλος της οκτάδας
 UI_J        equ HUD_PAGE + #1000 + HUD_ROWS * 80 ; ως το RPOSE
 UI_K        equ HUD_PAGE + #2800 + HUD_ROWS * 80 ; ως το RPOSE2
 UI_L        equ STACK_LOW       ; (M22) στον πάτο της στοίβας: ui_hud_l.asm
 UI_P        equ start           ; (M22) στον κώδικα του start που έτρεξε
+UI_M        equ set_palette     ; (2026-11-25) ρουτίνες της εκκίνησης στο
+UI_N        equ make_swap       ; BOOT (boot.asm): πριν από το ui_load
 SNDA_AT      equ SVM_STORE + SVM_LEN ; ο ήχος (sound_fx.asm, M21): ως το BKT0
 SNDB_AT     equ SRC_TAB + SRC_N * 4 ; τα εφέ: ως το #7000
 SNDC_AT     equ BOOT + BOOT_LEN ; η μουσική του παιχνιδιού: ως το J_SI
@@ -1132,7 +1137,14 @@ uii_end:
 uij_end:
         org UI_K
         include "../data/ui_k.asm"
+        include "ui_hud_k.asm"
 uik_end:
+        org UI_M
+        include "../data/ui_m.asm"
+uim_end:
+        org UI_N
+        include "ui_hud_n.asm"
+uin_end:
         org UI_L
         include "../data/ui_l.asm"
         include "ui_hud_l.asm"
@@ -1156,10 +1168,13 @@ UIJ_LEN     equ uij_end - UI_J
 UIK_LEN     equ uik_end - UI_K
 UIL_LEN     equ uil_end - UI_L
 UIP_LEN     equ uip_end - UI_P
+UIM_LEN     equ uim_end - UI_M
+UIN_LEN     equ uin_end - UI_N
         ifndef SNA
         assert uih_end <= #5000 && uii_end <= #5800, 'ui_h / ui_i past the 8th row'
         assert uij_end <= RPOSE && uik_end <= RPOSE2, 'ui_j / ui_k past RPOSE'
         assert uip_end <= start_dead, 'ui_p past start_dead'
+        assert uim_end <= hud_update && uin_end <= clear_screen, 'ui_m / ui_n past the boot routines'
         assert uil_end <= STACK_LOW + #60, 'ui_l: stack keeps 160 bytes'  ; (της στοίβας μένουν 160)
         assert sndc_end <= J_SI, 'music_game past J_SI'
         assert snda_end <= BKT0, 'sound_fx past BKT0'
@@ -1169,7 +1184,7 @@ UIP_LEN     equ uip_end - UI_P
         assert uia_end <= SRC_TAB, 'ui_a past SRC_TAB'
         assert uib_end <= PN, 'ui_b past PN'
         assert uic_end <= PORTAL, 'ui_c past PORTAL'
-        assert UI_TMP >= LOAD_AT + #800 && UI_TMP + UI_LEN + UIA_LEN + UIB_LEN + UIC_LEN + UID_LEN + SNDA_LEN + SNDB_LEN + SNDC_LEN + UIH_LEN + UII_LEN + UIJ_LEN + UIK_LEN + UIL_LEN + UIP_LEN + 64 + #700 - 4 * 25 * 16 + 128 <= INIT, 'UI_TMP over INIT (ui_load)'
+        assert UI_TMP + UI_LEN + UIA_LEN + UIB_LEN + UIC_LEN + UID_LEN + SNDA_LEN + SNDB_LEN + SNDC_LEN + UIH_LEN + UII_LEN + UIJ_LEN + UIK_LEN + UIL_LEN + UIP_LEN + UIM_LEN + UIN_LEN + 64 + 56 + 128 + 192 <= INIT, 'UI_TMP over INIT (ui_load)'
         ifndef C7RAW
         save 'build/ui.bin',UI_AT,UI_LEN
         save 'build/ui_a.bin',UI_F,UIA_LEN
@@ -1185,6 +1200,8 @@ UIP_LEN     equ uip_end - UI_P
         save 'build/ui_k.bin',UI_K,UIK_LEN
         save 'build/ui_l.bin',UI_L,UIL_LEN
         save 'build/ui_p.bin',UI_P,UIP_LEN
+        save 'build/ui_m.bin',UI_M,UIM_LEN
+        save 'build/ui_n.bin',UI_N,UIN_LEN
         endif
         endif
 

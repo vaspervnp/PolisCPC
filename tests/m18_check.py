@@ -49,7 +49,7 @@ def train(g, slot, want_set):
 
 
 def main():
-    g = M4.Game('--shots' in sys.argv)
+    g = M4.Game('--shots' in sys.argv, wander=True)
     c, sym = g.c, g.sym
     g.tick(3)
     grd, res = M4.M.mockup.make_map()

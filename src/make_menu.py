@@ -126,8 +126,8 @@ CTRL_ROWS = [('QAOP/JOY', 'MOVE CURSOR'),
              ('', 'VILLAGER BUILD'),
              ('', 'SQUAD SPLIT'),
              ('', 'PLACE BUILDING'),
-             ('A AT BOTTOM', 'HUD BUTTONS'),
-             ('M', 'MUSIC OFF/ON')]
+             ('A OR LETTER', 'HUD BUTTONS'),    # (2026-11-25: το γράμμα στο
+             ('M', 'MUSIC OFF/ON')]             # εικονίδιο, B T R S N I V C U)
 CTRL_BACK = 'SPACE - BACK'
 CTRL_X, CTRL_AX, CTRL_Y0, CTRL_DY = 2, 2 + CELL * 12, 24, 15
 

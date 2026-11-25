@@ -2464,7 +2464,12 @@ ai_tick:
         ld hl,(lv_sec)          ; ένα δευτερόλεπτο
         inc hl
         ld (lv_sec),hl
-        ld hl,(ai_cool)
+        ld a,l                  ; (2026-11-25) στα 300 s οι περιπλανώμενες
+        cp 300 & 255            ; ξανά παντού (WZ_OFF = 1: fog.asm,
+        jr nz,.wz               ; init.asm wz_code)
+        ld a,h
+        ld (WZ_OFF),a
+.wz:    ld hl,(ai_cool)
         ld a,h
         or l
         ret z

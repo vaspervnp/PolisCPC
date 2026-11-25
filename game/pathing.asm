@@ -302,7 +302,9 @@ spot_blk:
         ex de,hl
         pop hl
         call feet_tile
-        jp tile_blk
+        jp WZ_TILE              ; (2026-11-25: μόνο οι περιπλανώμενες καλούν
+                                ; το spot_blk — τα πρώτα 5 λεπτά όχι στην
+                                ; πόλη του παίκτη: init.asm, wz_code)
 
 ; IX -> n_i, n_j: το πλακίδιο κάτω από τα πόδια της (με πρόσημο, 16-bit).
 unit_tile:

@@ -34,9 +34,18 @@ CS_SRC      equ #ADE0           ; dw: η στήλη στην κρυφή μνήμ
 CS_DST      equ #ADE2           ; dw: ... και η θέση της
 CS_PEND     equ #ADE4           ; db: 1 = η διακοπή τη γράφει στην οθόνη
         assert FD_TAB + FD_N * FD_SZ <= CS_SRC && CS_PEND < UNIT_TAB, 'CS_SRC'
+
+; (2026-11-25) Οι περιπλανώμενες έξω από την πόλη του παίκτη τα πρώτα 5
+; λεπτά: ο έλεγχος του στόχου τους (wz_tile, το αντιγράφει εδώ το lv_init:
+; init.asm) και το «τέλος» του (WZ_OFF: το γράφει η C7 στα 300 s).
+WZ_OFF      equ CS_PEND + 1     ; db: 0 = η περιοχή ισχύει
+WZ_TILE     equ WZ_OFF + 1      ; ο κώδικας (wz_code, init.asm)
 FOG_T       equ 5               ; 1/300 s από την αρχή του καρέ: ως εκεί
         assert FOG + FOG_LEN <= CMP_RED, 'FOG over CMP_RED'
-        assert AGE_AT + AGE_MAX <= FOG, 'age file over FOG'
+IC_C6       equ #5F48           ; (2026-11-25) ένα εικονίδιο κουμπιού (56
+                                ; bytes ως την ομίχλη, make_ui.py)
+        assert AGE_AT + AGE_MAX <= IC_C6, 'age file over IC_C6'
+        assert IC_C6 + 56 == FOG, 'IC_C6'
 
 ; HL = δείκτης χάρτη -> NZ αν το πλακίδιο είναι εξερευνημένο (με την C6
 ; μέσα). Κρατάει BC, DE, HL.
