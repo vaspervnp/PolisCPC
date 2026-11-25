@@ -51,16 +51,21 @@ def game_world(grd=None, res=None, blds=None, found=(), age=None, seen=None):
     """Ο κόσμος όπως τον ζωγραφίζει το παιχνίδι: έδαφος, πόροι, και τα
     κτίρια του (με τις εικόνες του src/make_bank6.py, της εποχής `age`).
     `found`: θεμέλια (κλειδί, i0, j0) — η κάτοψη γίνεται «χώμα τραχύ»,
-    χωρίς εικόνα."""
+    χωρίς εικόνα· όσα δεν είναι (ακόμα) στα `blds`, και με τη σκαλωσιά
+    (2026-11-25: ο πόρος 15, ως το bld_fin)."""
     import make_bank6 as MB
     if grd is None:
         grd, res = mockup.make_map()
     grd = [list(r) for r in grd]
+    res = [list(r) for r in res]
+    done = {(k, i0, j0) for k, i0, j0 in (GAME_BLDS if blds is None else blds)}
     for key, i0, j0 in found:
         n = MB.footprint(key)
         for j in range(j0, j0 + n):
             for i in range(i0, i0 + n):
                 grd[j][i] = 'dirt_rough'
+                if (key, i0, j0) not in done and res[j][i] is None:
+                    res[j][i] = 'scaffold'      # (όχι στο έτοιμο χωράφι)
     items = [(MB.image(k, age or MB.START_AGE), i0, j0, MB.footprint(k))
              for k, i0, j0 in (GAME_BLDS if blds is None else blds)]
     return mockup.render_world(grd, res, towns=False, blds=items, seen=seen)

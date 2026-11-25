@@ -109,23 +109,29 @@ the sound effects stay.
 
 ## 6. Controls
 
-You need only a few keys: **Q A O P** (or the joystick, or the cursor
-keys in the menus), **SPACE** and **RETURN**. Everything else is chosen
+You need only a few keys: **Q A O P** (or the joystick, an AMX mouse, or
+the cursor keys in the menus), **SPACE** and **RETURN**. Everything else is chosen
 from a **menu** that opens in the middle of the screen, or from the
 **buttons** of the HUD.
 
 | key | action |
 |---|---|
-| **Q A O P** or joystick | move the cursor (at the edge of the screen the map scrolls) |
+| **Q A O P**, joystick or AMX mouse | move the cursor (at the edge of the screen the map scrolls) |
 | **cursor keys** | scroll the map |
-| **SPACE** or fire | select: a click picks the unit under the cursor; hold and drag for a box |
+| **SPACE**, fire or the left mouse button | select: a click picks the unit under the cursor; hold and drag for a box |
 | **SPACE** on one of your buildings | select it and open its menu |
-| **RETURN**, **ENTER**, **COPY** or fire 2 | command the selected units (see below) |
+| **RETURN**, **ENTER**, **COPY**, fire 2 or the right mouse button | command the selected units (see below) |
 | **RETURN** on your selected villagers | open the BUILD menu |
 | **RETURN** on your selected squad | open its menu (SPLIT SQUAD) |
 | **RETURN** while placing | build here |
 | **SPACE** while placing | cancel the placement |
 | **M** | music off / on |
+
+**The AMX mouse** plugs into the joystick port and needs no setting: move
+it and the cursor follows, faster the faster you move it. The cursor still
+moves in the same steps as with the keys. It also works in the menus and on
+the HUD buttons. It has been tried only in an emulator; on a real CPC the
+speed may differ.
 
 ### The menus
 
@@ -156,7 +162,8 @@ Every button also has its own **letter key**, shown in white in the bottom
 left corner of its icon and in white inside its name at the top of the
 screen. The letter presses the button from anywhere, without moving the
 cursor, but only while the button is showing (**U**, for PAUSE, always
-works).
+works). SAVE GAME uses the **F1** key on the numeric keypad instead of a
+letter.
 
 A button appears only when it makes sense:
 
@@ -168,7 +175,7 @@ A button appears only when it makes sense:
 | **SPLIT SQUAD** | **S** | one of your squads (2 or more) is selected | split it in two |
 | **NEXT AGE** | **N** | before the Iron Age | the menu of your Town Center, with the next age |
 | **IDLE VILLAGER** | **I** | a villager of yours has nothing to do | select them, and move the view to them |
-| **SAVE GAME** | **V** | always | save the game to disc (about 2 seconds) |
+| **SAVE GAME** | **F1** | always | save the game to disc (about 2 seconds) |
 | **CANCEL** | **C** | a building is being placed | cancel the placement |
 | **PAUSE** | **U** | always | stop the game; the button is now called **CONTINUE**, and pressing it again lets the game go on |
 
@@ -184,6 +191,8 @@ What happens depends on what is under the cursor.
   it.
 * **An enemy unit** (red): attack it.
 * **An enemy building:** attack it until it falls.
+* **One of your foundations** (a building not yet finished): the selected
+  villagers carry on building it from where it stopped.
 * **One of your own squads of the same kind:** the selected squads walk
   there and join it (see section 9).
 * **One of the units you have selected:** its menu (BUILD for villagers,
@@ -203,7 +212,8 @@ not carrying out an order of yours. A villager who is attacked fights back.
 To build, select one or more villagers, press **RETURN** on them (or the
 **BUILD** button) and choose the building. Move the corner of the cursor to
 the spot and press **RETURN**. The cost is paid at
-once and a foundation appears. The selected villagers walk to it and build.
+once and a foundation appears, a scaffold of planks and beams. The selected
+villagers walk to it and build.
 When the building is finished, you hear a tone (if it is on the screen).
 
 | building | cost | needs | what it does |
@@ -365,4 +375,4 @@ You also win any level if you destroy the enemy completely.
   and gives your stone a use.
 * Build Granaries and Storage Pits next to the resources. Short trips mean
   more food and wood.
-* Save often with the **SAVE GAME** button.
+* Save often with **F1** (the **SAVE GAME** button).

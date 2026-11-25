@@ -205,11 +205,11 @@
    "name": "χωράφι",
    "index": 14,
    "gathers": "τροφή",
-   "amount": 250
+   "amount": 40
   },
   {
-   "key": "ruins",
-   "name": "ερείπια",
+   "key": "scaffold",
+   "name": "σκαλωσιά",
    "index": 15,
    "gathers": null,
    "amount": 0

@@ -188,7 +188,7 @@ def main():
 
     # ------------------------------------------------ 4. τα γράμματα
     M6.click_unit(g, 0)
-    for k in list('thx') + [CPCMOD.KEY_ESC]:
+    for k in list('thxv') + [CPCMOD.KEY_ESC]:
         M7.press(g, k)
     dead = (not UM.is_open(c) and c.peek(sym['BMODE']) == 255 and
             tc_queue(c) == q1 and c.peek(sym['SAVE_REQ']) == 0)
@@ -201,7 +201,7 @@ def main():
     M7.press(g, 'u')
     p2 = c.peek(sym['PAUSED'])
     g.report('γράμματα', dead and bld and p1 == 1 and p2 == 0,
-             'T H X ESC: κανένα μενού %s (bmode %d, ουρά %d, save_req %d)· '
+             'T H X V ESC: κανένα μενού %s (bmode %d, ουρά %d, save_req %d)· '
              'B: το μενού BUILD %s· U: paused %d, U: %d'
              % (dead, c.peek(sym['BMODE']), tc_queue(c),
                 c.peek(sym['SAVE_REQ']), bld, p1, p2))

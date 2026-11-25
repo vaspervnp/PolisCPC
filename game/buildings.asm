@@ -63,7 +63,10 @@ QMAX        equ 5
 CAND_MAX    equ 8
 UNITS_LIVE  equ 80              ; οι υπόλοιπες ως 128: ελεύθερες θέσεις (M10: 48, για τις δύο ομάδες)
 TEAM_FREE   equ 255
-FOUND_BYTE  equ (4 << 4) | BLD_RES ; θεμέλιο: χώμα τραχύ + πλακίδιο κτιρίου
+SCAF_RES    equ 15              ; (2026-11-25) η σκαλωσιά (src/terrain.py):
+FOUND_BYTE  equ (4 << 4) | SCAF_RES ; θεμέλιο: χώμα τραχύ + σκαλωσιά, που
+                                ; το bld_fin (bank7.asm) κάνει BLD_RES
+        assert (SCAF_RES & BLD_RES) == BLD_RES, 'bld_pick: and BLD_RES'
 ; (τα δύο Κέντρα Πόλης και οι μονάδες τους: από την κεφαλίδα της πίστας,
 ; lv_hdr — M13)
 
@@ -1147,7 +1150,7 @@ bld_pick:
         call map_ptr
         ld a,(hl)
         pop de
-        and 15
+        and BLD_RES             ; κτίριο ή θεμέλιο (13 ή SCAF_RES 15)
         cp BLD_RES
         ret nz
         ld iy,BLD_TAB           ; ποιο: d - i0 στο 0..n-1, e - j0 επίσης

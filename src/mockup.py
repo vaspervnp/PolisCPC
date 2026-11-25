@@ -78,7 +78,7 @@ HUD_ART = dict([(k, a) for k, _, a in T.ICONS] +
 # η ετικέτα στην κορυφή του χάρτη — game/ui.asm, src/make_ui.py)
 BUTTONS = [('build', 'BUILD'), ('eject', 'TRAIN'), ('research', 'RESEARCH'),
            ('patrol', 'SPLIT SQUAD'), ('age_up', 'NEXT AGE'),
-           ('idle', 'IDLE VILLAGER'), ('save', 'SAVE GAME'),
+           ('idle', 'IDLE VILLAGER'), ('save', 'SAVE GAME F1'),
            ('cancel', 'CANCEL'), ('pause', 'PAUSE')]
 SLOTS = 8                               # οι θέσεις (M22: το PAUSE, το 9ο
                                         # κουμπί, πάντα μετά τα άλλα φανερά)
@@ -86,9 +86,10 @@ CONTINUE = 'CONTINUE'                   # η ετικέτα του PAUSE όσο 
 # (2026-11-25) Το πλήκτρο κάθε κουμπιού (game/ui_hud_j.asm, hb_hot): στην
 # ετικέτα το γράμμα του με άλλο χρώμα, και στην κάτω αριστερή γωνία του
 # εικονιδίου, άσπρο σε σκούρο πλαίσιο 4 x 6 (btn_icon). Όχι Q A O P (ο
-# κέρσορας) ούτε M (η μουσική).
-BUTTON_KEYS = 'BTRSNIVCU'
-KEY_GLYPHS = {'B': '110101110101110', 'T': '111010010010010',
+# κέρσορας) ούτε M (η μουσική). (2026-11-25: το SAVE GAME με το F1, όχι
+# με το V· στην ετικέτα «SAVE GAME F1», στο εικονίδιο «F1» σε πλαίσιο 7 x 6.)
+BUTTON_KEYS = ['B', 'T', 'R', 'S', 'N', 'I', 'F1', 'C', 'U']
+KEY_GLYPHS = {'F': '111100110100100', '1': '0111010101','B': '110101110101110', 'T': '111010010010010',
               'R': '110101110101101', 'S': '011100010001110',
               'N': '110101101101101', 'I': '111010010010111',
               'V': '101101101101010', 'C': '011100100100011',
@@ -99,20 +100,27 @@ KEY_BOX, KEY_INK = 'K', 'I'
 def btn_icon(k):
     """Το εικονίδιο του κουμπιού k (BUTTONS) με το γράμμα του πλήκτρου."""
     ic = [list(r) for r in T.hud(HUD_ART[BUTTONS[k][0]])]
-    g = KEY_GLYPHS[BUTTON_KEYS[k]]
+    glyphs = [KEY_GLYPHS[ch] for ch in BUTTON_KEYS[k]]
+    w = sum(len(g) // 5 + 1 for g in glyphs)    # (ένα κενό μετά το καθένα)
     for y in range(10, 16):
-        for x in range(4):
+        for x in range(w):
             ic[y][x] = gfx.PEN[KEY_BOX]
-    for j in range(5):
-        for i in range(3):
-            if g[3 * j + i] == '1':
-                ic[11 + j][i] = gfx.PEN[KEY_INK]
+    x0 = 0
+    for g in glyphs:
+        gw = len(g) // 5
+        for j in range(5):
+            for i in range(gw):
+                if g[gw * j + i] == '1':
+                    ic[11 + j][x0 + i] = gfx.PEN[KEY_INK]
+        x0 += gw + 1
     return ic
 
 
 def key_index(label, k):
-    """Η θέση του γράμματος του πλήκτρου μέσα στην ετικέτα."""
-    return label.index(BUTTON_KEYS[k])
+    """Οι θέσεις των γραμμάτων του πλήκτρου μέσα στην ετικέτα."""
+    key = BUTTON_KEYS[k]
+    at = label.rindex(key) if len(key) > 1 else label.index(key)
+    return list(range(at, at + len(key)))
 BTN_PEN, BTN_HI = 't', 'c'              # το φόντο του κουμπιού· φωτισμένο
 HUD_BG = 'K'                            # το φόντο του HUD (και κουμπί κρυμμένο, M22)
 
@@ -338,8 +346,8 @@ def make_map(seed=7):
     for (ci, cj) in ((24, 50), (37, 52), (61, 33)):
         cluster('berry_bush', ci, cj, 5)
     for (i, j, k) in ((50, 30, 'gazelle'), (54, 33, 'gazelle'),
-                      (44, 84, 'gazelle'), (12, 70, 'ruins'),
-                      (86, 20, 'ruins'), (48, 46, 'rock_small'),
+                      (44, 84, 'gazelle'),
+                      (48, 46, 'rock_small'),
                       (70, 70, 'rock_small'), (40, 30, 'stump'),
                       (41, 31, 'bush_empty')):
         if free(i, j):

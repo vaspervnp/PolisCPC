@@ -2245,29 +2245,40 @@ bld_fin:
         ld a,(iy+B_TYPE)
         cp BTY_FARM
         jr z,.farm
+        call bt_hl              ; (2026-11-25) η σκαλωσιά -> πλακίδιο κτιρίου
+        ld c,(hl)
+        ld a,BLD_RES
+        call foot_set
         ld hl,bld_redraw
         jp call0
 .farm:  push iy
         call bld_kill
         pop iy
-        ld e,(iy+B_J)
         ld c,3                  ; (η κάτοψη του χωραφιού: data/bld.asm)
-.r:     ld d,(iy+B_I)
+        ld a,FARM_RES
+; IY = κτίριο, C = n, A = πόρος: η κάτοψή του στον χάρτη, με το έδαφος ίδιο
+; (2026-11-25: ένας βρόχος για το bld_fin και το bld_kill).
+foot_set:
+        ld (.v+1),a
+        ld e,(iy+B_J)
+        ld b,c
+.r:     push bc
+        ld d,(iy+B_I)
         push de
-        push bc
         call map_ptr
-        pop bc
         pop de
-        ld b,3
+        pop bc
+        push bc
+        ld b,c
 .t:     ld a,(hl)
         and #F0
-        or FARM_RES
+.v:     or 0
         ld (hl),a
         inc hl
         djnz .t
+        pop bc
         inc e
-        dec c
-        jr nz,.r
+        djnz .r
         ret
 
 ; IY = κτίριο: κατεδαφίζεται. Οι στήλες του ξαναζωγραφίζονται (bld_redraw,
@@ -2280,26 +2291,9 @@ bld_kill:
         pop iy
         ld a,(iy+B_TYPE)
         call bt_hl
-        ld a,(hl)
-        ld c,a                  ; C = n
-        ld b,a
-        ld e,(iy+B_J)
-.r:     push bc
-        ld d,(iy+B_I)
-        push de
-        call map_ptr
-        pop de
-        pop bc
-        push bc
-        ld b,c
-.t:     ld a,(hl)
-        and #F0
-        ld (hl),a
-        inc hl
-        djnz .t
-        pop bc
-        inc e
-        djnz .r
+        ld c,(hl)               ; C = n
+        xor a                   ; κανένας πόρος
+        call foot_set
         ld (iy+B_TYPE),255
         ld a,1
         ld (occ_dirty),a

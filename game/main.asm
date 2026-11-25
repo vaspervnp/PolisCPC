@@ -409,12 +409,12 @@ zeros:  ds 16                   ; «πλακίδιο» έξω από τον χά
                                                         ; πλακίδια)
 mus_mask:   db 15               ; 0: η μουσική κλειστή (M, player.asm· εδώ
 mus_km:     db 0                ; και όχι στο sound.asm: το align 16)
-hb_vis:     db 255              ; (M22, hudvis.asm) τα φανερά κουμπιά: όλα
+hb_vis:     db 0                ; (M22, hudvis.asm) τα φανερά κουμπιά: κανένα
 hb_ik:      db 0                ; στην αρχή, όπως το HUD· ο αδρανής χωρικός:
 hb_if:      db 0                ; η επόμενη μονάδα, βρέθηκε σε αυτόν τον γύρο,
 hb_idf:     db 0                ; βρέθηκε στον προηγούμενο (1 << 5)
 hb_ph:      db 0                ; η φάση των καρέ (hb_tick)
-hb_old:     db 255              ; τα φανερά στις μονές θέσεις (hb_odd)
+hb_old:     db 0                ; τα φανερά στις μονές θέσεις (hb_odd)
 tw_b:       db 255              ; ο πύργος που σημαδεύει (255 κανένας, buildings.asm)
 ; του ήχου (sound.asm)
 snd_div:    db 6                ; οι διακοπές ως το επόμενο καρέ του ήχου
@@ -1032,10 +1032,19 @@ HIC_LEN     equ hic_end - HI_C
         assert HI_C + HIC_LEN <= PORTAL, 'HI_C past PORTAL'
 HIA_AT      equ SVM_AT + SVM_LEN        ; στην οθόνη, μετά το INIT
 HI_LEN      equ HIA_LEN + HIB_LEN + HIC_LEN
-        assert HIA_AT + HI_LEN <= #FFFF, 'HI past #FFFF'
+; Το ποντίκι AMX (mouse.asm, 2026-11-25): τα κομμάτια του μετά τα HI, και
+; το init_go τα βάζει στη θέση τους.
+MS_V        equ #A770           ; ms_x, ms_y
+MSI_AT      equ #A8C0
+MSD_AT      equ #AD50
+MSX_AT      equ SQ_FONT + DIGITS_LEN
+        assert MS_V >= RLIST + 80, 'MS_V'
+        assert MSI_AT >= MOVERS + 64 && MSD_AT >= BUF_A + #800 + 80, 'MS'
+        include "mouse.asm"
+        assert ms_end <= #FFFF, 'HI past #FFFF'
         assert SVM_BUF + 2048 + 512 <= INIT, 'SVM_BUF over INIT'
         assert SVM_STORE + SVM_LEN <= BKT0, 'SVM_STORE'
-INIT_ALL    equ HIA_AT + HI_LEN - INIT
+INIT_ALL    equ ms_end - INIT
         ifndef SNA
         ifdef C7RAW
         save 'build/init.bin',INIT,INIT_ALL     ; -> init_z (το δεύτερο πέρασμα)

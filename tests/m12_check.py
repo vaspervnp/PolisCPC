@@ -182,14 +182,15 @@ def units_pos(c):
 
 
 def wait_save(c, sym):
-    """SAVE GAME (το κουμπί του HUD, M20· ως το M19 το V) ως την
-    επανασχεδίαση μετά την αποθήκευση -> καρέ (50 Hz)."""
-    import ui_menu as UM
-    assert UM.hud_button(c, UM.HB_SAVE, leave=False), 'SAVE GAME'
+    """SAVE GAME με το F1 (2026-11-25· το κουμπί του HUD από το M20, ως το
+    M19 το V) ως την επανασχεδίαση μετά την αποθήκευση -> καρέ (50 Hz)."""
+    c.key_down(CP.KEY_F1)
     for f in range(3000):
         c.run_frames(1)
         if c.peek(sym['PHASE']) != 6:
             break
+    c.key_up(CP.KEY_F1)
+    assert f < 1000, 'F1: καμία αποθήκευση'     # (η επανασχεδίαση: ~2 s)
     M.wait_phase(c, sym, 2, limit_ms=4000)
     return f + 4
 

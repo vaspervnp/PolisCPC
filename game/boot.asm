@@ -312,30 +312,40 @@ bld_train:
         inc (hl)
         ret
 
-; -> A = το όριο πληθυσμού: POP_BASE + POP_HOUSE ανά έτοιμο σπίτι (ως 255).
+; -> A = το όριο πληθυσμού: POP_BASE + POP_HOUSE ανά έτοιμο σπίτι (με τα
+; BLD_MAX κτίρια ως 155: δεν ξεπερνά το 255).
 POP_BASE    equ 15
 POP_HOUSE   equ 5
+        assert POP_BASE + POP_HOUSE * BLD_MAX <= 255, 'pop_cap'
 pop_cap:
-        ld c,POP_BASE
+        ld c,BTY_HOUSE
+        call bld_cnt
+        ld b,a
+        add a,a
+        add a,a
+        add a,b
+        add a,POP_BASE
+        ret
+
+; C = τύπος -> A = πόσα έτοιμα του παίκτη (2026-11-25: κοινό του pop_cap και
+; του bld_can — ο χώρος για το cmd_pre). Χαλάει B, E, IY.
+bld_cnt:
         ld iy,BLD_TAB
         ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
         ld b,a
+        ld e,0
 .l:     ld a,(iy+B_TYPE)
-        cp BTY_HOUSE
+        cp c
         jr nz,.n
-        ld a,(iy+B_OWN)         ; του παίκτη
+        ld a,(iy+B_OWN)
         or a
         jr nz,.n
-        ld a,(iy+B_ST)
-        or a
+        or (iy+B_ST)
         jr z,.n
-        ld a,c
-        add a,POP_HOUSE
-        jr c,.n
-        ld c,a
+        inc e
 .n:     call bnext
         djnz .l
-        ld a,c
+        ld a,e
         ret
 
 ; Carry αν υπάρχει χωρικός του παίκτη στην επιλογή.
@@ -383,24 +393,11 @@ bld_can:
         jr z,.cost
         push hl
         ld c,a
-        ld iy,BLD_TAB
-        ld a,(bld_top)          ; ως την ψηλότερη θέση που πιάστηκε
-        ld b,a
-.p:     ld a,(iy+B_TYPE)
-        cp c
-        jr nz,.pn
-        ld a,(iy+B_OWN)
-        or a
-        jr nz,.pn
-        ld a,(iy+B_ST)
-        or a
-        jr nz,.ok
-.pn:    call bnext
-        djnz .p
+        call bld_cnt
         pop hl
+        or a
         scf
-        ret
-.ok:    pop hl
+        ret z                   ; κανένα: carry
 .cost:  inc hl
         ld de,hud_val           ; 4 x (κόστος ≤ ό,τι έχεις)
         ld b,4
@@ -418,18 +415,10 @@ bld_can:
 
 ; HL -> 4 x κόστος: αφαιρείται από τη μπάρα αν φτάνει (NC), αλλιώς carry.
 pay:    push hl
-        ld de,hud_val
-        ld b,4
-.c:     ld a,(de)
-        sub (hl)
-        inc de
-        ld a,(de)
-        sbc a,0
-        jr c,.no
-        inc de
-        inc hl
-        djnz .c
+        dec hl                  ; (το bld_can.cost: από το byte πριν)
+        call bld_can.cost
         pop hl
+        ret c
         ld de,hud_val
         ld b,4
         ld c,1                  ; C = το bit του αριθμού στη μπάρα
@@ -451,8 +440,6 @@ pay:    push hl
         sla c
         djnz .d
         or a
-        ret
-.no:    pop hl
         ret
 
 ; ------------------------------------------------------------ τοποθέτηση
@@ -537,6 +524,7 @@ bld_place:
         call bld_new
         ret c
         call bld_redraw         ; το θεμέλιο στην οθόνη
+.res:                           ; (IY = το κτίριο: και το cmd_pre)
         call bidx               ; οι επιλεγμένοι χωρικοί: να το χτίσουν
         ld (bp_slot),a
         ld a,(sel_n)
@@ -765,3 +753,28 @@ cl_ = CARD_Y
 cl_ = cl_ + 1
         rend
 
+
+; (2026-11-25, ζήτημα του χρήστη: «αν σταματήσεις να χτίζεις κάτι, στον ίδιο
+; χώρο με enter να συνεχίζει το χτίσιμο ο χωρικός».) Από το do_command
+; (input.asm), στη θέση του cmd_menu: RETURN με χωρικούς επιλεγμένους πάνω
+; σε ΔΙΚΟ ΣΟΥ θεμέλιο -> πάνε να το χτίσουν (build_go, όπως μετά την
+; τοποθέτηση), όχι απλώς ως εκεί — και οι υπόλοιποι της επιλογής μένουν
+; εκεί που είναι. Carry: άνοιξε μενού (cmd_menu). Αλλιώς NC: η κανονική
+; εντολή.
+cmd_pre:
+        call cmd_menu
+        ret c
+        ld a,(sel_bld)          ; (το bld_pick το αλλάζει: όπως το ord_cmd)
+        push af
+        call bld_pick           ; IY = το κτίριο κάτω από τον κέρσορα
+        ld a,(sel_bld)
+        ld c,a
+        pop af
+        ld (sel_bld),a
+        inc c
+        ret z                   ; κανένα (NC από το cmd_menu)
+        ld a,(iy+B_OWN)
+        or (iy+B_ST)
+        ret nz                  ; του αντιπάλου, ή έτοιμο
+        pop hl                  ; όχι πίσω στο do_command: ο βρόχος του
+        jp bld_place.res        ; bld_place, και από εκεί στον καλούντα του

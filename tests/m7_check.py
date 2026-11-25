@@ -26,6 +26,9 @@ tests/ui_menu.py):
    (ο ευθύς δρόμος περνάει από μέσα): φτάνει, χωρίς να πατήσει ποτέ στην
    κάτοψη.
 7. ΧΡΟΝΟΣ. Κάθε καρέ χωρίς κύλιση < 40 ms.
+8. ΑΠΟΘΗΚΗ (2026-11-25). Ένας χωρικός την αρχίζει, φεύγει με RETURN σε άδειο
+   έδαφος (το θεμέλιο σταματάει), και με RETURN πάνω στο θεμέλιο ξαναπαίρνει
+   τη δουλειά του χτισίματος και το τελειώνει.
 """
 import collections
 import os
@@ -191,7 +194,7 @@ def main():
     vals1 = M6.hud_vals(c, sym)
     i0, j0 = BARRACKS[0] - 1, BARRACKS[1] - 1
     found = bar and (bar[0]['i0'], bar[0]['j0'], bar[0]['st']) == (i0, j0, 0) \
-        and all(c.peek(MAP + j * 96 + i) == (4 << 4 | MB.BLD_RES)
+        and all(c.peek(MAP + j * 96 + i) == (4 << 4 | 15)    # σκαλωσιά
                 for i in range(i0, i0 + 3) for j in range(j0, j0 + 3))
     builders = [v for v in M6.VILLAGERS
                 if c.peek(S.UNIT_TAB + v * S.U_SIZE + M6.U_JOB) == 4]
@@ -377,16 +380,35 @@ def main():
     g.move_cursor(*M6.tile_cursor(g, *pit))
     press(g, CPCMOD.KEY_RETURN, 1)
     nav.add(pit[0], pit[1], 2)
+    # (2026-11-25) Διακοπή: όταν έχει αρχίσει, ο χωρικός φεύγει (RETURN σε
+    # άδειο έδαφος) και το θεμέλιο δεν προχωράει· RETURN πάνω στο θεμέλιο:
+    # ξανά δουλειά J_BUILD, και το τελειώνει (boot.asm, cmd_pre).
+    for k in range(600):
+        g.tick(1)
+        p = [b for b in blds(c) if b['type'] == 'storage_pit']
+        if p and p[0]['prog'] >= 3:
+            break
+    M6.command(g, (34, 66))
+    g.tick(20)
+    pr0 = [b for b in blds(c) if b['type'] == 'storage_pit'][0]['prog']
+    g.tick(150)
+    pr1 = [b for b in blds(c) if b['type'] == 'storage_pit'][0]['prog']
+    g.move_cursor(*M6.tile_cursor(g, *pit))
+    press(g, CPCMOD.KEY_RETURN, 1)
+    job = c.peek(S.UNIT_TAB + v * S.U_SIZE + M6.U_JOB)
     for k in range(1500):
         g.tick(1)
         p = [b for b in blds(c) if b['type'] == 'storage_pit']
         if p and p[0]['st'] == 1 and c.peek(sym['RQ_N']) == 255:
             break
     built = p and p[0]['st'] == 1
-    g.report('αποθήκη', len(sel) == 1 and v in M6.VILLAGERS and built,
-             'S, RETURN στο %s: ο χωρικός %d την έχτισε σε %d καρέ%s'
-             % (pit, v, k + 1, '' if built and len(sel) == 1 else
-                ' — επιλογή %s, %s' % (sorted(sel), p)))
+    g.report('αποθήκη', len(sel) == 1 and v in M6.VILLAGERS and built and
+             pr0 == pr1 and pr0 >= 3 and job == 4,
+             'S, RETURN στο %s: ο χωρικός %d αρχίζει, φεύγει (θεμέλιο %d, μετά '
+             'από 150 καρέ %d), RETURN στο θεμέλιο: δουλειά %d, την τελείωσε σε '
+             '%d καρέ%s'
+             % (pit, v, pr0, pr1, job, k + 1, '' if built and len(sel) == 1
+                else ' — επιλογή %s, %s' % (sorted(sel), p)))
     M6.command(g, M6.TREE)
     drops, carry0 = [], 0
     w0 = M6.hud_vals(c, sym)[1]

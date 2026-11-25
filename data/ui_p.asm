@@ -15,7 +15,7 @@ ui_ic_tab:
         dw ui_ic_5
         db 1 | 0 << 4, 15   ; idle (I)
         dw #7A40
-        db 0 | 5 << 4, 16   ; save (V)
+        db 0 | 5 << 4, 16   ; save (F1)
         dw #7A80
         db 0 | 5 << 4, 16   ; cancel (C)
         dw #5F48

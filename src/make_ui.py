@@ -239,7 +239,8 @@ def main():
         'ul_%d' % k for k in range(len(lbls))))
     for k, lbl in enumerate(lbls):         # (το γράμμα του πλήκτρου: bit 7)
         g = list(enc(lbl))
-        g[mockup.key_index(lbl, min(k, 8))] |= 0x80
+        for i in mockup.key_index(lbl, min(k, 8)):
+            g[i] |= 0x80
         b.append('ul_%d: db %d%s  ; %s\n' % (k, len(g), ''.join(
             ', %d' % x for x in g), lbl))
     # Ο φωτισμός αλλάζει pen ΤΟ ΦΟΝΤΟ <-> ΤΟ ΦΩΤΙΣΜΕΝΟ, pixel προς pixel

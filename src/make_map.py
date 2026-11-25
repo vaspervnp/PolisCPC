@@ -56,7 +56,7 @@ HUD_Y0, HUD_ROWS = mockup.MAP_H, 7
 # και για τους ελέγχους (tests/m5_check.py).
 BLOCK_TER = {'water_deep', 'water_shallow', 'cliff'}
 BLOCK_RES = {'tree', 'tree_pine', 'tree_palm', 'berry_bush', 'bush_empty',
-             'gold_rock', 'stone_rock', 'fish', 'whale', 'ruins',
+             'gold_rock', 'stone_rock', 'fish', 'whale', 'scaffold',
              'reeds'}          # M7: το 13 είναι το πλακίδιο κτιρίου (make_bank6)
 
 
@@ -171,6 +171,15 @@ def hud_page(grd, res):
     # Ο μίνι χάρτης ΔΕΝ μπαίνει εδώ (M11): τον ζωγραφίζει ο Z80, γραμμή-γραμμή,
     # με τα ανεξερεύνητα μαύρα (game/minimap.asm, από το minimap_asm).
     img = mockup.hud_background(numbers=False)
+    # (2026-11-25) Οι θέσεις των κουμπιών ΑΔΕΙΕΣ (το φόντο του HUD): τα
+    # ζωγραφίζει το hb_sync στο πρώτο καρέ, με τα γράμματα των πλήκτρων
+    # (main.asm: hb_vis και hb_old 0 στην αρχή — καμία θέση ζωγραφισμένη).
+    # Με τα εικονίδια εδώ, το POLIS.BIN περνούσε το #8000.
+    for i in range(mockup.SLOTS):
+        ox, oy = mockup.btn_xy(i)
+        for y in range(oy, oy + 17):
+            for x in range(ox - 1, ox + 9):
+                img[y][x] = gfx.PEN[mockup.HUD_BG]
     page = bytearray(0x4000)
     for k in range(HUD_ROWS):
         for l in range(8):

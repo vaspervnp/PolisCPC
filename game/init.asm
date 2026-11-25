@@ -714,7 +714,27 @@ init_go:
         call bld_init           ; το Κέντρο Πόλης στον χάρτη, πριν την εύρεση
         call nav_init           ; δρόμου (η κάτοψή του είναι εμπόδιο)
         call gather_init        ; οι πηγές, και οι αριθμοί του HUD
-        jp fog_init             ; ο εξερευνημένος χάρτης (M11)
+        call fog_init           ; ο εξερευνημένος χάρτης (M11)
+        ld hl,ms0_p             ; το ποντίκι AMX (mouse.asm): μετά το
+        ld de,#0000             ; φόρτωμα, που γράφει το #8000-#BEFF (το
+        ld bc,ms0_e             ; #0038 μένει JP int_handler: ms_gate)
+        ldir
+        ld de,MSI_AT
+        ld bc,ms1_e - MSI_AT
+        ldir
+        ld de,MS_V + 2
+        ld bc,ms2_e - MS_V - 2
+        ldir
+        ld de,MSD_AT
+        ld bc,ms3_e - MSD_AT
+        ldir
+        ld de,MSX_AT
+        ld bc,ms4_e - MSX_AT
+        ldir
+        ld h,b                  ; (BC = 0) οι μετρητές
+        ld l,c
+        ld (MS_V),hl
+        ret
 
 ; Τα μενού (M20) στις κρυφές σειρές του HUD, ΜΕΤΑ το hud_init που τις
 ; καθαρίζει: το UI.BIN αποσυμπιεσμένο στο UI_TMP, και τα κομμάτια του στη
