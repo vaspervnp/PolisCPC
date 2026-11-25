@@ -5,6 +5,9 @@
 (Ο ΗΧΟΣ ως το M20 ήταν εδώ· από το M21: tests/m21_check.py.)
 
 ΑΠΟ ΤΗ ΔΙΣΚΕΤΑ (RUN"POLIS):
+3. REVIVE8B. Το RUN"POLIS τρέχει το POLIS.BAS: η οθόνη revive8b.scr στη
+   μνήμη #C000 ίδια, MODE 0, κάθε pen στο χρώμα του data/revive8b.txt· χωρίς
+   πλήκτρο το παιχνίδι ξεκινά μετά από 10 s, με το Space αμέσως.
 4. ΜΕΝΟΥ. Η οθόνη του μενού pixel προς pixel = η εικόνα του
    src/make_title.py με τις επιλογές του src/make_menu.py από πάνω.
 5. ΠΟΛΙΤΙΣΜΟΣ. PLAY AS, δεξιά x3, RETURN: οι Ρωμαίοι — τα ονόματα AGE3R / AGE4R.
@@ -44,6 +47,7 @@ import cpc as CP                                # noqa: E402
 from cpc import CPC                             # noqa: E402
 
 D = M.BUILD
+R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIG = b'POLIS-M21'
 STACK_LOW = 0xBF00
 FOG, FOG_LEN = 0x5F80, 1152
@@ -190,10 +194,52 @@ def wait_save(c, sym):
     return f + 4
 
 
+def splash(dsk_path, space):
+    """RUN"POLIS ως την οθόνη revive8b· με space, Space για 60 καρέ. ->
+    (καρέ ως την οθόνη, MODE, pens σωστά, καρέ από την οθόνη ως το παιχνίδι)."""
+    scr = open(os.path.join(R, 'data', 'revive8b.scr'), 'rb').read()
+    want = [int(t.split()[2][1:], 16) & 31 for t in
+            open(os.path.join(R, 'data', 'revive8b.txt')).read().splitlines()
+            if t.split()[:1] and t.split()[0].isdigit()]
+    jp = bytes([0xC3]) + M.symbols()['INT_HANDLER'].to_bytes(2, 'little')
+    c = CPC()
+    c.run_frames(150)
+    c.insert_disc(dsk_path)
+    c.type_text('RUN"POLIS\n')
+    f0 = 0
+    while c.read_ram(0xC000, 16384) != scr and f0 < 3000:
+        c.run_frames(5)
+        f0 += 5
+    c.run_frames(2)
+    fb, pens = c.framebuffer(), c.decode_screen_ram(mode=0)
+    # το framebuffer: το χρώμα του υλικού, η οθόνη στο (64, 37), 4 ανά pixel
+    pens_ok = all(fb[(37 + y) * 1024 + 64 + 4 * x] == want[pens[y][x]]
+                  for y in range(200) for x in range(160))
+    mode = c.mode
+    if space:                   # (το LOAD τελειώνει λίγο μετά τα bytes)
+        c.key_down(CP.KEY_SPACE)
+        c.run_frames(60)
+        c.key_up(CP.KEY_SPACE)
+    f1 = 2 + (60 if space else 0)
+    while c.read_ram(0x38, 3) != jp and f1 < 3000:
+        c.run_frames(5)
+        f1 += 5
+    return f0, mode, pens_ok, f1
+
+
 def disk():
     sym = M.symbols()
     shots = '--shots' in sys.argv
     dsk_path = os.path.join(D, 'polis.dsk')
+
+    # ------------------------------------------------------- 3. revive8b
+    f0, mode, pens_ok, wait = splash(dsk_path, False)
+    _, _, _, fast = splash(dsk_path, True)
+    report('REVIVE8B', f0 < 3000 and mode == 0 and pens_ok and
+           wait - fast >= 400 and fast < 300,
+           'η οθόνη στο καρέ %d, MODE %d, χρώματα %s· το παιχνίδι μετά από '
+           '%d καρέ, με το Space μετά από %d (10 s = 500)'
+           % (f0, mode, pens_ok, wait, fast))
 
     # ------------------------------------------------------------ 4. μενού
     c = boot(dsk_path, [])

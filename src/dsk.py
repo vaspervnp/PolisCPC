@@ -3,6 +3,14 @@
     python3 src/dsk.py build/polis.dsk ΟΝΟΜΑ.ΕΧΤ αρχείο [ΟΝΟΜΑ.ΕΧΤ αρχείο ...]
     python3 src/dsk.py build/polis.dsk --empty SAVE.BIN 41984
     python3 src/dsk.py build/polis.dsk --zx0 ΟΝΟΜΑ.ΕΧΤ αρχείο   (συμπιεσμένο ZX0)
+    python3 src/dsk.py build/polis.dsk --splash data/revive8b.scr
+
+(2026-11-25) --splash: η οθόνη revive8b.scr όπως στα άλλα παιχνίδια CPC.
+Γράφει το REVIVE8B.SCR (με κεφαλίδα AMSDOS, φορτώνεται στο #C000) και το
+POLIS.BAS (ASCII), που βάζει τα inks του revive8b.txt, δείχνει την οθόνη για
+10 δευτερόλεπτα ή ώσπου να πατηθεί το Space, και τρέχει το POLIS.BIN. Το
+RUN"POLIS του AMSDOS βρίσκει πρώτα το .BAS. Μπαίνουν ΤΕΛΕΥΤΑΙΑ, στα ελεύθερα
+blocks μετά το SAVE.BIN: κανένα άλλο αρχείο δεν αλλάζει θέση.
 
 Ο rasm γράφει τα αρχεία του με κεφαλίδα AMSDOS (128 bytes). Ο δικός μας
 οδηγός (game/disk.asm) διαβάζει blocks κατευθείαν, άρα η κεφαλίδα θα έπεφτε
@@ -136,6 +144,46 @@ class Dsk:
         open(self.path, 'wb').write(self.d)
 
 
+def amsdos(name, data, load, run=None, ftype=2):
+    """Τα bytes με την κεφαλίδα AMSDOS των 128 bytes μπροστά (δυαδικό)."""
+    base, ext = name.upper().split('.')
+    h = bytearray(128)
+    h[1:12] = (base.ljust(8) + ext.ljust(3)).encode()
+    h[18] = ftype
+    n = len(data)
+    h[19:21] = n.to_bytes(2, 'little')
+    h[21:23] = load.to_bytes(2, 'little')
+    h[23] = 0xFF
+    h[24:26] = n.to_bytes(2, 'little')
+    h[26:28] = (load if run is None else run).to_bytes(2, 'little')
+    h[64:67] = n.to_bytes(3, 'little')
+    h[67:69] = (sum(h[:67]) & 0xFFFF).to_bytes(2, 'little')
+    return bytes(h) + bytes(data)
+
+
+def splash_inks(scr):
+    """Τα 16 inks (αριθμοί firmware) από το .txt δίπλα στο .scr."""
+    import re
+    txt = open(os.path.splitext(scr)[0] + '.txt').read()
+    inks = [int(m.group(2)) for m in
+            re.finditer(r'(?m)^\s*(\d+)\s+(\d+)\s+&', txt)]
+    assert len(inks) == 16, scr
+    return inks
+
+
+def splash_bas(inks):
+    """Το POLIS.BAS: ASCII, γραμμές CR LF, στο τέλος #1A."""
+    ink = ':'.join('INK %d,%d' % (k, v) for k, v in enumerate(inks))
+    lines = ['10 MODE 0:BORDER 0',
+             '20 ' + ink[:ink.index('INK 8,') - 1],
+             '30 ' + ink[ink.index('INK 8,'):],
+             '40 LOAD"REVIVE8B.SCR",&C000',
+             # 10 δευτερόλεπτα (το TIME μετράει 300 το δευτερόλεπτο) ή Space
+             '50 T=TIME:WHILE TIME-T<3000 AND INKEY(47)=-1:WEND',
+             '60 RUN"POLIS.BIN"']
+    return ('\r\n'.join(lines) + '\r\n').encode('ascii') + b'\x1a'
+
+
 def zx0(data):
     """Τα bytes συμπιεσμένα ZX0 από τον ίδιο τον rasm (όπως τα μπλοκ LZX0 του
     POLIS.BIN): για το dzx0 του game/zx0.asm."""
@@ -161,6 +209,13 @@ def main():
             name, size = args[1], int(args[2])
             args = args[3:]
             dsk.add(name, bytes(size))
+        elif args[0] == '--splash':
+            scr = args[1]
+            args = args[2:]
+            data = open(scr, 'rb').read()
+            assert len(data) == 16384, scr
+            dsk.add('REVIVE8B.SCR', amsdos('REVIVE8B.SCR', data, 0xC000))
+            dsk.add('POLIS.BAS', splash_bas(splash_inks(scr)))
         elif args[0] == '--zx0':
             name, path = args[1], args[2]
             args = args[3:]

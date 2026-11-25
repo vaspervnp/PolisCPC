@@ -4,7 +4,7 @@
 #   ./game/build.sh
 #
 # Βγάζει στο build/:
-#   polis.dsk   δισκέτα με POLIS.BIN (κεφαλίδα AMSDOS) — RUN"POLIS
+#   polis.dsk   δισκέτα με POLIS.BAS (η οθόνη revive8b) και POLIS.BIN — RUN"POLIS
 #   polis.sna   snapshot που ξεκινάει κατευθείαν, για γρήγορη δοκιμή
 #   polis.sym   σύμβολα για τον debugger του emulator
 #   m0_bars.sna η οθόνη ελέγχου του M0: οι 16 λωρίδες της παλέτας
@@ -86,5 +86,6 @@ python3 src/dsk.py build/polis.dsk \
     --zx0 TUTOR.BIN build/tutor.bin \
     --zx0 UI.BIN build/ui_all.bin \
     --empty PROG.BIN 1024 \
-    --empty SAVE.BIN 43008
+    --empty SAVE.BIN 43008 \
+    --splash data/revive8b.scr
 ls -l build/polis.dsk build/polis.sna build/m0_bars.sna

@@ -19,8 +19,9 @@ view, and what your people have not explored yet stays black.
 
 ## 2. Loading the game
 
-Insert the disc, type the command below and press **RETURN**. The title
-screen appears after a few seconds.
+Insert the disc, type the command below and press **RETURN**. The
+Revive8bit screen shows for ten seconds (press **SPACE** to skip it), then
+the title screen appears after a few more seconds.
 
 ```
 RUN"POLIS
