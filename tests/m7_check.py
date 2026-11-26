@@ -248,13 +248,19 @@ def main():
     # ------------------------------------------------- 5. δύο σπαθοφόροι
     fx, fy = 2 * (i0 + 2 - (j0 + 2)) + 192, 4 * (i0 + j0 + 4) + 4  # (38, 62)
     cx, cy = M4.M2.cam(c, sym)
-    tx, ty = M6.tile_cursor(g, i0 + 2, j0 + 2)
-    g.move_cursor(tx, ty)
-    c.key_down(' ')
-    g.tick(2)
-    c.key_up(' ')
-    g.tick(2)
     slot = [b for b in blds(c) if b['type'] == 'barracks'][0]['slot']
+    # (2026-11-26) ένα πλακίδιο της κάτοψης χωρίς χωρικό από πάνω (το κλικ
+    # διαλέγει τη μονάδα): με τη φτηνότερη επανασχεδίαση ο στρατώνας χτίζεται
+    # σε άλλο καρέ, και οι χωρικοί στέκονται αλλού
+    for di, dj in ((2, 2), (1, 2), (2, 1), (1, 1), (0, 2), (2, 0)):
+        tx, ty = M6.tile_cursor(g, i0 + di, j0 + dj)
+        g.move_cursor(tx, ty)
+        c.key_down(' ')
+        g.tick(2)
+        c.key_up(' ')
+        g.tick(2)
+        if c.peek(sym['SEL_BLD']) == slot:
+            break
     picked = c.peek(sym['SEL_BLD'])
     v0 = M6.hud_vals(c, sym)
     UM.choose(c, UM.MA_TRAIN)           # το μενού του ανοίγει με το κλικ

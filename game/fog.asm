@@ -41,6 +41,7 @@ CS_PEND     equ #ADE4           ; db: 1 = η διακοπή τη γράφει σ
 WZ_OFF      equ CS_PEND + 1     ; db: 0 = η περιοχή ισχύει
 WZ_TILE     equ WZ_OFF + 1      ; ο κώδικας (wz_code, init.asm)
 FOG_T       equ 5               ; 1/300 s από την αρχή του καρέ: ως εκεί
+FOG_T2      equ 8               ; (2026-11-26) και στο τέλος του καρέ (units.asm)
         assert FOG + FOG_LEN <= CMP_RED, 'FOG over CMP_RED'
 IC_C6       equ #5F48           ; (2026-11-25) ένα εικονίδιο κουμπιού (56
                                 ; bytes ως την ομίχλη, make_ui.py)

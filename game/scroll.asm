@@ -496,7 +496,14 @@ draw_column:
         rr l
         dec hl
         ld (col_rr),hl          ; η σειρά ρόμβων της ομάδας (για τα κτίρια)
-        push hl
+        ld a,(col_y0)           ; (2026-11-26) ένα κομμάτι (col_redraw): από
+        rrca                    ; την ομάδα y0 / 4 — οι πάνω του έχουν το
+        rrca                    ; sprite τους ως τη γραμμή 4k + 2 < y0. Ως
+        ld e,a                  ; τότε περπατούσε όλη τη στήλη από πάνω, και
+        ld d,0                  ; ένα κομμάτι 12 γραμμών χαμηλά κόστιζε σχεδόν
+        add hl,de               ; όσο όλη (η ομίχλη άνοιγε ένα κομμάτι ανά
+        push hl                 ; καρέ). Τα κτίρια πίσω τους: το bld_flush
+                                ; (βάθος < r) τα πιάνει στην πρώτη ομάδα.
         ld de,(col_w)
         add hl,de               ; s
         ld a,l
@@ -530,11 +537,21 @@ draw_column:
         call col_tile
         ld (col_t0),hl
         ld (col_r0),a
-        ld hl,line_addr
+        ld a,(col_y0)           ; (y0 πολλαπλάσιο του 4: fd_one, rq_step)
+        ld l,a
+        ld h,0
+        add hl,hl
+        ld de,line_addr
+        add hl,de
         ld (col_lp),hl
-        ld a,16 - 13            ; η πρώτη γραμμή του sprite της ομάδας 0, +16
+        ld a,(col_y0)
+        add a,16 - 13           ; η πρώτη γραμμή του sprite της ομάδας 0, +16
         ld (col_sy),a
-        ld a,VIEW_H / 4 + 4
+        ld a,(col_y0)
+        rrca
+        rrca
+        neg
+        add a,VIEW_H / 4 + 4
 .grp:   ld (col_n),a
         ld a,(col_par)          ; το επόμενο πλακίδιο
         or a

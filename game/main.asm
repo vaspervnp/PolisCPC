@@ -669,10 +669,7 @@ cmd_sj:     db 0                ; (ld (cmd_sj),de: j και μετά i)
 cmd_si:     db 0
 sp_ui:      db 0                ; stand_point (και occlude.asm: μαζί)
 sp_uj:      db 0
-sp_sj:      db 0
-sp_si:      db 0
 sp_bj:      db 0
-sp_bi:      db 0
 sp_best:    db 0
 src_spare:  dw 0
 nf_n:       db 0                ; near_free
