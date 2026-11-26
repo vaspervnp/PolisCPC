@@ -41,6 +41,7 @@ UM_W        equ 76
 UM_TX       equ UM_X + 2        ; το κείμενο: η στήλη 0 (ο δείκτης)
 UI_FRAME    equ #0F             ; τα pens, όπως το tutorial (data/tutor.asm)
 UI_BG       equ #C0
+        assert UI_BG == JM_BG, 'JM_BG (jobmsg.asm)'
 
 um_on:      db 0
 um_kind:    db 0

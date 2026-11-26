@@ -556,7 +556,8 @@ bld_place:
 ; IX = χωρικός: πάει στο ελεύθερο πλακίδιο γύρω από το κτίριο bp_slot που
 ; είναι πιο κοντά του.
 build_go:
-        ld l,(ix+U_IDX)
+        call jm_bld             ; (2026-11-26) BUILDING στη λωρίδα, αν είναι
+                                ; του παίκτη (jobmsg.asm), και L = U_IDX
         ld h,J_SI >> 8
         ld a,(bp_slot)
         ld (hl),a

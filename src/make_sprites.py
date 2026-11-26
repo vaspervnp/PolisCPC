@@ -161,9 +161,14 @@ def write_palette():
            ';',
            '; Το pen 0 είναι η μάσκα: βάλε το ό,τι χρώμα θες για φόντο χάρτη.',
            '',
+           '; (2026-11-26) Οι firmware αριθμοί και οι πίνακες των παικτών δεν',
+           '; τους χρησιμοποιεί ο κώδικας: μόνο με -DPAL_ALL (80 bytes του',
+           '; κύριου κώδικα, game/jobmsg.asm).',
+           '        ifdef PAL_ALL',
            'polis_inks:',
            '  db ' + ','.join(str(f) for f in gfx.FW)
-           + '   ; firmware numbers, pen 0..15', '',
+           + '   ; firmware numbers, pen 0..15',
+           '        endif', '',
            '; Τα ίδια ως hardware colours του gate array, με το bit 6 αναμμένο:',
            '; ld bc,#7F00+pen / out (c),c / ld c,τιμή / out (c),c. Για όταν το',
            '; firmware είναι κλειστό.',
@@ -173,11 +178,12 @@ def write_palette():
     asm += ['; Χρώμα παίκτη: ο πίνακας αλλάζει ΜΟΝΟ τα pens %d και %d.'
             % (gfx.TEAM_HI, gfx.TEAM_LO),
             '; Πέρνα τα δεδομένα του sprite μία φορά στο φόρτωμα, pen προς pen.',
-            '; ΟΧΙ αλλαγή του INK — τότε θα άλλαζαν ΟΛΟΙ οι παίκτες μαζί.', '']
+            '; ΟΧΙ αλλαγή του INK — τότε θα άλλαζαν ΟΛΟΙ οι παίκτες μαζί.', '',
+            '        ifdef PAL_ALL']
     for i, (nm, hi, lo) in enumerate(gfx.TEAMS):
         asm.append('team_%-8s db %s   ; %s'
                    % (nm + ':', ','.join(str(v) for v in gfx.team_table(i)), nm))
-    asm.append('')
+    asm += ['        endif', '']
     with open(os.path.join(OUT, 'palette.asm'), 'w') as f:
         f.write('\n'.join(asm))
 

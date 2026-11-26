@@ -20,7 +20,7 @@ rm -f build/polis.dsk
 rasm game/main.asm -DC7RAW=1 -o build/c7raw -sz > /dev/null
 rasm game/main.asm -o build/polis -s -sz
 # (M20) τα σύμβολα των μενού για το snapshot — εδώ το polis.sym είναι «τράπεζα:διεύθυνση ΟΝΟΜΑ»
-grep -E ' ((UM|HB|UI_IC)_[A-Z0-9_]+|HUD_MUS|FX_TICK|FX_V4|FX_DEC|MUS_GAME|UI_BTN|SN_CTR|SN_CT2|SN_CJ|SN_CI|SN_HOME|UI_END|UI[A-P]_END|SND[A-C]_END)$' build/polis.sym | awk '{split($1, a, ":"); if (a[1] != "260") print tolower($2) " equ #" a[2]}' > build/ui_sym.asm   # (όχι του κύριου κώδικα, 260: M22 hudvis.asm)
+grep -E ' ((UM|HB|UI_IC)_[A-Z0-9_]+|UI_W_BUILD|UI_FILL|HUD_MUS|FX_TICK|FX_V4|FX_DEC|MUS_GAME|UI_BTN|SN_CTR|SN_CT2|SN_CJ|SN_CI|SN_HOME|UI_END|UI[A-P]_END|SND[A-C]_END)$' build/polis.sym | awk '{split($1, a, ":"); if (a[1] != "260") print tolower($2) " equ #" a[2]}' > build/ui_sym.asm   # (όχι του κύριου κώδικα, 260: M22 hudvis.asm)
 grep -q '^um_go ' build/ui_sym.asm || { echo 'build/ui_sym.asm: τα σύμβολα των μενού;'; exit 1; }
 cp build/polis.sym build/polis_dsk.sym
 rasm game/main.asm -DSNA=1 -o build/polis -sz -v2 -ss

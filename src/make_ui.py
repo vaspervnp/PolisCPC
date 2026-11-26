@@ -50,6 +50,11 @@ WORDS = [('ui_w_build', 'BUILD'), ('ui_w_close', 'CLOSE'),
          ('ui_w_train', 'TRAIN'), ('ui_w_split', 'SPLIT SQUAD'),
          ('ui_w_busy', 'RESEARCHING')]
 COST = 'FWGS'                   # τροφή, ξύλο, χρυσό, πέτρα
+# (2026-11-26) Η δουλειά που πήρε ο χωρικός, για λίγο στην κορυφή του χάρτη
+# (game/jobmsg.asm): με τη σειρά του J_KIND (τροφή, ξύλο, χρυσό, πέτρα), και
+# μετά το χτίσιμο — η λέξη BUILD (ui_w_build). Σύντομα: στον κύριο κώδικα.
+JOBS = ['GATHER FOOD', 'CHOP WOOD', 'MINE GOLD', 'MINE STONE']
+assert max(map(len, JOBS + ['BUILD'])) <= 11, 'JM_N (jobmsg.asm)'
 
 
 def enc(s):
@@ -270,8 +275,13 @@ def main():
                                          for k in range(len(TECHS)))]
     for k, s_ in enumerate(TECHS):
         c.append(db_str('ut_%d' % k, s_))
+    q = [head, '; (2026-11-26) οι δουλειές των χωρικών (game/jobmsg.asm)\n',
+         'jm_tab:     dw %s, ui_w_build\n' % ', '.join(
+             'uq_%d' % k for k in range(len(JOBS)))]
+    for k, s_ in enumerate(JOBS):
+        q.append(db_str('uq_%d' % k, s_))
     for name, part in (('ui_a.asm', a), ('ui_b.asm', b), ('ui_c.asm', c),
-                       ('ui_vis.asm', v)):
+                       ('ui_vis.asm', v), ('ui_q.asm', q)):
         print(write(name, ''.join(part)))
     stale = os.path.join(DATA, 'ui.asm')
     if os.path.exists(stale):

@@ -727,28 +727,6 @@ de_carry:
         ld d,a
         ret
 
-; DE + 1 μέσα στη μνήμη οθόνης: στο όριο των 2 KB τυλίγεται στην αρχή της
-; ίδιας οκτάδας (η κύλιση μπορεί να σπάει μια γραμμή εκεί).
-inc_de_scr:
-        inc de
-        ld a,e
-        or a
-        ret nz
-        ld a,d
-        and 7
-        ret nz
-        ld a,d
-        sub 8
-        ld d,a
-        ret
-
-; DE = η γραμμή από κάτω, με τύλιγμα στα 2 KB.
-next_line_de:
-        ld a,d
-        add a,#08
-        ld d,a
-        and #38
-        ret nz
 ; Το D μόλις ξεχείλισε (τέλος σειράς): +80, τυλιγμένο στα 2 KB.
 next_row_de:
         ld a,e

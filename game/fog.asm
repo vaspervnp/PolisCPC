@@ -47,37 +47,7 @@ IC_C6       equ #5F48           ; (2026-11-25) ένα εικονίδιο κου�
         assert AGE_AT + AGE_MAX <= IC_C6, 'age file over IC_C6'
         assert IC_C6 + 56 == FOG, 'IC_C6'
 
-; HL = δείκτης χάρτη -> NZ αν το πλακίδιο είναι εξερευνημένο (με την C6
-; μέσα). Κρατάει BC, DE, HL.
-fog_hl: push hl
-        push bc
-        ld a,l
-        and 7
-        ld c,a
-        ld a,h
-        and #7F                 ; - MAP
-        srl a
-        rr l
-        srl a
-        rr l
-        srl a
-        rr l
-        ld h,a
-        ld a,l
-        add a,FOG & 255
-        ld l,a
-        ld a,h
-        adc a,FOG >> 8
-        ld h,a
-        ld a,c
-        add a,fog_bit & 255
-        ld c,a
-        ld b,fog_bit >> 8
-        ld a,(bc)
-        and (hl)
-        pop bc
-        pop hl
-        ret
+; (2026-11-26) Το fog_hl και το fog_iy: στην C6 (fog6.asm).
 
 ; HL = δείκτης χάρτη (και έξω από τον χάρτη: συνεπές βήμα) -> col_fp = το
 ; byte του στο FOG, col_fm = το bit του (scroll.asm, draw_column: προχωράνε
@@ -108,46 +78,6 @@ fog_ptr:
         endif
 fog_bit:    db 1, 2, 4, 8, 16, 32, 64, 128
         assert (fog_bit & 255) <= 248, 'fog_bit: one page'
-
-; B = i, C = j (με πρόσημο: στο παράθυρο |i|, |j| < 128) -> IY = το byte του
-; στο FOG, IXH = το bit του (και έξω από τον χάρτη: συνεπές βήμα). Κρατάει
-; BC, DE, HL.
-fog_iy: push hl
-        push de
-        ld a,c
-        ld l,a
-        rla
-        sbc a,a
-        ld h,a                  ; HL = j
-        add hl,hl
-        add hl,hl
-        ld d,h
-        ld e,l
-        add hl,hl
-        add hl,de               ; 12 j
-        ld a,b
-        sra a
-        sra a
-        sra a
-        ld e,a
-        add a,a
-        sbc a,a
-        ld d,a
-        add hl,de               ; + i / 8
-        ld de,FOG
-        add hl,de
-        push hl
-        pop iy
-        ld a,b
-        and 7
-        add a,fog_bit & 255
-        ld l,a
-        ld h,fog_bit >> 8
-        ld a,(hl)
-        ld ixh,a
-        pop de
-        pop hl
-        ret
 
 ; IY = κτίριο -> NZ αν το μπροστινό του πλακίδιο είναι εξερευνημένο (με την
 ; C6 μέσα). Κρατάει BC, IY.

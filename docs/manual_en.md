@@ -188,11 +188,13 @@ What happens depends on what is under the cursor.
 
 * **Empty ground:** the selected units walk there, in four columns.
 * **Berry bush, tree, gold or stone:** the selected villagers go and gather
-  it.
+  it. For two seconds the job appears at the top of the map (GATHER FOOD,
+  CHOP WOOD, MINE GOLD, MINE STONE).
 * **An enemy unit** (red): attack it.
 * **An enemy building:** attack it until it falls.
 * **One of your foundations** (a building not yet finished): the selected
-  villagers carry on building it from where it stopped.
+  villagers carry on building it from where it stopped (BUILD at the top of
+  the map, as when you place a building).
 * **One of your own squads of the same kind:** the selected squads walk
   there and join it (see section 9).
 * **One of the units you have selected:** its menu (BUILD for villagers,

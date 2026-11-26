@@ -207,6 +207,8 @@ def main():
         g.tick(1)
         if c.peek(sym['RQ_N']) == 255:
             break
+    while c.peek(sym['JM_T']):              # (2026-11-26) το BUILD στη λωρίδα
+        g.tick(1)                           # (game/jobmsg.asm): ως να σβήσει
     g.world = M4.M.game_world(grd, res, found=[('barracks', i0, j0)])
     g.report('σύνθεση', g.compose('foundation'), 'το θεμέλιο στην οθόνη '
              '(χώμα στην κάτοψη), με τις μονάδες από πάνω')

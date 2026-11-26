@@ -32,9 +32,11 @@ hb_lab: call hb_hot             ; (2026-11-25) τα γράμματα των κο
         and 3
         cp 2
         call z,hb_scan
-.l:     ld a,(hb_on)            ; ο κέρσορας στα κουμπιά: η ετικέτα — και αν
+.l:     call jm_tick            ; ο κέρσορας στα κουμπιά: η ετικέτα — και αν
         or a                    ; η θέση του άδειασε, μία πίσω σε κάθε καρέ
-        ret z                   ; (το SAVE GAME φαίνεται πάντα)
+        ret z                   ; (το SAVE GAME φαίνεται πάντα). (2026-11-26)
+                                ; Το jm_tick (jobmsg.asm): A = hb_on, ή 0 όσο η
+                                ; δουλειά του χωρικού έχει τη λωρίδα.
         ld a,(hb_i)
         call hb_vk
         jp c,hb_label

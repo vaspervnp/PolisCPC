@@ -7,7 +7,8 @@
 
 ; IX = χωρικός της εντολής: η πηγή cmd_si, cmd_sj, του είδους cmd_kind.
 job_start:
-        ld l,(ix+U_IDX)
+        call jm_job             ; (2026-11-26) η δουλειά στη λωρίδα (jobmsg.asm),
+                                ; και L = U_IDX
         ld h,J_SI >> 8
         ld a,(cmd_si)
         ld (hl),a

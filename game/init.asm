@@ -731,10 +731,14 @@ init_go:
         ld de,MSX_AT
         ld bc,ms4_e - MSX_AT
         ldir
-        ld h,b                  ; (BC = 0) οι μετρητές
-        ld l,c
-        ld (MS_V),hl
-        ret
+        ld (MS_V),bc            ; (BC = 0) οι μετρητές
+        ld a,RAM_RES            ; (2026-11-26) το fog_hl, το fog_iy στην C6
+        call setram             ; (fog6.asm): μετά το units_gfx, που τη
+        ld de,FOG6_AT           ; γράφει όλη
+        ld bc,fg6_e - FOG6_AT
+        ldir
+        ld a,RAM_BASE
+        jp setram
 
 ; Τα μενού (M20) στις κρυφές σειρές του HUD, ΜΕΤΑ το hud_init που τις
 ; καθαρίζει: το UI.BIN αποσυμπιεσμένο στο UI_TMP, και τα κομμάτια του στη

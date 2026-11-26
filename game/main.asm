@@ -431,6 +431,7 @@ snd_pv:     db 0                ; η ένταση του (0: κανένα)
 snd_kp:     db 0                ; το SPACE στο προηγούμενο καρέ
 fx_r7:      db #3C              ; το R7: A, B τόνος· C από το εφέ
         include "hudvis.asm"    ; (M22: μετά το align 16, όχι πριν)
+        include "jobmsg.asm"    ; (2026-11-26) η δουλειά του χωρικού στη λωρίδα
 
 ; ---------------------------------------------------------- μεταβλητές
 cam_x:      dw 98               ; bytes κόσμου, ζυγό — η πόλη του παίκτη
@@ -508,7 +509,6 @@ sr_n:       db 0
 sr_res:     db 0
 sr_src:     db 0
 sr_line:    dw 0                ; η πρώτη γραμμή του sprite της ομάδας
-el_t:       db 0
 row_ent:    dw 0
 row_dst:    dw 0
 pcx:        db 98               ; η κάμερα στο προηγούμενο καρέ μονάδων (low)
@@ -1041,10 +1041,12 @@ MSX_AT      equ SQ_FONT + DIGITS_LEN
         assert MS_V >= RLIST + 80, 'MS_V'
         assert MSI_AT >= MOVERS + 64 && MSD_AT >= BUF_A + #800 + 80, 'MS'
         include "mouse.asm"
-        assert ms_end <= #FFFF, 'HI past #FFFF'
+FOG6_AT     equ #4780           ; (2026-11-26) fog6.asm: στην C6
+        include "fog6.asm"
+        assert fg6_end <= #FFFF, 'HI past #FFFF'
         assert SVM_BUF + 2048 + 512 <= INIT, 'SVM_BUF over INIT'
         assert SVM_STORE + SVM_LEN <= BKT0, 'SVM_STORE'
-INIT_ALL    equ ms_end - INIT
+INIT_ALL    equ fg6_end - INIT
         ifndef SNA
         ifdef C7RAW
         save 'build/init.bin',INIT,INIT_ALL     ; -> init_z (το δεύτερο πέρασμα)
